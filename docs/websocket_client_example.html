@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 消息通知测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        h2 {
+            color: #666;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"],
+        input[type="password"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
+        button.danger:hover {
+            background-color: #da190b;
+        }
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #fafafa;
+            border-radius: 4px;
+        }
+        .message {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+            background-color: white;
+        }
+        .message.new-message {
+            border-left-color: #2196F3;
+        }
+        .message.unread-count {
+            border-left-color: #FF9800;
+        }
+        .message.heartbeat {
+            border-left-color: #9E9E9E;
+            opacity: 0.7;
+        }
+        .message-time {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        .message-type {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .message-data {
+            color: #666;
+            font-family: monospace;
+            background-color: #f5f5f5;
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-card {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 WebSocket 消息通知测试客户端</h1>
+
+    <!-- 连接状态 -->
+    <div class="container">
+        <h2>连接状态</h2>
+        <div id="status" class="status disconnected">未连接</div>
+
+        <div class="form-group">
+            <label for="wsUrl">WebSocket URL:</label>
+            <input type="text" id="wsUrl" value="ws://localhost:9090/api/v1/ws/messages">
+        </div>
+
+        <div class="form-group">
+            <label for="token">JWT Token:</label>
+            <input type="text" id="token" placeholder="请输入JWT Token">
+        </div>
+
+        <button id="connectBtn" onclick="connect()">连接</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>断开</button>
+    </div>
+
+    <!-- 消息接收区 -->
+    <div class="container">
+        <h2>接收到的消息</h2>
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalMessages">0</div>
+                <div class="stat-label">总消息数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="newMessages">0</div>
+                <div class="stat-label">新消息</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="unreadCount">0</div>
+                <div class="stat-label">未读消息</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="heartbeats">0</div>
+                <div class="stat-label">心跳次数</div>
+            </div>
+        </div>
+        <div class="messages" id="messages"></div>
+        <button onclick="clearMessages()" style="margin-top: 10px;">清空消息</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+        let newMessageCount = 0;
+        let heartbeatCount = 0;
+        let currentUnreadCount = 0;
+
+        function connect() {
+            const wsUrl = document.getElementById('wsUrl').value;
+            const token = document.getElementById('token').value;
+
+            if (!token) {
+                alert('请输入JWT Token');
+                return;
+            }
+
+            // 添加token到URL查询参数（如果需要）或使用子协议
+            const url = wsUrl + '?token=' + encodeURIComponent(token);
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = function(event) {
+                    updateStatus('已连接', true);
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    addMessage('连接成功', { url: wsUrl }, 'CONNECTED');
+                };
+
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                };
+
+                ws.onerror = function(error) {
+                    addMessage('WebSocket错误', { error: error.toString() }, 'ERROR');
+                };
+
+                ws.onclose = function(event) {
+                    updateStatus('已断开', false);
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                    addMessage('连接关闭', { code: event.code, reason: event.reason }, 'CLOSED');
+                };
+            } catch (error) {
+                alert('连接失败: ' + error.message);
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function handleMessage(data) {
+            messageCount++;
+            document.getElementById('totalMessages').textContent = messageCount;
+
+            switch (data.type) {
+                case 'NEW_MESSAGE':
+                    newMessageCount++;
+                    document.getElementById('newMessages').textContent = newMessageCount;
+                    addMessage('新消息', data.data, data.type);
+                    // 播放提示音（可选）
+                    playNotificationSound();
+                    break;
+
+                case 'UNREAD_COUNT':
+                    currentUnreadCount = data.data.count;
+                    document.getElementById('unreadCount').textContent = currentUnreadCount;
+                    addMessage('未读消息数更新', data.data, data.type);
+                    break;
+
+                case 'MESSAGE_READ':
+                    addMessage('消息已读', data.data, data.type);
+                    break;
+
+                case 'MESSAGE_DELETED':
+                    addMessage('消息已删除', data.data, data.type);
+                    break;
+
+                case 'HEARTBEAT':
+                    heartbeatCount++;
+                    document.getElementById('heartbeats').textContent = heartbeatCount;
+                    addMessage('心跳', data.data, data.type);
+                    // 回复心跳
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'HEARTBEAT_REPLY',
+                            data: { pong: 'ping' },
+                            timestamp: Date.now()
+                        }));
+                    }
+                    break;
+
+                case 'SYSTEM_NOTIFY':
+                    addMessage('系统通知', data.data, data.type);
+                    break;
+
+                default:
+                    addMessage('未知消息类型', data, data.type);
+            }
+        }
+
+        function addMessage(title, data, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+
+            // 根据消息类型添加不同的样式类
+            if (type === 'NEW_MESSAGE') {
+                messageDiv.classList.add('new-message');
+            } else if (type === 'UNREAD_COUNT') {
+                messageDiv.classList.add('unread-count');
+            } else if (type === 'HEARTBEAT') {
+                messageDiv.classList.add('heartbeat');
+            }
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN');
+
+            messageDiv.innerHTML = `
+                <div class="message-time">${timeStr}</div>
+                <div class="message-type">${type || 'UNKNOWN'}: ${title}</div>
+                <div class="message-data">${JSON.stringify(data, null, 2)}</div>
+            `;
+
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+
+            // 限制消息数量
+            while (messagesDiv.children.length > 50) {
+                messagesDiv.removeChild(messagesDiv.lastChild);
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            messageCount = 0;
+            newMessageCount = 0;
+            heartbeatCount = 0;
+            currentUnreadCount = 0;
+            document.getElementById('totalMessages').textContent = '0';
+            document.getElementById('newMessages').textContent = '0';
+            document.getElementById('unreadCount').textContent = '0';
+            document.getElementById('heartbeats').textContent = '0';
+        }
+
+        function updateStatus(text, isConnected) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = 'status ' + (isConnected ? 'connected' : 'disconnected');
+        }
+
+        function playNotificationSound() {
+            // 播放系统提示音
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZUQ0PVK3m8LJoHwU0kNny0YEZLS');
+                audio.play();
+            } catch (e) {
+                console.log('无法播放提示音');
+            }
+        }
+
+        // 页面加载时的提示
+        window.onload = function() {
+            console.log('WebSocket测试客户端已加载');
+            console.log('请先登录获取JWT Token，然后输入Token并点击连接按钮');
+        };
+    </script>
+</body>
+</html>
