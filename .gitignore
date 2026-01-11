@@ -28,5 +28,16 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+.claude/
+
+# Build output
+bin/
+
+# Uploads
+uploads/
+
+# Session files
+session.txt
+session.json

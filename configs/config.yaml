@@ -1,0 +1,130 @@
+# Sky-Server 配置文件示例
+# 使用时请复制为 config.yaml 并修改相应配置
+
+# 应用配置
+app:
+  name: "Sky-Server"
+  version: "1.0.0"
+  env: "development"  # development, production
+  port: 9090
+  mode: "debug"  # debug, release
+
+# 数据库配置
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    username: "root"
+    password: "abc123"
+    database: "skyserver"
+    charset: "utf8mb4"
+    parseTime: true
+    loc: "Local"
+    maxIdleConns: 10
+    maxOpenConns: 100
+    connMaxLifetime: 3600  # 秒
+
+# Redis配置
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  poolSize: 10
+  minIdleConns: 5
+
+# JWT配置
+jwt:
+  secret: "your-secret-key-change-in-production"
+  accessTokenExpire: 7200    # 2小时（秒）
+  refreshTokenExpire: 604800 # 7天（秒）
+
+# 日志配置
+log:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json, text
+  output: "stdout"  # stdout, file
+  filePath: "logs/app.log"
+  maxSize: 100  # MB
+  maxBackups: 10
+  maxAge: 30  # 天
+  compress: true
+
+# CORS配置
+cors:
+  allowOrigins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  allowMethods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowHeaders:
+    - "Content-Type"
+    - "Authorization"
+  exposeHeaders:
+    - "Content-Length"
+  allowCredentials: true
+  maxAge: 3600
+
+# 缓存配置
+cache:
+  # 元数据缓存过期时间（秒）
+  metadataTTL: 86400  # 24小时
+  # 字典缓存过期时间（秒）
+  dictTTL: 3600  # 1小时
+  # 权限缓存过期时间（秒）
+  permissionTTL: 1800  # 30分钟
+
+# 动作配置
+action:
+  # 脚本执行超时时间（秒）
+  scriptTimeout: 300  # 5分钟
+
+# 限流配置
+rateLimit:
+  enabled: true
+  requestsPerMinute: 100  # 每分钟请求数
+  burstSize: 20
+
+# 文件上传配置
+upload:
+  maxSize: 10485760  # 10MB（字节）
+  allowedTypes:
+    - "image/jpeg"
+    - "image/png"
+    - "image/gif"
+    - "application/pdf"
+    - "application/msword"
+    - "application/vnd.ms-excel"
+  uploadPath: "uploads"
+
+# Swagger配置
+swagger:
+  enabled: true
+  title: "Sky-Server API"
+  description: "元数据驱动的企业级应用框架"
+  version: "1.0.0"
+  host: "localhost:9090"
+  basePath: "/api/v1"
+
+# 安全配置
+security:
+  # 密码加密cost（bcrypt）
+  passwordCost: 10
+  # 允许执行Bash命令的白名单
+  allowedBashCommands:
+    - "echo"
+    - "date"
+    - "pwd"
+  # Bash执行超时（秒）
+  bashTimeout: 30
+
+# 监控配置
+monitoring:
+  # 是否启用慢查询日志
+  slowQueryEnabled: true
+  # 慢查询阈值（毫秒）
+  slowQueryThreshold: 500
