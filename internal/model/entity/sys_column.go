@@ -4,7 +4,7 @@ package entity
 type SysColumn struct {
 	BaseModel
 	SysTableID     uint   `gorm:"column:SYS_TABLE_ID;index:idx_column_table;not null" json:"sysTableId"`
-	Name           string `gorm:"column:NAME;size:255" json:"name"`
+	DisplayName    string `gorm:"column:DISPLAY_NAME;size:255" json:"displayName"`
 	DbName         string `gorm:"column:DB_NAME;size:255" json:"dbName"`
 	FullName       string `gorm:"column:FULL_NAME;size:255;uniqueIndex:idx_column_full_name" json:"fullName"`
 	ColType        string `gorm:"column:COL_TYPE;size:255" json:"colType"`

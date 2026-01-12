@@ -15,12 +15,27 @@ var DB *gorm.DB
 
 // Init 初始化MySQL连接
 func Init(cfg *config.MySQLConfig, log *zap.Logger) (*gorm.DB, error) {
+	// 解析日志级别
+	var logLevel logger.LogLevel
+	switch cfg.LogLevel {
+	case "silent":
+		logLevel = logger.Silent
+	case "error":
+		logLevel = logger.Error
+	case "warn":
+		logLevel = logger.Warn
+	case "info":
+		logLevel = logger.Info
+	default:
+		logLevel = logger.Info // 默认为 Info 级别
+	}
+
 	// 配置GORM日志
 	gormLogger := logger.New(
 		&gormLoggerWriter{logger: log},
 		logger.Config{
 			SlowThreshold:             500 * time.Millisecond, // 慢查询阈值
-			LogLevel:                  logger.Info,
+			LogLevel:                  logLevel,
 			IgnoreRecordNotFoundError: true,
 			Colorful:                  false,
 		},

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
 // AliyunOSS 阿里云OSS存储实现
@@ -229,13 +229,14 @@ func (s *AliyunOSS) GetPostPolicy(ctx context.Context, dir string, expireSeconds
 	// 构建POST策略
 	conditions := []interface{}{
 		[]interface{}{"content-length-range", 0, 1024 * 1024 * 100}, // 最大100MB
-		[]interface{}{"starts-with", "$key", dir},                    // 限制上传目录
+		[]interface{}{"starts-with", "$key", dir},                   // 限制上传目录
 	}
 
 	policy := map[string]interface{}{
 		"expiration": time.Unix(expireTime, 0).UTC().Format("2006-01-02T15:04:05Z"),
 		"conditions": conditions,
 	}
+	fmt.Println(policy)
 
 	// TODO: 生成签名
 	// 这里需要实现POST策略的签名逻辑

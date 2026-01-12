@@ -5,9 +5,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -46,10 +46,10 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token        string      `json:"token"`
-	RefreshToken string      `json:"refreshToken"`
-	ExpiresIn    int         `json:"expiresIn"`
-	User         *UserInfo   `json:"user"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refreshToken"`
+	ExpiresIn    int       `json:"expiresIn"`
+	User         *UserInfo `json:"user"`
 }
 
 // TokenResponse Token响应
@@ -80,10 +80,10 @@ type SessionInfo struct {
 
 // service SSO服务实现
 type service struct {
-	userRepo            repository.UserRepository
-	jwtUtil             *jwt.JWT
-	accessTokenExpire   time.Duration
-	refreshTokenExpire  time.Duration
+	userRepo           repository.UserRepository
+	jwtUtil            *jwt.JWT
+	accessTokenExpire  time.Duration
+	refreshTokenExpire time.Duration
 }
 
 // NewService 创建SSO服务

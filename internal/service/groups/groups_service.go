@@ -2,10 +2,11 @@ package groups
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -478,6 +479,21 @@ func (s *service) RemoveUserGroups(ctx context.Context, userID uint, directoryID
 
 // CheckUserPermission 检查用户权限
 func (s *service) CheckUserPermission(ctx context.Context, userID uint, directoryID uint, permission int) (bool, error) {
+	// 检查用户是否是管理员
+	var isAdmin string
+	if err := s.db.WithContext(ctx).
+		Table("sys_user").
+		Select("IS_ADMIN").
+		Where("ID = ? AND IS_ACTIVE = ?", userID, "Y").
+		Scan(&isAdmin).Error; err != nil {
+		return false, errors.Wrap(errors.ErrDatabase, "查询用户信息失败", err)
+	}
+
+	// 如果是管理员，直接返回有权限
+	if isAdmin == "Y" {
+		return true, nil
+	}
+
 	userPerm, err := s.GetUserDirectoryPermission(ctx, userID, directoryID)
 	if err != nil {
 		return false, err
@@ -489,6 +505,21 @@ func (s *service) CheckUserPermission(ctx context.Context, userID uint, director
 
 // GetUserDirectoryPermission 获取用户在目录的权限值
 func (s *service) GetUserDirectoryPermission(ctx context.Context, userID uint, directoryID uint) (int, error) {
+	// 检查用户是否是管理员
+	var isAdmin string
+	if err := s.db.WithContext(ctx).
+		Table("sys_user").
+		Select("IS_ADMIN").
+		Where("ID = ? AND IS_ACTIVE = ?", userID, "Y").
+		Scan(&isAdmin).Error; err != nil {
+		return 0, errors.Wrap(errors.ErrDatabase, "查询用户信息失败", err)
+	}
+
+	// 如果是管理员，返回全部权限
+	if isAdmin == "Y" {
+		return PermAll, nil
+	}
+
 	var permission int
 	err := s.db.WithContext(ctx).
 		Table("sys_group_prem").
@@ -510,6 +541,21 @@ func (s *service) GetUserDirectoryPermission(ctx context.Context, userID uint, d
 
 // CheckUserTablePermission 检查用户表权限
 func (s *service) CheckUserTablePermission(ctx context.Context, userID uint, tableID uint, permission int) (bool, error) {
+	// 检查用户是否是管理员
+	var isAdmin string
+	if err := s.db.WithContext(ctx).
+		Table("sys_user").
+		Select("IS_ADMIN").
+		Where("ID = ? AND IS_ACTIVE = ?", userID, "Y").
+		Scan(&isAdmin).Error; err != nil {
+		return false, errors.Wrap(errors.ErrDatabase, "查询用户信息失败", err)
+	}
+
+	// 如果是管理员，直接返回有权限
+	if isAdmin == "Y" {
+		return true, nil
+	}
+
 	// 查询表关联的目录
 	var dir entity.SysDirectory
 	err := s.db.WithContext(ctx).
@@ -530,7 +576,7 @@ func (s *service) CheckUserTablePermission(ctx context.Context, userID uint, tab
 
 // GetUserDataFilter 获取用户数据过滤条件
 func (s *service) GetUserDataFilter(ctx context.Context, userID uint, directoryID uint) (map[string]interface{}, error) {
-	var filterObj string
+	var filterObj sql.NullString
 	err := s.db.WithContext(ctx).
 		Table("sys_group_prem").
 		Select("sys_group_prem.FILTER_OBJ").
@@ -546,13 +592,13 @@ func (s *service) GetUserDataFilter(ctx context.Context, userID uint, directoryI
 		return nil, errors.Wrap(errors.ErrDatabase, "查询数据过滤条件失败", err)
 	}
 
-	if filterObj == "" {
+	if !filterObj.Valid || filterObj.String == "" {
 		return nil, nil
 	}
 
 	// 解析JSON
 	var filter map[string]interface{}
-	if err := json.Unmarshal([]byte(filterObj), &filter); err != nil {
+	if err := json.Unmarshal([]byte(filterObj.String), &filter); err != nil {
 		return nil, errors.Wrap(errors.ErrInternal, "解析过滤条件失败", err)
 	}
 

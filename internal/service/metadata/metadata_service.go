@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
 // Service 元数据服务接口

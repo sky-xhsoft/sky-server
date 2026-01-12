@@ -51,6 +51,7 @@ type MySQLConfig struct {
 	MaxIdleConns    int    `mapstructure:"maxIdleConns"`
 	MaxOpenConns    int    `mapstructure:"maxOpenConns"`
 	ConnMaxLifetime int    `mapstructure:"connMaxLifetime"`
+	LogLevel        string `mapstructure:"logLevel"` // SQL日志级别: silent, error, warn, info
 }
 
 // RedisConfig Redis配置

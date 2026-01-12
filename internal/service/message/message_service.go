@@ -9,7 +9,7 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
 
