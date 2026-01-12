@@ -9,7 +9,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/executor"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -33,7 +33,7 @@ type ActionResult struct {
 	Success  bool                   `json:"success"`
 	Message  string                 `json:"message"`
 	Data     map[string]interface{} `json:"data"`
-	Duration time.Duration          `json:"duration"`
+	Duration time.Duration          `json:"duration" swaggertype:"integer"`
 	Error    string                 `json:"error"`
 }
 

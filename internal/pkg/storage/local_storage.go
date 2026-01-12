@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
 // LocalStorage 本地存储实现

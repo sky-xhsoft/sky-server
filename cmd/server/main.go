@@ -10,25 +10,30 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sky-xhsoft/sky-server/internal/api/router"
+	"github.com/sky-xhsoft/sky-server/api/router"
+	_ "github.com/sky-xhsoft/sky-server/api/swagger" // Swagger docs
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	jwtPkg "github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
+	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
 	"github.com/sky-xhsoft/sky-server/internal/repository/redis"
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
+	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/internal/service/crud"
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
 	"github.com/sky-xhsoft/sky-server/internal/service/menu"
 	"github.com/sky-xhsoft/sky-server/internal/service/message"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
 	"github.com/sky-xhsoft/sky-server/internal/service/sequence"
 	"github.com/sky-xhsoft/sky-server/internal/service/sso"
 	"github.com/sky-xhsoft/sky-server/internal/service/workflow"
-	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
+	"github.com/sky-xhsoft/sky-server/plugins"
 	"go.uber.org/zap"
 )
 
@@ -129,11 +134,19 @@ func main() {
 	// 初始化权限组服务（CRUD和Action服务依赖它）
 	groupsService := groups.NewService(db)
 
+	// 初始化ID生成服务（基于Redis缓存）
+	idgenService := idgen.NewService(db, redisClient)
+
+	// 初始化插件管理器并注册所有钩子函数
+	_ = plugins.Setup(db)
+
 	crudService := crud.NewService(
 		db,
 		metadataService,
 		groupsService,
 		metadataRepo,
+		userRepo,
+		idgenService,
 	)
 
 	actionService := action.NewService(
@@ -150,6 +163,7 @@ func main() {
 
 	auditService := audit.NewService(db)
 
+	// 初始化菜单服务
 	menuService := menu.NewService(db)
 
 	// 初始化文件服务
@@ -166,6 +180,18 @@ func main() {
 
 	// 初始化消息服务
 	messageService := message.NewService(db, wsManager)
+
+	// 初始化云盘存储
+	cloudStorage, err := storage.NewLocalStorage(&storage.LocalStorageConfig{
+		BasePath: cfg.File.UploadDir + "/cloud", // 使用 uploads/cloud 作为云盘存储目录
+		BaseURL:  fmt.Sprintf("http://localhost:%d/files/cloud", cfg.App.Port),
+	})
+	if err != nil {
+		logger.Fatal("Failed to initialize cloud storage", zap.Error(err))
+	}
+
+	// 初始化云盘服务
+	cloudService := cloud.NewService(db, cloudStorage)
 
 	logger.Info("Services initialized")
 
@@ -189,6 +215,7 @@ func main() {
 		Menu:      menuService,
 		File:      fileService,
 		Message:   messageService,
+		Cloud:     cloudService,
 		WSManager: wsManager,
 	}
 	router.Setup(engine, cfg, jwtUtil, services, log)

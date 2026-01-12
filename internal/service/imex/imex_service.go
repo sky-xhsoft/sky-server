@@ -10,7 +10,7 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
@@ -78,7 +78,7 @@ func (s *service) ExportToExcel(ctx context.Context, tableName string, filters m
 	// 写入表头
 	for i, col := range columns {
 		cell := string(rune('A'+i)) + "1"
-		f.SetCellValue(sheetName, cell, col.DisplayName)
+		f.SetCellValue(sheetName, cell, col.Name)
 	}
 
 	// 查询数据
@@ -159,7 +159,7 @@ func (s *service) ImportFromExcel(ctx context.Context, tableName string, fileHea
 	colMap := make(map[int]*entity.SysColumn)
 	for i, headerName := range header {
 		for _, col := range columns {
-			if col.DisplayName == headerName || col.DbName == headerName {
+			if col.Name == headerName || col.DbName == headerName {
 				colMap[i] = col
 				break
 			}
@@ -187,7 +187,7 @@ func (s *service) ImportFromExcel(ctx context.Context, tableName string, fileHea
 
 			// 类型转换
 			var value interface{}
-			switch col.FieldType {
+			switch col.ColType {
 			case "int":
 				if cellValue != "" {
 					v, err := strconv.Atoi(cellValue)
@@ -267,17 +267,25 @@ func (s *service) GenerateTemplate(ctx context.Context, tableName string) (strin
 
 		cell := string(rune('A'+i)) + "1"
 		// 使用displayName作为表头，并添加注释
-		f.SetCellValue(sheetName, cell, col.DisplayName)
+		f.SetCellValue(sheetName, cell, col.Name)
 
 		// 添加备注说明字段类型
-		comment := fmt.Sprintf("字段: %s\n类型: %s\n", col.DbName, col.FieldType)
-		if col.IsRequired {
+		comment := fmt.Sprintf("字段: %s\n类型: %s\n", col.DbName, col.ColType)
+		if col.NullAble == "Y" {
 			comment += "必填: 是\n"
 		}
 		if col.DefaultValue != "" {
 			comment += fmt.Sprintf("默认值: %s\n", col.DefaultValue)
 		}
-		f.AddComment(sheetName, cell, comment)
+		err := f.AddComment(sheetName, excelize.Comment{
+			Cell:   cell,
+			Author: "System",
+			Text:   comment,
+		})
+		if err != nil {
+			// 添加注释失败不影响主流程，只记录错误
+			_ = err
+		}
 	}
 
 	// 生成文件名

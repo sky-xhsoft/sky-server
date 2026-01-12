@@ -41,3 +41,6 @@ uploads/
 # Session files
 session.txt
 session.json
+
+
+.venv

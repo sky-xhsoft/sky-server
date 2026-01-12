@@ -23,6 +23,7 @@ database:
     maxIdleConns: 10
     maxOpenConns: 100
     connMaxLifetime: 3600  # 秒
+    logLevel: "info"  # SQL日志级别: silent(不打印), error(仅错误), warn(警告+错误), info(所有SQL)
 
 # Redis配置
 redis:

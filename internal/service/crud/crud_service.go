@@ -10,10 +10,12 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/executor"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/mask"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/transaction"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -41,12 +43,12 @@ type Service interface {
 // QueryRequest 查询请求
 type QueryRequest struct {
 	TableName string                 `json:"tableName" binding:"required"`
-	Page      int                    `json:"page"`      // 页码，从1开始
-	PageSize  int                    `json:"pageSize"`  // 每页大小
-	OrderBy   string                 `json:"orderBy"`   // 排序字段
-	Order     string                 `json:"order"`     // 排序方向: asc, desc
-	Filters   map[string]interface{} `json:"filters"`   // 过滤条件
-	Include   []string               `json:"include"`   // 包含的关联表
+	Page      int                    `json:"page"`     // 页码，从1开始
+	PageSize  int                    `json:"pageSize"` // 每页大小
+	OrderBy   string                 `json:"orderBy"`  // 排序字段
+	Order     string                 `json:"order"`    // 排序方向: asc, desc
+	Filters   map[string]interface{} `json:"filters"`  // 过滤条件
+	Include   []string               `json:"include"`  // 包含的关联表
 }
 
 // QueryResponse 查询响应
@@ -63,6 +65,8 @@ type service struct {
 	metadataService metadata.Service
 	groupsService   groups.Service
 	metadataRepo    repository.MetadataRepository
+	userRepo        repository.UserRepository
+	idgenService    idgen.Service
 }
 
 // NewService 创建通用CRUD服务
@@ -71,12 +75,16 @@ func NewService(
 	metadataService metadata.Service,
 	groupsService groups.Service,
 	metadataRepo repository.MetadataRepository,
+	userRepo repository.UserRepository,
+	idgenService idgen.Service,
 ) Service {
 	return &service{
 		db:              db,
 		metadataService: metadataService,
 		groupsService:   groupsService,
 		metadataRepo:    metadataRepo,
+		userRepo:        userRepo,
+		idgenService:    idgenService,
 	}
 }
 
@@ -131,7 +139,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 
 	// 执行查询
 	var result map[string]interface{}
-	if err := query.First(&result).Error; err != nil {
+	if err := query.Take(&result).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "记录不存在")
 		}
@@ -255,44 +263,71 @@ func (s *service) Create(ctx context.Context, tableName string, data map[string]
 		return nil, errors.New(errors.ErrPermissionDenied, "无创建权限")
 	}
 
-	// 执行before钩子
-	if err := s.executeHooks(ctx, table.ID, "A", "begin", data); err != nil {
-		return nil, errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
-	}
-
-	// 获取字段定义
+	// 获取字段定义（在事务外，避免长时间持有锁）
 	columns, err := s.metadataService.GetColumns(table.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 验证和处理字段（根据MASK和权限）
+	// 验证和处理字段（在事务外）
 	processedData, err := s.processFieldsForCreate(columns, data, userID)
 	if err != nil {
 		return nil, err
 	}
 
+	// 生成新的ID（在事务外，避免长时间持有锁）
+	newID, err := s.idgenService.GetNextID(ctx, table.Name)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrInternal, "生成ID失败", err)
+	}
+	processedData["ID"] = newID
+
 	// 添加审计字段
-	// TODO: 从context获取用户名
 	processedData["IS_ACTIVE"] = "Y"
 
-	// 执行插入
-	if err := s.db.Table(table.Name).Create(&processedData).Error; err != nil {
-		return nil, errors.Wrap(errors.ErrDatabase, "创建失败", err)
+	// 获取用户信息以填充审计字段
+	user, userErr := s.userRepo.GetUserByID(userID)
+	if userErr == nil && user != nil {
+		// 设置创建人和公司ID
+		processedData["CREATE_BY"] = user.Username
+		processedData["SYS_COMPANY_ID"] = user.SysCompanyID
+	}
+	// 设置创建时间
+	processedData["CREATE_TIME"] = time.Now()
+
+	// 在事务中执行：before钩子 + 插入 + after钩子
+	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
+		// 执行before钩子（在事务中）
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "A", "begin", data); err != nil {
+			return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
+		}
+
+		// 执行插入（在事务中，ID已经预先生成）
+		if err := tx.Table(table.Name).Create(&processedData).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "创建失败", err)
+		}
+
+		// 执行after钩子（在事务中）
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "A", "end", processedData); err != nil {
+			return errors.Wrap(errors.ErrInternal, "执行after钩子失败", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	// 执行after钩子
-	if err := s.executeHooks(ctx, table.ID, "A", "end", processedData); err != nil {
-		return nil, errors.Wrap(errors.ErrInternal, "执行after钩子失败", err)
-	}
+	// 获取创建记录的ID（已在前面生成）
+	recordID := newID
 
 	// 返回创建的记录
-	id := processedData["ID"]
-	if id == nil {
+	if recordID == 0 {
 		return processedData, nil
 	}
 
-	return s.GetOne(ctx, tableName, id.(uint), userID)
+	return s.GetOne(ctx, tableName, recordID, userID)
 }
 
 // Update 更新记录
@@ -315,46 +350,67 @@ func (s *service) Update(ctx context.Context, tableName string, id uint, data ma
 	// 添加ID到数据中供钩子使用
 	data["ID"] = id
 
-	// 执行before钩子
-	if err := s.executeHooks(ctx, table.ID, "M", "begin", data); err != nil {
-		return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
-	}
-
-	// 获取字段定义
+	// 获取字段定义（在事务外）
 	columns, err := s.metadataService.GetColumns(table.ID)
 	if err != nil {
 		return err
 	}
 
-	// 验证和处理字段（根据MASK和权限）
+	// 验证和处理字段（在事务外）
 	processedData, err := s.processFieldsForUpdate(columns, data, userID)
 	if err != nil {
 		return err
 	}
 
 	// 添加审计字段
-	// TODO: 从context获取用户名
+	// 获取用户信息以填充审计字段
+	user, err := s.userRepo.GetUserByID(userID)
+	if err == nil && user != nil {
+		// 设置更新人
+		processedData["UPDATE_BY"] = user.Username
+	}
+	// 设置更新时间
+	processedData["UPDATE_TIME"] = time.Now()
 
-	// 执行更新
-	result := s.db.Table(table.Name).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").Updates(processedData)
-	if result.Error != nil {
-		return errors.Wrap(errors.ErrDatabase, "更新失败", result.Error)
+	// 获取要更新的字段列表（支持零值更新）
+	updateFields := make([]string, 0, len(processedData))
+	for field := range processedData {
+		updateFields = append(updateFields, field)
 	}
 
-	if result.RowsAffected == 0 {
-		return errors.New(errors.ErrResourceNotFound, "记录不存在")
-	}
+	// 在事务中执行：before钩子 + 更新 + after钩子
+	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
+		// 执行before钩子（在事务中）
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "M", "begin", data); err != nil {
+			return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
+		}
 
-	// 执行after钩子
-	processedData["ID"] = id
-	if err := s.executeHooks(ctx, table.ID, "M", "end", processedData); err != nil {
-		return errors.Wrap(errors.ErrInternal, "执行after钩子失败", err)
-	}
+		// 执行更新（在事务中，使用 Select 明确指定要更新的字段，包括零值）
+		result := tx.Table(table.Name).
+			Where("ID = ? AND IS_ACTIVE = ?", id, "Y").
+			Select(updateFields).
+			Updates(processedData)
+		if result.Error != nil {
+			return errors.Wrap(errors.ErrDatabase, "更新失败", result.Error)
+		}
 
-	return nil
+		if result.RowsAffected == 0 {
+			return errors.New(errors.ErrResourceNotFound, "记录不存在")
+		}
+
+		// 执行after钩子（在事务中）
+		processedData["ID"] = id
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "M", "end", processedData); err != nil {
+			return errors.Wrap(errors.ErrInternal, "执行after钩子失败", err)
+		}
+
+		return nil
+	})
+
+	return err
 }
 
-// Delete 删除记录（软删除）
+// Delete 删除记录（物理删除）
 func (s *service) Delete(ctx context.Context, tableName string, id uint, userID uint) error {
 	// 获取表元数据
 	table, err := s.metadataService.GetTable(tableName)
@@ -371,28 +427,33 @@ func (s *service) Delete(ctx context.Context, tableName string, id uint, userID 
 		return errors.New(errors.ErrPermissionDenied, "无删除权限")
 	}
 
-	// 执行before钩子
+	// 在事务中执行：before钩子 + 删除 + after钩子
 	deleteData := map[string]interface{}{"ID": id}
-	if err := s.executeHooks(ctx, table.ID, "D", "begin", deleteData); err != nil {
-		return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
-	}
+	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
+		// 执行before钩子（在事务中）
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "D", "begin", deleteData); err != nil {
+			return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
+		}
 
-	// 执行软删除
-	result := s.db.Table(table.Name).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").Update("IS_ACTIVE", "N")
-	if result.Error != nil {
-		return errors.Wrap(errors.ErrDatabase, "删除失败", result.Error)
-	}
+		// 执行物理删除（在事务中）
+		result := tx.Table(table.Name).Where("ID = ?", id).Delete(nil)
+		if result.Error != nil {
+			return errors.Wrap(errors.ErrDatabase, "删除失败", result.Error)
+		}
 
-	if result.RowsAffected == 0 {
-		return errors.New(errors.ErrResourceNotFound, "记录不存在")
-	}
+		if result.RowsAffected == 0 {
+			return errors.New(errors.ErrResourceNotFound, "记录不存在")
+		}
 
-	// 执行after钩子
-	if err := s.executeHooks(ctx, table.ID, "D", "end", deleteData); err != nil {
-		return errors.Wrap(errors.ErrInternal, "执行after钩子失败", err)
-	}
+		// 执行after钩子（在事务中）
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "D", "end", deleteData); err != nil {
+			return errors.Wrap(errors.ErrInternal, "执行after钩子失败", err)
+		}
 
-	return nil
+		return nil
+	})
+
+	return err
 }
 
 // BatchDelete 批量删除
@@ -412,13 +473,34 @@ func (s *service) BatchDelete(ctx context.Context, tableName string, ids []uint,
 		return errors.New(errors.ErrPermissionDenied, "无删除权限")
 	}
 
-	// 执行批量软删除
-	result := s.db.Table(table.Name).Where("ID IN ? AND IS_ACTIVE = ?", ids, "Y").Update("IS_ACTIVE", "N")
-	if result.Error != nil {
-		return errors.Wrap(errors.ErrDatabase, "批量删除失败", result.Error)
-	}
+	// 在事务中执行批量删除
+	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
+		// 对每个ID执行before钩子（在事务中）
+		for _, id := range ids {
+			deleteData := map[string]interface{}{"ID": id}
+			if err := s.executeHooksInTx(ctx, tx, table.ID, "D", "begin", deleteData); err != nil {
+				return errors.Wrap(errors.ErrInternal, fmt.Sprintf("执行ID=%d的before钩子失败", id), err)
+			}
+		}
 
-	return nil
+		// 执行批量物理删除（在事务中）
+		result := tx.Table(table.Name).Where("ID IN ?", ids).Delete(nil)
+		if result.Error != nil {
+			return errors.Wrap(errors.ErrDatabase, "批量删除失败", result.Error)
+		}
+
+		// 对每个ID执行after钩子（在事务中）
+		for _, id := range ids {
+			deleteData := map[string]interface{}{"ID": id}
+			if err := s.executeHooksInTx(ctx, tx, table.ID, "D", "end", deleteData); err != nil {
+				return errors.Wrap(errors.ErrInternal, fmt.Sprintf("执行ID=%d的after钩子失败", id), err)
+			}
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 // buildSelectFields 构建查询字段列表（根据MASK控制）
@@ -429,8 +511,11 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 		// TODO: 检查字段权限（基于SGRADE）- 需要集成groups权限服务
 		// 暂时允许所有字段访问
 
+		// 主键字段始终包含，不受MASK限制
+		isPrimaryKey := col.IsAK == "Y" || col.SetValueType == "pk"
+
 		// 检查MASK可见性
-		if col.Mask != "" {
+		if !isPrimaryKey && col.Mask != "" {
 			fieldMask := mask.ParseMask(col.Mask)
 			if !fieldMask.IsVisible(operation) {
 				continue
@@ -532,7 +617,25 @@ func (s *service) executeHooks(ctx context.Context, tableID uint, action, event 
 
 	// 按顺序执行钩子
 	for _, hook := range hooks {
-		if err := s.executeHook(ctx, hook, data); err != nil {
+		if err := s.executeHook(ctx, hook, data, s.db); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// executeHooksInTx 在事务中执行钩子
+func (s *service) executeHooksInTx(ctx context.Context, tx *gorm.DB, tableID uint, action, event string, data map[string]interface{}) error {
+	// 获取钩子列表
+	hooks, err := s.metadataRepo.GetTableCmdsByAction(tableID, action, event)
+	if err != nil {
+		return err
+	}
+
+	// 按顺序执行钩子（在事务中）
+	for _, hook := range hooks {
+		if err := s.executeHook(ctx, hook, data, tx); err != nil {
 			return err
 		}
 	}
@@ -541,22 +644,22 @@ func (s *service) executeHooks(ctx context.Context, tableID uint, action, event 
 }
 
 // executeHook 执行单个钩子
-func (s *service) executeHook(ctx context.Context, hook *entity.SysTableCmd, data map[string]interface{}) error {
+func (s *service) executeHook(ctx context.Context, hook *entity.SysTableCmd, data map[string]interface{}, db *gorm.DB) error {
 	// 根据ContentType执行不同类型的钩子
 	switch hook.ContentType {
 	case "js", "py", "go", "bsh":
-		return s.executeScriptHook(ctx, hook, data)
+		return s.executeScriptHook(ctx, hook, data, db)
 	case "url":
 		return s.executeURLHook(ctx, hook, data)
 	case "sp":
-		return s.executeSPHook(ctx, hook, data)
+		return s.executeSPHook(ctx, hook, data, db)
 	default:
 		return nil
 	}
 }
 
 // executeScriptHook 执行脚本钩子
-func (s *service) executeScriptHook(ctx context.Context, hook *entity.SysTableCmd, data map[string]interface{}) error {
+func (s *service) executeScriptHook(ctx context.Context, hook *entity.SysTableCmd, data map[string]interface{}, db *gorm.DB) error {
 	var scriptType executor.ScriptType
 	switch hook.ContentType {
 	case "js":
@@ -569,8 +672,19 @@ func (s *service) executeScriptHook(ctx context.Context, hook *entity.SysTableCm
 		scriptType = executor.ScriptTypeBash
 	}
 
+	// 对于 Go 类型的钩子，需要将数据库连接传递给钩子函数
+	params := make(map[string]interface{})
+	for k, v := range data {
+		params[k] = v
+	}
+
+	// 对于 Go 钩子，将数据库连接加入到参数中
+	if hook.ContentType == "go" && db != nil {
+		params["__db__"] = db
+	}
+
 	scriptExecutor := executor.NewScriptExecutor(scriptType, 5*time.Minute)
-	result, err := scriptExecutor.Execute(ctx, hook.Content, data)
+	result, err := scriptExecutor.Execute(ctx, hook.Content, params)
 	if err != nil {
 		return err
 	}
@@ -611,7 +725,7 @@ func (s *service) executeURLHook(ctx context.Context, hook *entity.SysTableCmd, 
 }
 
 // executeSPHook 执行存储过程钩子
-func (s *service) executeSPHook(ctx context.Context, hook *entity.SysTableCmd, data map[string]interface{}) error {
+func (s *service) executeSPHook(ctx context.Context, hook *entity.SysTableCmd, data map[string]interface{}, db *gorm.DB) error {
 	var spReq executor.SPRequest
 	if err := json.Unmarshal([]byte(hook.Content), &spReq); err != nil {
 		return err
@@ -625,7 +739,7 @@ func (s *service) executeSPHook(ctx context.Context, hook *entity.SysTableCmd, d
 		spReq.InParams[k] = v
 	}
 
-	spExecutor := executor.NewSPExecutor(s.db)
+	spExecutor := executor.NewSPExecutor(db)
 	resp, err := spExecutor.Execute(ctx, &spReq)
 	if err != nil {
 		return err

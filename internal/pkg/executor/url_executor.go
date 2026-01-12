@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
 // URLExecutor URL调用执行器
