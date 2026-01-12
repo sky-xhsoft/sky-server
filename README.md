@@ -65,7 +65,11 @@ vi configs/config.yaml
 4. 初始化数据库
 
 ```bash
+# 创建元数据表
 mysql -u root -p < sqls/create_skyserver.sql
+
+# 如果有业务表，可以从数据库自动生成元数据
+make metadata-init
 ```
 
 5. 运行项目
@@ -82,7 +86,10 @@ make run
 
 ```
 sky-server/
-├── cmd/server/              # 主程序入口
+├── cmd/
+│   ├── server/              # 主程序入口
+│   ├── hash/                # 密码哈希工具
+│   └── metadata-init/       # 元数据初始化工具
 ├── internal/                # 内部包
 │   ├── api/                 # API层
 │   ├── service/             # 业务逻辑层
@@ -97,24 +104,35 @@ sky-server/
 ## 开发命令
 
 ```bash
-make help      # 显示帮助信息
-make init      # 初始化项目（安装依赖）
-make build     # 编译项目
-make run       # 运行项目
-make test      # 运行测试
-make clean     # 清理编译产物
-make tidy      # 整理依赖
-make swagger   # 生成Swagger文档
+make help          # 显示帮助信息
+make init          # 初始化项目（安装依赖）
+make build         # 编译项目
+make run           # 运行项目
+make test          # 运行测试
+make clean         # 清理编译产物
+make tidy          # 整理依赖
+make swagger       # 生成Swagger文档
+make metadata-init # 从数据库初始化元数据
 ```
 
 ## 文档
 
 详细文档请查看 [docs](./docs) 目录：
 
+**设计文档**:
 - [系统架构设计](./docs/01-系统架构设计.md)
 - [数据库设计](./docs/02-数据库设计.md)
 - [API设计](./docs/03-API设计.md)
 - [开发计划](./docs/04-开发计划.md)
+
+**使用指南**:
+- [元数据初始化工具使用指南](./docs/metadata-init-guide.md)
+- [插件测试指南](./docs/plugin-tests-guide.md)
+
+**技术文档**:
+- [事务修复总结](./docs/transaction-fix-summary.md)
+- [Update 零值修复](./docs/update-zero-value-fix.md)
+- [插件升级说明](./docs/plugin-sys-table-after-create-upgrade.md)
 
 ## 许可证
 

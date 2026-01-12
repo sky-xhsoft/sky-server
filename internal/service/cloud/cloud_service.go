@@ -6,13 +6,12 @@ import (
 	"io"
 	"math/rand"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -80,7 +79,7 @@ type UploadFileRequest struct {
 type CreateShareRequest struct {
 	ResourceType string `json:"resourceType" binding:"required"` // file 或 folder
 	ResourceID   uint   `json:"resourceId" binding:"required"`
-	ShareType    string `json:"shareType" binding:"required"`    // public, password, private
+	ShareType    string `json:"shareType" binding:"required"` // public, password, private
 	Password     string `json:"password"`
 	ExpireDays   int    `json:"expireDays"`   // 过期天数（0=永久）
 	MaxDownloads int    `json:"maxDownloads"` // 最大下载次数（0=无限制）
@@ -404,8 +403,8 @@ func (s *service) UpdateQuota(ctx context.Context, userID uint, sizeDelta int64,
 	return s.db.WithContext(ctx).Model(&entity.CloudQuota{}).
 		Where("USER_ID = ?", userID).
 		Updates(map[string]interface{}{
-			"USED_SPACE":  gorm.Expr("USED_SPACE + ?", sizeDelta),
-			"FILE_COUNT":  gorm.Expr("FILE_COUNT + ?", fileDelta),
+			"USED_SPACE": gorm.Expr("USED_SPACE + ?", sizeDelta),
+			"FILE_COUNT": gorm.Expr("FILE_COUNT + ?", fileDelta),
 		}).Error
 }
 

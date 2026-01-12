@@ -13,11 +13,17 @@ type SysTable struct {
 	SysTableCategoryID *uint  `gorm:"column:SYS_TABLECATEGORY_ID" json:"sysTableCategoryId"`
 	URL                string `gorm:"column:URL;size:255" json:"url"`
 	RpcName            string `gorm:"column:RPC_NAME;size:255" json:"rpcName"`
-	IsMenu             string `gorm:"column:IS_MENU;size:1" json:"isMenu"`       // Y/N
+	IsMenu             string `gorm:"column:IS_MENU;size:1" json:"isMenu"`         // Y/N
+	IcoImg             string `gorm:"column:ICO_IMG;size:255" json:"icoImg"`       // 表单图标
 	IsDropdown         string `gorm:"column:IS_DROPDOWN;size:1" json:"isDropdown"` // Y/N
 	SysObjUIConfID     *int   `gorm:"column:SYS_OBJUICONF_ID" json:"sysObjUiConfId"`
-	IsBig              string `gorm:"column:IS_BIG;size:1" json:"isBig"` // Y/N
-	Props              string `gorm:"column:PROPS;size:2000" json:"props"` // 扩展属性（JSON）
+	SysDirectoryID     *uint  `gorm:"column:SYS_DIRECTORY_ID" json:"sysDirectoryId"`     // 安全目录
+	SysParentTableID   *uint  `gorm:"column:SYS_PARENT_TABLE_ID" json:"sysParentTableId"` // 父表
+	RowCnt             *int   `gorm:"column:ROWCNT" json:"rowcnt"`                         // 统计行数
+	IsBig              string `gorm:"column:IS_BIG;size:1" json:"isBig"`                   // Y/N 是否海量
+	Props              string `gorm:"column:PROPS;size:2000" json:"props"`                 // 扩展属性（JSON）
+	Description        string `gorm:"column:DESCRIPTION;size:2000" json:"description"`     // 备注
+	OrderNo            int    `gorm:"column:ORDERNO" json:"orderno"`                       // 排序
 }
 
 // TableName 指定表名

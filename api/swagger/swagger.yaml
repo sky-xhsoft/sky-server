@@ -1,0 +1,3180 @@
+basePath: /api/v1
+definitions:
+  action.ActionResult:
+    properties:
+      data:
+        additionalProperties: true
+        type: object
+      duration:
+        type: integer
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  cloud.FolderNode:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/cloud.FolderNode'
+        type: array
+      createBy:
+        type: string
+      createTime:
+        type: string
+      description:
+        description: 描述
+        type: string
+      fileCount:
+        description: 文件数量
+        type: integer
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      isPublic:
+        description: 是否公开 Y/N
+        type: string
+      name:
+        description: 文件夹名称
+        type: string
+      ownerId:
+        description: 所有者ID
+        type: integer
+      parentId:
+        description: 父文件夹ID
+        type: integer
+      path:
+        description: 完整路径
+        type: string
+      shareCode:
+        description: 分享码
+        type: string
+      shareExpire:
+        description: 分享过期时间
+        type: string
+      sysCompanyId:
+        type: integer
+      totalSize:
+        description: 总大小（字节）
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+    type: object
+  cloud.ShareInfo:
+    properties:
+      file:
+        $ref: '#/definitions/entity.CloudFile'
+      folder:
+        $ref: '#/definitions/entity.CloudFolder'
+      resourceType:
+        type: string
+      share:
+        $ref: '#/definitions/entity.CloudShare'
+      sharer:
+        description: 分享者名称
+        type: string
+    type: object
+  crud.QueryRequest:
+    properties:
+      filters:
+        additionalProperties: true
+        description: 过滤条件
+        type: object
+      include:
+        description: 包含的关联表
+        items:
+          type: string
+        type: array
+      order:
+        description: '排序方向: asc, desc'
+        type: string
+      orderBy:
+        description: 排序字段
+        type: string
+      page:
+        description: 页码，从1开始
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      tableName:
+        type: string
+    required:
+    - tableName
+    type: object
+  crud.QueryResponse:
+    properties:
+      data:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+    type: object
+  entity.CloudFile:
+    properties:
+      accessUrl:
+        description: 访问URL
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      description:
+        description: 描述
+        type: string
+      downloadCount:
+        description: 下载次数
+        type: integer
+      fileExt:
+        description: 文件扩展名
+        type: string
+      fileName:
+        description: 文件名
+        type: string
+      fileSize:
+        description: 文件大小（字节）
+        type: integer
+      fileType:
+        description: 文件MIME类型
+        type: string
+      folderId:
+        description: 文件夹ID
+        type: integer
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      isPublic:
+        description: 是否公开 Y/N
+        type: string
+      md5:
+        description: MD5值
+        type: string
+      ownerId:
+        description: 所有者ID
+        type: integer
+      path:
+        description: 完整路径
+        type: string
+      shareCode:
+        description: 分享码
+        type: string
+      shareExpire:
+        description: 分享过期时间
+        type: string
+      storagePath:
+        description: 存储路径
+        type: string
+      storageType:
+        description: '存储类型: local, oss'
+        type: string
+      sysCompanyId:
+        type: integer
+      tags:
+        description: 标签（逗号分隔）
+        type: string
+      thumbnail:
+        description: 缩略图URL
+        type: string
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+    type: object
+  entity.CloudFolder:
+    properties:
+      createBy:
+        type: string
+      createTime:
+        type: string
+      description:
+        description: 描述
+        type: string
+      fileCount:
+        description: 文件数量
+        type: integer
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      isPublic:
+        description: 是否公开 Y/N
+        type: string
+      name:
+        description: 文件夹名称
+        type: string
+      ownerId:
+        description: 所有者ID
+        type: integer
+      parentId:
+        description: 父文件夹ID
+        type: integer
+      path:
+        description: 完整路径
+        type: string
+      shareCode:
+        description: 分享码
+        type: string
+      shareExpire:
+        description: 分享过期时间
+        type: string
+      sysCompanyId:
+        type: integer
+      totalSize:
+        description: 总大小（字节）
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+    type: object
+  entity.CloudQuota:
+    properties:
+      createBy:
+        type: string
+      createTime:
+        type: string
+      fileCount:
+        description: 文件数量
+        type: integer
+      folderCount:
+        description: 文件夹数量
+        type: integer
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      maxFileSize:
+        description: 单文件最大大小（字节）
+        type: integer
+      quotaType:
+        description: '配额类型: standard, premium'
+        type: string
+      sysCompanyId:
+        type: integer
+      totalQuota:
+        description: 总配额（字节）
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      usedSpace:
+        description: 已用空间（字节）
+        type: integer
+      userId:
+        description: 用户ID
+        type: integer
+    type: object
+  entity.CloudShare:
+    properties:
+      createBy:
+        type: string
+      createTime:
+        type: string
+      downloadCount:
+        description: 已下载次数
+        type: integer
+      expireTime:
+        description: 过期时间
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      maxDownloads:
+        description: 最大下载次数（0=无限制）
+        type: integer
+      password:
+        description: 访问密码
+        type: string
+      resourceId:
+        description: 资源ID
+        type: integer
+      resourceType:
+        description: '资源类型: file, folder'
+        type: string
+      shareCode:
+        description: 分享码
+        type: string
+      shareType:
+        description: '分享类型: public, password, private'
+        type: string
+      sharerId:
+        description: 分享者ID
+        type: integer
+      status:
+        description: '状态: active, expired, disabled'
+        type: string
+      sysCompanyId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      viewCount:
+        description: 查看次数
+        type: integer
+    type: object
+  entity.SysAction:
+    properties:
+      actionType:
+        description: url,sp,job,js,bsh,py,go
+        type: string
+      comments:
+        type: string
+      content:
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      displayName:
+        type: string
+      displayType:
+        description: list_button,list_menu_item,obj_button,obj_menu_item,tab_button
+        type: string
+      filter:
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      name:
+        type: string
+      orderno:
+        type: integer
+      saveObj:
+        type: string
+      scripts:
+        type: string
+      sysCompanyId:
+        type: integer
+      sysTableId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      urlTarget:
+        type: string
+    type: object
+  entity.SysColumn:
+    properties:
+      colLength:
+        type: integer
+      colPrecision:
+        type: integer
+      colType:
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      dbName:
+        type: string
+      defaultValue:
+        type: string
+      description:
+        type: string
+      displayCols:
+        type: integer
+      displayName:
+        type: string
+      displayRows:
+        type: integer
+      displayType:
+        description: blank,button,hr,check,file,image,select,text,textarea,date,datetime,clob,xml,json
+        type: string
+      errMsg:
+        type: string
+      filter:
+        type: string
+      fullName:
+        type: string
+      hrColumnId:
+        type: integer
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      isAk:
+        description: Y/N
+        type: string
+      isDk:
+        description: Y/N
+        type: string
+      isQuery:
+        description: Y/N
+        type: string
+      isShowTitle:
+        type: string
+      isUppercase:
+        description: Y/N
+        type: string
+      mask:
+        description: 10位字段读写规则
+        type: string
+      modifiAble:
+        type: string
+      nullAble:
+        description: Y/N
+        type: string
+      orderno:
+        type: integer
+      props:
+        description: 扩展属性（JSON）
+        type: string
+      refColumnId:
+        type: integer
+      refOnDelete:
+        type: string
+      refTableId:
+        type: integer
+      regExpression:
+        type: string
+      seq:
+        type: string
+      setValueType:
+        description: pk,docno,createBy,byPage,select,fk,sysdate,operator,password,ignore
+        type: string
+      sgrade:
+        description: 字段访问级别
+        type: integer
+      showColumnId:
+        type: integer
+      showColumnVal:
+        type: string
+      submethod:
+        type: string
+      sysCompanyId:
+        type: integer
+      sysDictId:
+        type: string
+      sysTableId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+    type: object
+  entity.SysDictItem:
+    properties:
+      createBy:
+        type: string
+      createTime:
+        type: string
+      cssClass:
+        type: string
+      displayName:
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      isDefaultValue:
+        description: Y/N
+        type: string
+      orderno:
+        type: integer
+      sysCompanyId:
+        type: integer
+      sysDictId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      value:
+        type: string
+    type: object
+  entity.SysTable:
+    properties:
+      akColumnId:
+        type: integer
+      createBy:
+        type: string
+      createTime:
+        type: string
+      description:
+        description: 备注
+        type: string
+      displayName:
+        type: string
+      dkColumnId:
+        type: integer
+      filter:
+        type: string
+      icoImg:
+        description: 表单图标
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      isBig:
+        description: Y/N 是否海量
+        type: string
+      isDropdown:
+        description: Y/N
+        type: string
+      isMenu:
+        description: Y/N
+        type: string
+      mask:
+        description: A:新增,M:修改,D:删除,Q:查询,S:提交,U:反提交,V:作废,E:导出,I:导入
+        type: string
+      name:
+        type: string
+      orderno:
+        description: 排序
+        type: integer
+      props:
+        description: 扩展属性（JSON）
+        type: string
+      realTableId:
+        type: integer
+      rowcnt:
+        description: 统计行数
+        type: integer
+      rpcName:
+        type: string
+      sysCompanyId:
+        type: integer
+      sysDirectoryId:
+        description: 安全目录
+        type: integer
+      sysObjUiConfId:
+        type: integer
+      sysParentTableId:
+        description: 父表
+        type: integer
+      sysTableCategoryId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      url:
+        type: string
+    type: object
+  entity.SysTableRef:
+    properties:
+      assocType:
+        description: 1:1对1, n:1对n
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      displayName:
+        type: string
+      editType:
+        description: Y:标准,N:无,NP:非内嵌允许弹出,NS:非内嵌禁止弹出,A:仅显示新增字段
+        type: string
+      filter:
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      orderno:
+        type: integer
+      refColumnId:
+        type: integer
+      refTableId:
+        type: integer
+      sysCompanyId:
+        type: integer
+      sysTableId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+    type: object
+  entity.WfDefinition:
+    properties:
+      config:
+        description: JSON配置
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      description:
+        type: string
+      displayName:
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      name:
+        type: string
+      status:
+        description: draft:草稿, published:已发布, archived:已归档
+        type: string
+      sysCompanyId:
+        type: integer
+      sysTableId:
+        description: 关联的业务表
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      version:
+        type: integer
+    type: object
+  entity.WfInstance:
+    properties:
+      businessId:
+        description: 业务数据ID
+        type: integer
+      createBy:
+        type: string
+      createTime:
+        type: string
+      currentNodeId:
+        description: 当前节点ID
+        type: integer
+      endTime:
+        description: 结束时间
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      startTime:
+        description: 开始时间
+        type: string
+      startUserId:
+        description: 发起人
+        type: integer
+      status:
+        description: running:运行中, completed:已完成, terminated:已终止, suspended:已挂起
+        type: string
+      sysCompanyId:
+        type: integer
+      sysTableId:
+        description: 关联的业务表
+        type: integer
+      title:
+        description: 流程标题
+        type: string
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      variables:
+        description: 流程变量(JSON)
+        type: string
+      wfDefinitionId:
+        type: integer
+    type: object
+  entity.WfNode:
+    properties:
+      actionId:
+        description: 自动任务关联的动作ID
+        type: integer
+      assignType:
+        description: user:指定用户, role:角色, expression:表达式
+        type: string
+      assignValue:
+        description: 分配值(用户ID/角色ID/表达式)
+        type: string
+      config:
+        description: JSON配置
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      displayName:
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      name:
+        type: string
+      nodeType:
+        description: start:开始, end:结束, user:用户任务, auto:自动任务, gateway:网关
+        type: string
+      posX:
+        description: 节点X坐标
+        type: integer
+      posY:
+        description: 节点Y坐标
+        type: integer
+      sysCompanyId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      wfDefinitionId:
+        type: integer
+    type: object
+  entity.WfTask:
+    properties:
+      action:
+        description: approve:同意, reject:拒绝, transfer:转交
+        type: string
+      assigneeId:
+        description: 任务执行人
+        type: integer
+      claimTime:
+        description: 签收时间
+        type: string
+      comment:
+        description: 审批意见
+        type: string
+      completeTime:
+        description: 完成时间
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      dueTime:
+        description: 截止时间
+        type: string
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      priority:
+        description: 优先级
+        type: integer
+      status:
+        description: pending:待处理, completed:已完成, rejected:已拒绝, transferred:已转交
+        type: string
+      sysCompanyId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      variables:
+        description: 任务变量(JSON)
+        type: string
+      wfInstanceId:
+        type: integer
+      wfNodeId:
+        type: integer
+    type: object
+  entity.WfTransition:
+    properties:
+      condition:
+        description: 流转条件表达式
+        type: string
+      createBy:
+        type: string
+      createTime:
+        type: string
+      fromNodeId:
+        type: integer
+      id:
+        type: integer
+      isActive:
+        description: Y:有效, N:无效
+        type: string
+      name:
+        type: string
+      orderno:
+        description: 优先级顺序
+        type: integer
+      sysCompanyId:
+        type: integer
+      toNodeId:
+        type: integer
+      updateBy:
+        type: string
+      updateTime:
+        type: string
+      wfDefinitionId:
+        type: integer
+    type: object
+  groups.GroupPermission:
+    properties:
+      directoryId:
+        type: integer
+      filterObj:
+        description: JSON格式的过滤条件
+        type: string
+      permission:
+        description: 位运算权限值
+        type: integer
+    type: object
+  handler.AccessShareRequest:
+    properties:
+      password:
+        description: 访问密码（如果需要）
+        type: string
+    type: object
+  handler.AssignGroupsToUserRequest:
+    properties:
+      directoryIds:
+        items:
+          type: integer
+        type: array
+    required:
+    - directoryIds
+    type: object
+  handler.AssignPermissionsRequest:
+    properties:
+      permissions:
+        items:
+          $ref: '#/definitions/groups.GroupPermission'
+        type: array
+    required:
+    - permissions
+    type: object
+  handler.BatchDeleteRequest:
+    properties:
+      ids:
+        items:
+          type: integer
+        type: array
+    required:
+    - ids
+    type: object
+  handler.BatchExecuteActionRequest:
+    properties:
+      batchParams:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+    required:
+    - batchParams
+    type: object
+  handler.BatchNextValueRequest:
+    properties:
+      count:
+        type: integer
+      seqName:
+        type: string
+    required:
+    - count
+    - seqName
+    type: object
+  handler.CreateDirectoryRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      orderno:
+        type: integer
+      parentId:
+        type: integer
+      sysTableId:
+        type: integer
+    required:
+    - name
+    type: object
+  handler.CreateFolderRequest:
+    properties:
+      description:
+        description: 描述
+        type: string
+      folderName:
+        description: 文件夹名称
+        type: string
+      parentId:
+        description: 父文件夹ID（nil表示根目录）
+        type: integer
+    required:
+    - folderName
+    type: object
+  handler.CreateGroupRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      sgrade:
+        type: integer
+    required:
+    - name
+    type: object
+  handler.CreateShareRequest:
+    properties:
+      expireDays:
+        description: 过期天数（0表示永久）
+        type: integer
+      maxDownloads:
+        description: 最大下载次数（0表示无限制）
+        type: integer
+      password:
+        description: 访问密码（当shareType=password时需要）
+        type: string
+      resourceId:
+        description: 资源ID
+        type: integer
+      resourceType:
+        description: file 或 folder
+        type: string
+      shareType:
+        description: public, password, private
+        type: string
+    required:
+    - resourceId
+    - resourceType
+    - shareType
+    type: object
+  handler.ExecuteActionRequest:
+    properties:
+      params:
+        additionalProperties: true
+        type: object
+    type: object
+  handler.KickDeviceRequest:
+    properties:
+      deviceId:
+        type: string
+    required:
+    - deviceId
+    type: object
+  handler.ListFilesResponse:
+    properties:
+      data: {}
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+    type: object
+  handler.LogoutRequest:
+    properties:
+      deviceId:
+        type: string
+    required:
+    - deviceId
+    type: object
+  handler.MoveFileRequest:
+    properties:
+      targetFolderId:
+        description: 目标文件夹ID
+        type: integer
+    type: object
+  handler.RefreshTokenRequest:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
+    type: object
+  handler.RenameFileRequest:
+    properties:
+      newName:
+        description: 新名称
+        type: string
+    required:
+    - newName
+    type: object
+  handler.RenameFolderRequest:
+    properties:
+      newName:
+        description: 新名称
+        type: string
+    required:
+    - newName
+    type: object
+  handler.TransferTaskRequest:
+    properties:
+      comment:
+        type: string
+      toUserId:
+        type: integer
+    required:
+    - toUserId
+    type: object
+  handler.UpdateDirectoryRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      orderno:
+        type: integer
+      parentId:
+        type: integer
+      sysTableId:
+        type: integer
+    type: object
+  handler.UpdateGroupRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      sgrade:
+        type: integer
+    type: object
+  sso.LoginRequest:
+    properties:
+      clientType:
+        description: web, mobile, desktop
+        type: string
+      companyId:
+        type: integer
+      deviceId:
+        description: 设备唯一标识
+        type: string
+      deviceName:
+        description: 设备名称
+        type: string
+      ipAddress:
+        type: string
+      password:
+        type: string
+      userAgent:
+        type: string
+      username:
+        type: string
+    required:
+    - clientType
+    - companyId
+    - password
+    - username
+    type: object
+  sso.LoginResponse:
+    properties:
+      expiresIn:
+        type: integer
+      refreshToken:
+        type: string
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/sso.UserInfo'
+    type: object
+  sso.SessionInfo:
+    properties:
+      clientType:
+        type: string
+      deviceId:
+        type: string
+      deviceName:
+        type: string
+      ipAddress:
+        type: string
+      isCurrent:
+        type: boolean
+      lastActiveTime:
+        type: string
+      loginTime:
+        type: string
+    type: object
+  sso.TokenResponse:
+    properties:
+      expiresIn:
+        type: integer
+      token:
+        type: string
+    type: object
+  sso.UserInfo:
+    properties:
+      companyId:
+        type: integer
+      id:
+        type: integer
+      isAdmin:
+        type: string
+      trueName:
+        type: string
+      username:
+        type: string
+    type: object
+  utils.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      error: {}
+      message:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  workflow.CompleteTaskRequest:
+    properties:
+      action:
+        description: approve, reject
+        type: string
+      comment:
+        type: string
+      taskId:
+        type: integer
+      userId:
+        type: integer
+      variables:
+        additionalProperties: true
+        type: object
+    required:
+    - action
+    - taskId
+    - userId
+    type: object
+  workflow.StartProcessRequest:
+    properties:
+      businessId:
+        type: integer
+      definitionId:
+        type: integer
+      startUserId:
+        type: integer
+      sysTableId:
+        type: integer
+      title:
+        type: string
+      variables:
+        additionalProperties: true
+        type: object
+    required:
+    - definitionId
+    - startUserId
+    type: object
+host: localhost:9090
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: http://www.example.com/support
+  description: 元数据驱动的企业级应用框架
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Sky-Server API
+  version: 1.0.0
+paths:
+  /api/v1/actions/{actionId}:
+    get:
+      consumes:
+      - application/json
+      description: 根据动作ID获取动作定义
+      parameters:
+      - description: 动作ID
+        in: path
+        name: actionId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.SysAction'
+      summary: 获取动作定义
+      tags:
+      - 动作
+  /api/v1/actions/{actionId}/batch-execute:
+    post:
+      consumes:
+      - application/json
+      description: 批量执行指定动作
+      parameters:
+      - description: 动作ID
+        in: path
+        name: actionId
+        required: true
+        type: integer
+      - description: 批量执行请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BatchExecuteActionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/action.ActionResult'
+            type: array
+      summary: 批量执行动作
+      tags:
+      - 动作
+  /api/v1/actions/{actionId}/execute:
+    post:
+      consumes:
+      - application/json
+      description: 根据动作ID执行动作
+      parameters:
+      - description: 动作ID
+        in: path
+        name: actionId
+        required: true
+        type: integer
+      - description: 执行请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ExecuteActionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/action.ActionResult'
+      summary: 执行动作
+      tags:
+      - 动作
+  /api/v1/actions/{tableName}/{actionName}/execute:
+    post:
+      consumes:
+      - application/json
+      description: 根据表名和动作名称执行动作
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      - description: 动作名称
+        in: path
+        name: actionName
+        required: true
+        type: string
+      - description: 执行请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ExecuteActionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/action.ActionResult'
+      summary: 根据名称执行动作
+      tags:
+      - 动作
+  /api/v1/auth/kick-device:
+    post:
+      consumes:
+      - application/json
+      description: 强制指定设备下线
+      parameters:
+      - description: 踢出设备请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.KickDeviceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 踢出指定设备
+      tags:
+      - 认证
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 用户登录，支持多设备登录
+      parameters:
+      - description: 登录请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sso.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sso.LoginResponse'
+      summary: 用户登录
+      tags:
+      - 认证
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 登出当前设备
+      parameters:
+      - description: 登出请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 登出
+      tags:
+      - 认证
+  /api/v1/auth/logout-all:
+    post:
+      consumes:
+      - application/json
+      description: 登出用户的所有设备
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 登出所有设备
+      tags:
+      - 认证
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 使用刷新令牌获取新的访问令牌
+      parameters:
+      - description: 刷新令牌请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sso.TokenResponse'
+      summary: 刷新访问令牌
+      tags:
+      - 认证
+  /api/v1/auth/sessions:
+    get:
+      consumes:
+      - application/json
+      description: 获取用户所有活跃的登录会话
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/sso.SessionInfo'
+            type: array
+      summary: 获取活跃会话
+      tags:
+      - 认证
+  /api/v1/cloud/files:
+    get:
+      consumes:
+      - application/json
+      description: 列出指定文件夹下的所有文件（支持分页）
+      parameters:
+      - description: 文件夹ID（0或空表示根目录）
+        in: query
+        name: folderId
+        type: integer
+      - description: 页码（默认1）
+        in: query
+        name: page
+        type: integer
+      - description: 每页大小（默认20）
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListFilesResponse'
+      summary: 列出文件
+      tags:
+      - Cloud
+  /api/v1/cloud/files/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定文件
+      parameters:
+      - description: 文件ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 删除文件
+      tags:
+      - Cloud
+  /api/v1/cloud/files/{id}/download:
+    get:
+      consumes:
+      - application/json
+      description: 下载指定文件
+      parameters:
+      - description: 文件ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      summary: 下载文件
+      tags:
+      - Cloud
+  /api/v1/cloud/files/{id}/move:
+    put:
+      consumes:
+      - application/json
+      description: 移动文件到指定文件夹
+      parameters:
+      - description: 文件ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 移动请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.MoveFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 移动文件
+      tags:
+      - Cloud
+  /api/v1/cloud/files/{id}/rename:
+    put:
+      consumes:
+      - application/json
+      description: 重命名指定文件
+      parameters:
+      - description: 文件ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 重命名请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RenameFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 重命名文件
+      tags:
+      - Cloud
+  /api/v1/cloud/files/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传文件到指定文件夹
+      parameters:
+      - description: 文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: 文件夹ID（0或空表示根目录）
+        in: formData
+        name: folderId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.CloudFile'
+      summary: 上传文件
+      tags:
+      - Cloud
+  /api/v1/cloud/folders:
+    get:
+      consumes:
+      - application/json
+      description: 列出指定父文件夹下的所有子文件夹
+      parameters:
+      - description: 父文件夹ID（0或空表示根目录）
+        in: query
+        name: parentId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.CloudFolder'
+            type: array
+      summary: 列出文件夹
+      tags:
+      - Cloud
+    post:
+      consumes:
+      - application/json
+      description: 在指定父文件夹下创建新文件夹
+      parameters:
+      - description: 创建文件夹请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateFolderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.CloudFolder'
+      summary: 创建文件夹
+      tags:
+      - Cloud
+  /api/v1/cloud/folders/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定文件夹（包括其中的所有文件和子文件夹）
+      parameters:
+      - description: 文件夹ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 删除文件夹
+      tags:
+      - Cloud
+  /api/v1/cloud/folders/{id}/rename:
+    put:
+      consumes:
+      - application/json
+      description: 重命名指定文件夹
+      parameters:
+      - description: 文件夹ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 重命名请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RenameFolderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 重命名文件夹
+      tags:
+      - Cloud
+  /api/v1/cloud/folders/tree:
+    get:
+      consumes:
+      - application/json
+      description: 获取用户的完整文件夹树结构
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cloud.FolderNode'
+            type: array
+      summary: 获取文件夹树
+      tags:
+      - Cloud
+  /api/v1/cloud/quota:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户的存储配额和使用情况
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.CloudQuota'
+      summary: 获取用户配额信息
+      tags:
+      - Cloud
+  /api/v1/cloud/shares:
+    post:
+      consumes:
+      - application/json
+      description: 创建文件或文件夹分享链接
+      parameters:
+      - description: 创建分享请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateShareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.CloudShare'
+      summary: 创建文件分享
+      tags:
+      - Cloud
+  /api/v1/cloud/shares/{code}:
+    get:
+      consumes:
+      - application/json
+      description: 根据分享码获取分享信息
+      parameters:
+      - description: 分享码
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 访问密码（如果需要）
+        in: query
+        name: password
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cloud.ShareInfo'
+      summary: 获取分享信息
+      tags:
+      - Cloud
+  /api/v1/cloud/shares/{code}/access:
+    post:
+      consumes:
+      - application/json
+      description: 访问分享文件（需要密码验证）
+      parameters:
+      - description: 分享码
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: 访问请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AccessShareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.CloudShare'
+      summary: 访问分享文件
+      tags:
+      - Cloud
+  /api/v1/cloud/shares/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 取消指定的文件分享
+      parameters:
+      - description: 分享ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 取消文件分享
+      tags:
+      - Cloud
+  /api/v1/data/{tableName}:
+    post:
+      consumes:
+      - application/json
+      description: 创建新记录
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      - description: 记录数据
+        in: body
+        name: data
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建记录
+      tags:
+      - CRUD
+  /api/v1/data/{tableName}/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定记录（软删除）
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      - description: 记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 删除记录
+      tags:
+      - CRUD
+    get:
+      consumes:
+      - application/json
+      description: 根据ID查询单条记录
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      - description: 记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询单条记录
+      tags:
+      - CRUD
+    put:
+      consumes:
+      - application/json
+      description: 更新指定记录
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      - description: 记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 记录数据
+        in: body
+        name: data
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 更新记录
+      tags:
+      - CRUD
+  /api/v1/data/{tableName}/batch-delete:
+    post:
+      consumes:
+      - application/json
+      description: 批量删除指定记录（软删除）
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      - description: 批量删除请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BatchDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 批量删除记录
+      tags:
+      - CRUD
+  /api/v1/dicts/{dictId}/items:
+    get:
+      consumes:
+      - application/json
+      description: 根据字典ID获取所有字典项
+      parameters:
+      - description: 字典ID
+        in: path
+        name: dictId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.SysDictItem'
+            type: array
+      summary: 获取字典项
+      tags:
+      - 字典
+  /api/v1/dicts/{dictName}/default:
+    get:
+      consumes:
+      - application/json
+      description: 根据字典名称获取默认值
+      parameters:
+      - description: 字典名称
+        in: path
+        name: dictName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 获取字典的默认值
+      tags:
+      - 字典
+  /api/v1/dicts/name/{dictName}/items:
+    get:
+      consumes:
+      - application/json
+      description: 根据字典名称获取所有字典项
+      parameters:
+      - description: 字典名称
+        in: path
+        name: dictName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.SysDictItem'
+            type: array
+      summary: 根据字典名称获取字典项
+      tags:
+      - 字典
+  /api/v1/dicts/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 清空并重新加载所有字典缓存
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 刷新字典缓存
+      tags:
+      - 字典
+  /api/v1/metadata/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 清空并重新加载元数据缓存
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 刷新元数据缓存
+      tags:
+      - 元数据
+  /api/v1/metadata/tables/{tableId}/actions:
+    get:
+      consumes:
+      - application/json
+      description: 根据表ID获取表的所有可用动作
+      parameters:
+      - description: 表ID
+        in: path
+        name: tableId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.SysAction'
+            type: array
+      summary: 获取表的动作定义
+      tags:
+      - 元数据
+  /api/v1/metadata/tables/{tableId}/columns:
+    get:
+      consumes:
+      - application/json
+      description: 根据表ID获取表的所有字段定义
+      parameters:
+      - description: 表ID
+        in: path
+        name: tableId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.SysColumn'
+            type: array
+      summary: 获取表的字段定义
+      tags:
+      - 元数据
+  /api/v1/metadata/tables/{tableId}/refs:
+    get:
+      consumes:
+      - application/json
+      description: 根据表ID获取表的所有关联关系
+      parameters:
+      - description: 表ID
+        in: path
+        name: tableId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.SysTableRef'
+            type: array
+      summary: 获取表的关系定义
+      tags:
+      - 元数据
+  /api/v1/metadata/tables/{tableName}:
+    get:
+      consumes:
+      - application/json
+      description: 根据表名获取表的元数据定义
+      parameters:
+      - description: 表名
+        in: path
+        name: tableName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.SysTable'
+      summary: 获取表定义
+      tags:
+      - 元数据
+  /api/v1/metadata/version:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前元数据的版本号
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 获取元数据版本
+      tags:
+      - 元数据
+  /api/v1/sequences/{seqName}/current:
+    get:
+      consumes:
+      - application/json
+      description: 获取序号的当前值（不递增）
+      parameters:
+      - description: 序号名称
+        in: path
+        name: seqName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 获取当前序号值
+      tags:
+      - 序号
+  /api/v1/sequences/{seqName}/next:
+    post:
+      consumes:
+      - application/json
+      description: 根据序号名称获取下一个序号值
+      parameters:
+      - description: 序号名称
+        in: path
+        name: seqName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 获取下一个序号
+      tags:
+      - 序号
+  /api/v1/sequences/{seqName}/reset:
+    post:
+      consumes:
+      - application/json
+      description: 重置序号到初始值
+      parameters:
+      - description: 序号名称
+        in: path
+        name: seqName
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 重置序号
+      tags:
+      - 序号
+  /api/v1/sequences/batch:
+    post:
+      consumes:
+      - application/json
+      description: 批量获取指定数量的序号
+      parameters:
+      - description: 批量获取请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BatchNextValueRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 批量获取序号
+      tags:
+      - 序号
+  /api/v1/workflow/definitions:
+    get:
+      parameters:
+      - description: 状态
+        in: query
+        name: status
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页大小
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询流程定义列表
+      tags:
+      - 工作流
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 流程定义
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.WfDefinition'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfDefinition'
+      summary: 创建流程定义
+      tags:
+      - 工作流
+  /api/v1/workflow/definitions/{id}:
+    get:
+      parameters:
+      - description: 流程定义ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfDefinition'
+      summary: 获取流程定义
+      tags:
+      - 工作流
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 流程定义ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 流程定义
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.WfDefinition'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新流程定义
+      tags:
+      - 工作流
+  /api/v1/workflow/definitions/{id}/publish:
+    post:
+      parameters:
+      - description: 流程定义ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 发布流程定义
+      tags:
+      - 工作流
+  /api/v1/workflow/instances:
+    get:
+      parameters:
+      - description: 流程定义ID
+        in: query
+        name: definitionId
+        type: integer
+      - description: 状态
+        in: query
+        name: status
+        type: string
+      - description: 发起人ID
+        in: query
+        name: startUserId
+        type: integer
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页大小
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询流程实例列表
+      tags:
+      - 工作流
+  /api/v1/workflow/instances/{id}:
+    get:
+      parameters:
+      - description: 流程实例ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfInstance'
+      summary: 获取流程实例
+      tags:
+      - 工作流
+  /api/v1/workflow/instances/{id}/terminate:
+    post:
+      parameters:
+      - description: 流程实例ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 终止流程实例
+      tags:
+      - 工作流
+  /api/v1/workflow/instances/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 启动流程请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/workflow.StartProcessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfInstance'
+      summary: 启动流程
+      tags:
+      - 工作流
+  /api/v1/workflow/nodes:
+    get:
+      parameters:
+      - description: 流程定义ID
+        in: query
+        name: definitionId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.WfNode'
+            type: array
+      summary: 获取流程节点列表
+      tags:
+      - 工作流
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 流程节点
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.WfNode'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfNode'
+      summary: 创建流程节点
+      tags:
+      - 工作流
+  /api/v1/workflow/nodes/{id}:
+    delete:
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 删除流程节点
+      tags:
+      - 工作流
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 流程节点
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.WfNode'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新流程节点
+      tags:
+      - 工作流
+  /api/v1/workflow/tasks/{id}:
+    get:
+      parameters:
+      - description: 任务ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfTask'
+      summary: 获取任务详情
+      tags:
+      - 工作流
+  /api/v1/workflow/tasks/{id}/claim:
+    post:
+      parameters:
+      - description: 任务ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 签收任务
+      tags:
+      - 工作流
+  /api/v1/workflow/tasks/{id}/transfer:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 任务ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 转交任务请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.TransferTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 转交任务
+      tags:
+      - 工作流
+  /api/v1/workflow/tasks/complete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 完成任务请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/workflow.CompleteTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 完成任务
+      tags:
+      - 工作流
+  /api/v1/workflow/tasks/my:
+    get:
+      parameters:
+      - description: 状态
+        in: query
+        name: status
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页大小
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询我的任务列表
+      tags:
+      - 工作流
+  /api/v1/workflow/transitions:
+    get:
+      parameters:
+      - description: 流程定义ID
+        in: query
+        name: definitionId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.WfTransition'
+            type: array
+      summary: 获取流程流转列表
+      tags:
+      - 工作流
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 流程流转
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.WfTransition'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.WfTransition'
+      summary: 创建流程流转
+      tags:
+      - 工作流
+  /api/v1/workflow/transitions/{id}:
+    delete:
+      parameters:
+      - description: 流转ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 删除流程流转
+      tags:
+      - 工作流
+  /directories:
+    get:
+      consumes:
+      - application/json
+      description: 查询安全目录列表,支持分页和过滤
+      parameters:
+      - description: 目录名称(模糊查询)
+        in: query
+        name: name
+        type: string
+      - description: 表ID
+        in: query
+        name: tableId
+        type: integer
+      - description: 父目录ID
+        in: query
+        name: parentId
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页大小
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 查询安全目录列表
+      tags:
+      - 安全目录管理
+    post:
+      consumes:
+      - application/json
+      description: 创建新的安全目录
+      parameters:
+      - description: 安全目录信息
+        in: body
+        name: directory
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateDirectoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建安全目录
+      tags:
+      - 安全目录管理
+  /directories/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除安全目录
+      parameters:
+      - description: 目录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除安全目录
+      tags:
+      - 安全目录管理
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取安全目录详情
+      parameters:
+      - description: 目录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取安全目录详情
+      tags:
+      - 安全目录管理
+    put:
+      consumes:
+      - application/json
+      description: 更新安全目录信息
+      parameters:
+      - description: 目录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 安全目录信息
+        in: body
+        name: directory
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateDirectoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新安全目录
+      tags:
+      - 安全目录管理
+  /directories/tree:
+    get:
+      consumes:
+      - application/json
+      description: 获取目录树结构
+      parameters:
+      - default: 0
+        description: 父目录ID
+        in: query
+        name: parentId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取目录树
+      tags:
+      - 安全目录管理
+  /groups:
+    get:
+      consumes:
+      - application/json
+      description: 查询权限组列表,支持分页和过滤
+      parameters:
+      - description: 权限组名称(模糊查询)
+        in: query
+        name: name
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页大小
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 查询权限组列表
+      tags:
+      - 权限组管理
+    post:
+      consumes:
+      - application/json
+      description: 创建新的权限组
+      parameters:
+      - description: 权限组信息
+        in: body
+        name: group
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建权限组
+      tags:
+      - 权限组管理
+  /groups/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除权限组
+      parameters:
+      - description: 权限组ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除权限组
+      tags:
+      - 权限组管理
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取权限组详情
+      parameters:
+      - description: 权限组ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取权限组详情
+      tags:
+      - 权限组管理
+    put:
+      consumes:
+      - application/json
+      description: 更新权限组信息
+      parameters:
+      - description: 权限组ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 权限组信息
+        in: body
+        name: group
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新权限组
+      tags:
+      - 权限组管理
+  /groups/{id}/permissions:
+    get:
+      consumes:
+      - application/json
+      description: 获取权限组的权限列表
+      parameters:
+      - description: 权限组ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取权限组的权限列表
+      tags:
+      - 权限组管理
+    post:
+      consumes:
+      - application/json
+      description: 分配权限给权限组
+      parameters:
+      - description: 权限组ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 权限列表
+        in: body
+        name: permissions
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AssignPermissionsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 分配权限给权限组
+      tags:
+      - 权限组管理
+  /groups/users/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: 获取用户的权限组列表
+      parameters:
+      - description: 用户ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户的权限组列表
+      tags:
+      - 权限组管理
+    post:
+      consumes:
+      - application/json
+      description: 分配权限组给用户
+      parameters:
+      - description: 用户ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: 目录ID列表
+        in: body
+        name: groups
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AssignGroupsToUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 分配权限组给用户
+      tags:
+      - 权限组管理
+  /menus/tree:
+    get:
+      consumes:
+      - application/json
+      description: 获取系统完整的三级菜单结构（子系统-表类别-表单）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"code":200,"data":[...],"message":"success"}'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: '{"code":401,"message":"未授权"}'
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: '{"code":500,"message":"服务器错误"}'
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取完整菜单树
+      tags:
+      - 菜单管理
+  /menus/user/tree:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户权限过滤后的菜单树
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"code":200,"data":[...],"message":"success"}'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: '{"code":401,"message":"未授权"}'
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: '{"code":500,"message":"服务器错误"}'
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户菜单树
+      tags:
+      - 菜单管理
+  /permissions/check:
+    post:
+      consumes:
+      - application/json
+      description: 检查用户是否有指定的权限
+      parameters:
+      - description: 目录ID
+        in: query
+        name: directoryId
+        required: true
+        type: integer
+      - description: 权限值
+        in: query
+        name: permission
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 检查用户权限
+      tags:
+      - 权限组管理
+  /permissions/user:
+    get:
+      consumes:
+      - application/json
+      description: 获取用户在指定目录的权限值
+      parameters:
+      - description: 目录ID
+        in: query
+        name: directoryId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户权限
+      tags:
+      - 权限组管理
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
-	"github.com/sky-xhsoft/sky-server/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
 
