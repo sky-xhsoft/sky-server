@@ -1,0 +1,186 @@
+-- ==========================================
+-- 云盘系统表结构
+-- ==========================================
+
+-- 1. 云盘文件夹表
+DROP TABLE IF EXISTS `cloud_folder`;
+CREATE TABLE `cloud_folder` (
+  `ID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `NAME` VARCHAR(255) NOT NULL COMMENT '文件夹名称',
+  `PARENT_ID` BIGINT UNSIGNED DEFAULT NULL COMMENT '父文件夹ID',
+  `PATH` VARCHAR(1000) NOT NULL COMMENT '完整路径',
+  `OWNER_ID` BIGINT UNSIGNED NOT NULL COMMENT '所有者ID',
+  `IS_PUBLIC` CHAR(1) DEFAULT 'N' COMMENT '是否公开 Y/N',
+  `SHARE_CODE` VARCHAR(50) DEFAULT NULL COMMENT '分享码',
+  `SHARE_EXPIRE` DATETIME DEFAULT NULL COMMENT '分享过期时间',
+  `DESCRIPTION` VARCHAR(500) DEFAULT NULL COMMENT '描述',
+  `FILE_COUNT` INT DEFAULT 0 COMMENT '文件数量',
+  `TOTAL_SIZE` BIGINT DEFAULT 0 COMMENT '总大小（字节）',
+  `SYS_COMPANY_ID` BIGINT UNSIGNED DEFAULT NULL COMMENT '公司ID',
+  `CREATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '创建人',
+  `CREATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `UPDATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '更新人',
+  `UPDATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `IS_ACTIVE` CHAR(1) DEFAULT 'Y' COMMENT '是否有效 Y/N',
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `uk_share_code` (`SHARE_CODE`),
+  KEY `idx_parent_id` (`PARENT_ID`),
+  KEY `idx_path` (`PATH`(255)),
+  KEY `idx_owner_id` (`OWNER_ID`),
+  KEY `idx_sys_company_id` (`SYS_COMPANY_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='云盘文件夹表';
+
+-- 2. 云盘文件表
+DROP TABLE IF EXISTS `cloud_file`;
+CREATE TABLE `cloud_file` (
+  `ID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `FILE_NAME` VARCHAR(255) NOT NULL COMMENT '文件名',
+  `FOLDER_ID` BIGINT UNSIGNED DEFAULT NULL COMMENT '文件夹ID',
+  `PATH` VARCHAR(1000) NOT NULL COMMENT '完整路径',
+  `STORAGE_TYPE` VARCHAR(20) NOT NULL DEFAULT 'local' COMMENT '存储类型: local, oss',
+  `STORAGE_PATH` VARCHAR(500) NOT NULL COMMENT '存储路径',
+  `FILE_SIZE` BIGINT NOT NULL COMMENT '文件大小（字节）',
+  `FILE_TYPE` VARCHAR(100) DEFAULT NULL COMMENT '文件MIME类型',
+  `FILE_EXT` VARCHAR(20) DEFAULT NULL COMMENT '文件扩展名',
+  `MD5` VARCHAR(32) DEFAULT NULL COMMENT 'MD5值',
+  `OWNER_ID` BIGINT UNSIGNED NOT NULL COMMENT '所有者ID',
+  `IS_PUBLIC` CHAR(1) DEFAULT 'N' COMMENT '是否公开 Y/N',
+  `SHARE_CODE` VARCHAR(50) DEFAULT NULL COMMENT '分享码',
+  `SHARE_EXPIRE` DATETIME DEFAULT NULL COMMENT '分享过期时间',
+  `ACCESS_URL` VARCHAR(500) DEFAULT NULL COMMENT '访问URL',
+  `THUMBNAIL` VARCHAR(500) DEFAULT NULL COMMENT '缩略图URL',
+  `DOWNLOAD_COUNT` INT DEFAULT 0 COMMENT '下载次数',
+  `TAGS` VARCHAR(500) DEFAULT NULL COMMENT '标签（逗号分隔）',
+  `DESCRIPTION` VARCHAR(500) DEFAULT NULL COMMENT '描述',
+  `SYS_COMPANY_ID` BIGINT UNSIGNED DEFAULT NULL COMMENT '公司ID',
+  `CREATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '创建人',
+  `CREATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `UPDATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '更新人',
+  `UPDATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `IS_ACTIVE` CHAR(1) DEFAULT 'Y' COMMENT '是否有效 Y/N',
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `uk_share_code` (`SHARE_CODE`),
+  KEY `idx_folder_id` (`FOLDER_ID`),
+  KEY `idx_md5` (`MD5`),
+  KEY `idx_owner_id` (`OWNER_ID`),
+  KEY `idx_sys_company_id` (`SYS_COMPANY_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='云盘文件表';
+
+-- 3. 云盘分享记录表
+DROP TABLE IF EXISTS `cloud_share`;
+CREATE TABLE `cloud_share` (
+  `ID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `SHARE_CODE` VARCHAR(50) NOT NULL COMMENT '分享码',
+  `RESOURCE_TYPE` VARCHAR(20) NOT NULL COMMENT '资源类型: file, folder',
+  `RESOURCE_ID` BIGINT UNSIGNED NOT NULL COMMENT '资源ID',
+  `SHARER_ID` BIGINT UNSIGNED NOT NULL COMMENT '分享者ID',
+  `SHARE_TYPE` VARCHAR(20) NOT NULL COMMENT '分享类型: public, password, private',
+  `PASSWORD` VARCHAR(50) DEFAULT NULL COMMENT '访问密码',
+  `EXPIRE_TIME` DATETIME DEFAULT NULL COMMENT '过期时间',
+  `MAX_DOWNLOADS` INT DEFAULT 0 COMMENT '最大下载次数（0=无限制）',
+  `DOWNLOAD_COUNT` INT DEFAULT 0 COMMENT '已下载次数',
+  `VIEW_COUNT` INT DEFAULT 0 COMMENT '查看次数',
+  `STATUS` VARCHAR(20) DEFAULT 'active' COMMENT '状态: active, expired, disabled',
+  `SYS_COMPANY_ID` BIGINT UNSIGNED DEFAULT NULL COMMENT '公司ID',
+  `CREATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '创建人',
+  `CREATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `UPDATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '更新人',
+  `UPDATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `IS_ACTIVE` CHAR(1) DEFAULT 'Y' COMMENT '是否有效 Y/N',
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `uk_share_code` (`SHARE_CODE`),
+  KEY `idx_resource_id` (`RESOURCE_ID`),
+  KEY `idx_sharer_id` (`SHARER_ID`),
+  KEY `idx_sys_company_id` (`SYS_COMPANY_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='云盘分享记录表';
+
+-- 4. 云盘配额表
+DROP TABLE IF EXISTS `cloud_quota`;
+CREATE TABLE `cloud_quota` (
+  `ID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `USER_ID` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+  `TOTAL_QUOTA` BIGINT NOT NULL COMMENT '总配额（字节）',
+  `USED_SPACE` BIGINT DEFAULT 0 COMMENT '已用空间（字节）',
+  `FILE_COUNT` INT DEFAULT 0 COMMENT '文件数量',
+  `FOLDER_COUNT` INT DEFAULT 0 COMMENT '文件夹数量',
+  `MAX_FILE_SIZE` BIGINT DEFAULT 0 COMMENT '单文件最大大小（字节）',
+  `QUOTA_TYPE` VARCHAR(20) DEFAULT 'standard' COMMENT '配额类型: standard, premium',
+  `SYS_COMPANY_ID` BIGINT UNSIGNED DEFAULT NULL COMMENT '公司ID',
+  `CREATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '创建人',
+  `CREATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `UPDATE_BY` VARCHAR(80) DEFAULT NULL COMMENT '更新人',
+  `UPDATE_TIME` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `IS_ACTIVE` CHAR(1) DEFAULT 'Y' COMMENT '是否有效 Y/N',
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `uk_user_id` (`USER_ID`),
+  KEY `idx_sys_company_id` (`SYS_COMPANY_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='云盘配额表';
+
+-- ==========================================
+-- 初始化默认配额
+-- ==========================================
+
+-- 为现有用户创建默认配额（10GB存储空间，20GB单文件限制）
+INSERT INTO `cloud_quota` (`USER_ID`, `TOTAL_QUOTA`, `USED_SPACE`, `FILE_COUNT`, `FOLDER_COUNT`, `MAX_FILE_SIZE`, `QUOTA_TYPE`, `CREATE_BY`)
+SELECT
+  u.ID,
+  107374182400,   -- 10GB = 10 * 1024 * 1024 * 1024
+  0,
+  0,
+  0,
+  214748364800,   -- 20GB = 20 * 1024 * 1024 * 1024
+  'standard',
+  'system'
+FROM sys_user u
+WHERE NOT EXISTS (
+  SELECT 1 FROM cloud_quota q WHERE q.USER_ID = u.ID
+);
+
+-- ==========================================
+-- 说明文档
+-- ==========================================
+
+/*
+表结构说明：
+
+1. cloud_folder - 云盘文件夹表
+   - 支持层级结构（PARENT_ID）
+   - 支持完整路径存储（PATH）
+   - 支持分享功能（SHARE_CODE, SHARE_EXPIRE）
+   - 统计文件数和总大小（FILE_COUNT, TOTAL_SIZE）
+
+2. cloud_file - 云盘文件表
+   - 支持多种存储类型（local, oss）
+   - 文件去重（MD5）
+   - 支持分享和访问控制
+   - 统计下载次数
+   - 支持标签和缩略图
+
+3. cloud_share - 云盘分享记录表
+   - 支持文件和文件夹分享
+   - 三种分享类型：public（公开）、password（密码保护）、private（私有）
+   - 下载次数限制和统计
+   - 过期时间控制
+
+4. cloud_quota - 云盘配额表
+   - 每个用户独立配额
+   - 统计已用空间和文件数
+   - 支持不同配额类型（standard, premium）
+   - 限制单文件最大大小
+
+索引说明：
+- 主键索引：所有表的 ID 字段
+- 唯一索引：SHARE_CODE（分享码）、USER_ID（配额表）
+- 普通索引：PARENT_ID、OWNER_ID、FOLDER_ID、RESOURCE_ID、SHARER_ID、MD5、SYS_COMPANY_ID
+- 路径索引：PATH 字段前255个字符（避免索引过长）
+
+默认配额：
+- 标准用户：10GB 存储空间
+- 单文件限制：20GB
+- 配额类型：standard
+
+使用方法：
+1. 执行此 SQL 文件创建所有云盘相关表
+2. 系统会自动为现有用户创建默认配额
+3. 新用户注册时需要在代码中自动创建配额记录
+*/

@@ -93,7 +93,7 @@ rateLimit:
 
 # 文件上传配置
 upload:
-  maxSize: 10485760  # 10MB（字节）
+  maxSize: 21474836480  # 10MB（字节）
   allowedTypes:
     - "image/jpeg"
     - "image/png"
@@ -102,6 +102,33 @@ upload:
     - "application/msword"
     - "application/vnd.ms-excel"
   uploadPath: "uploads"
+
+# 文件管理配置（云盘）
+file:
+  uploadDir: "uploads"  # 上传目录
+  maxFileSize: 21474836480  # 最大文件大小：20GB（字节）
+  allowedExts:  # 允许的文件扩展名（空列表表示允许所有类型）
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".gif"
+    - ".pdf"
+    - ".doc"
+    - ".docx"
+    - ".xls"
+    - ".xlsx"
+    - ".ppt"
+    - ".pptx"
+    - ".txt"
+    - ".zip"
+    - ".rar"
+    - ".7z"
+    - ".mp4"
+    - ".avi"
+    - ".mkv"
+    - ".mp3"
+    - ".wav"
+    - ".mp4"
 
 # Swagger配置
 swagger:

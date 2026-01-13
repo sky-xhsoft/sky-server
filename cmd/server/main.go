@@ -167,6 +167,11 @@ func main() {
 	menuService := menu.NewService(db)
 
 	// 初始化文件服务
+	logger.Info("Initializing file service",
+		zap.String("uploadDir", cfg.File.UploadDir),
+		zap.Int64("maxFileSize", cfg.File.MaxFileSize),
+		zap.Float64("maxFileSizeGB", float64(cfg.File.MaxFileSize)/(1024*1024*1024)),
+	)
 	fileService := file.NewService(db, &file.Config{
 		UploadDir:   cfg.File.UploadDir,
 		MaxFileSize: cfg.File.MaxFileSize,
@@ -200,6 +205,10 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	engine := gin.New()
+
+	// 设置文件上传大小限制（32MB内存缓存，超过的部分会写入临时文件）
+	// 这样可以支持大文件上传而不会占用过多内存
+	engine.MaxMultipartMemory = 32 << 20 // 32 MB
 
 	// 9. 注册路由
 	services := &router.Services{
