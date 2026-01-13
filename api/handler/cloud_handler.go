@@ -37,6 +37,11 @@ func (h *CloudHandler) CreateFolder(c *gin.Context) {
 		return
 	}
 
+	// 将 parentId=0 视为根目录（nil）
+	if req.ParentID != nil && *req.ParentID == 0 {
+		req.ParentID = nil
+	}
+
 	userID, exists := c.Get("userID")
 	if !exists {
 		utils.Unauthorized(c, "未授权")
@@ -76,8 +81,11 @@ func (h *CloudHandler) ListFolders(c *gin.Context) {
 			utils.BadRequest(c, "parentId 格式错误")
 			return
 		}
-		pid := uint(id)
-		parentID = &pid
+		// 将 0 视为根目录（nil）
+		if id > 0 {
+			pid := uint(id)
+			parentID = &pid
+		}
 	}
 
 	userID, exists := c.Get("userID")
@@ -213,8 +221,11 @@ func (h *CloudHandler) UploadFile(c *gin.Context) {
 			utils.BadRequest(c, "folderId 格式错误")
 			return
 		}
-		fid := uint(id)
-		folderID = &fid
+		// 将 0 视为根目录（nil）
+		if id > 0 {
+			fid := uint(id)
+			folderID = &fid
+		}
 	}
 
 	userID, exists := c.Get("userID")
@@ -347,6 +358,11 @@ func (h *CloudHandler) MoveFile(c *gin.Context) {
 		return
 	}
 
+	// 将 targetFolderId=0 视为根目录（nil）
+	if req.TargetFolderID != nil && *req.TargetFolderID == 0 {
+		req.TargetFolderID = nil
+	}
+
 	userID, exists := c.Get("userID")
 	if !exists {
 		utils.Unauthorized(c, "未授权")
@@ -419,8 +435,11 @@ func (h *CloudHandler) ListFiles(c *gin.Context) {
 			utils.BadRequest(c, "folderId 格式错误")
 			return
 		}
-		fid := uint(id)
-		folderID = &fid
+		// 将 0 视为根目录（nil）
+		if id > 0 {
+			fid := uint(id)
+			folderID = &fid
+		}
 	}
 
 	// 分页参数
