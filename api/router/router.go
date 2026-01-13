@@ -21,6 +21,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/workflow"
 	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -44,11 +45,13 @@ type Services struct {
 }
 
 // Setup 设置路由
-func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, logger *zap.Logger) {
+func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, logger *zap.Logger, db *gorm.DB) {
 	// 全局中间件
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS(cfg.CORS))
+	// 域名多租户识别中间件（根据请求域名自动识别公司）
+	engine.Use(middleware.DomainTenant(db))
 
 	// 健康检查
 	engine.GET("/health", func(c *gin.Context) {
