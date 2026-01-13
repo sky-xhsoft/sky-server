@@ -2,9 +2,10 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/api/middleware"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/sso"
-	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
 // AuthHandler 认证处理器
@@ -21,7 +22,7 @@ func NewAuthHandler(ssoService sso.Service) *AuthHandler {
 
 // Login 用户登录
 // @Summary 用户登录
-// @Description 用户登录，支持多设备登录
+// @Description 用户登录，支持多设备登录，优先使用域名识别公司
 // @Tags 认证
 // @Accept json
 // @Produce json
@@ -32,6 +33,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var req sso.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	// 优先使用域名识别的公司ID
+	domainCompanyID := middleware.GetCompanyID(c)
+	if domainCompanyID != nil {
+		// 使用域名识别的公司ID
+		req.CompanyID = domainCompanyID
+	} else if req.CompanyID == nil {
+		// 如果既没有域名识别，也没有传递公司ID，返回错误
+		utils.BadRequest(c, "无法识别公司，请配置域名或传递 companyId")
 		return
 	}
 

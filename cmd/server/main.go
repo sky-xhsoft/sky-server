@@ -227,7 +227,7 @@ func main() {
 		Cloud:     cloudService,
 		WSManager: wsManager,
 	}
-	router.Setup(engine, cfg, jwtUtil, services, log)
+	router.Setup(engine, cfg, jwtUtil, services, log, db)
 	logger.Info("Routes registered successfully")
 
 	// 10. 启动HTTP服务器

@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 # 配置
-BASE_URL = "http://localhost:9090/api/v1"
+BASE_URL = "http://pan.xh-tec.cn:9090/api/v1"
 USERNAME = "admin"
 PASSWORD = "admin123"
 COMPANY_ID = 1
@@ -60,7 +60,6 @@ class APITester:
         data = {
             "username": USERNAME,
             "password": PASSWORD,
-            "companyId": COMPANY_ID,
             "clientType": "web",
             "deviceId": "test-device-001",
             "deviceName": "API Test Client"
