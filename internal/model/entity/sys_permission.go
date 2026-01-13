@@ -57,10 +57,11 @@ func (SysGroupPrem) TableName() string {
 // SysCompany 公司（多租户）
 type SysCompany struct {
 	BaseModel
-	Name        string `gorm:"column:NAME;size:255;not null" json:"name"`
-	Code        string `gorm:"column:CODE;size:50;uniqueIndex" json:"code"`
-	Description string `gorm:"column:DESCRIPTION;size:500" json:"description"`
-	Status      string `gorm:"column:STATUS;size:1;default:Y" json:"status"` // Y:启用, N:禁用
+	Name        string  `gorm:"column:NAME;size:255;not null" json:"name"`
+	Code        string  `gorm:"column:CODE;size:50;uniqueIndex" json:"code"`
+	Domain      *string `gorm:"column:DOMAIN;size:255;uniqueIndex" json:"domain"` // 公司域名（用于多租户识别）
+	Description string  `gorm:"column:DESCRIPTION;size:500" json:"description"`
+	Status      string  `gorm:"column:STATUS;size:1;default:Y" json:"status"` // Y:启用, N:禁用
 }
 
 // TableName 指定表名

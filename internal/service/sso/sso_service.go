@@ -36,7 +36,7 @@ type Service interface {
 type LoginRequest struct {
 	Username   string `json:"username" binding:"required"`
 	Password   string `json:"password" binding:"required"`
-	CompanyID  uint   `json:"companyId" binding:"required"`
+	CompanyID  *uint  `json:"companyId"`                        // 可选，优先使用域名识别的公司ID
 	ClientType string `json:"clientType" binding:"required"` // web, mobile, desktop
 	DeviceID   string `json:"deviceId"`                      // 设备唯一标识
 	DeviceName string `json:"deviceName"`                    // 设备名称
@@ -104,8 +104,8 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 		return nil, errors.InvalidCredentials
 	}
 
-	// 验证公司ID
-	if user.SysCompanyID != req.CompanyID {
+	// 验证公司ID（如果提供了）
+	if req.CompanyID != nil && user.SysCompanyID != *req.CompanyID {
 		return nil, errors.InvalidCredentials
 	}
 
