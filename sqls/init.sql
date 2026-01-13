@@ -438,7 +438,6 @@ CREATE TABLE `sys_table_category`  (
 -- ----------------------------
 -- Table structure for sys_table_cmd
 -- ----------------------------
-DROP TABLE IF EXISTS `sys_table_cmd`;
 CREATE TABLE `sys_table_cmd`  (
   `ID` int UNSIGNED NOT NULL AUTO_INCREMENT,
   `SYS_COMPANY_ID` int UNSIGNED NULL DEFAULT NULL COMMENT '所属公司',

@@ -319,9 +319,10 @@ func (s *service) CreateShare(ctx context.Context, req *CreateShareRequest, user
 	shareCode := s.generateShareCode()
 
 	// 计算过期时间
-	var expireTime string
+	var expireTime *time.Time
 	if req.ExpireDays > 0 {
-		expireTime = time.Now().AddDate(0, 0, req.ExpireDays).Format("2006-01-02 15:04:05")
+		t := time.Now().AddDate(0, 0, req.ExpireDays)
+		expireTime = &t
 	}
 
 	// 创建分享记录
@@ -369,7 +370,7 @@ func (s *service) GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQ
 			UsedSpace:   0,
 			FileCount:   0,
 			FolderCount: 0,
-			MaxFileSize: 100 * 1024 * 1024, // 默认100MB
+			MaxFileSize: 20 * 1024 * 1024 * 1024, // 默认20GB
 			QuotaType:   "standard",
 		}
 		s.db.WithContext(ctx).Create(&quota)
@@ -420,6 +421,39 @@ func (s *service) getFolderByID(ctx context.Context, folderID uint) (*entity.Clo
 	return &folder, nil
 }
 
+func (s *service) getFileByID(ctx context.Context, fileID uint) (*entity.CloudFile, error) {
+	var file entity.CloudFile
+	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", fileID, "Y").First(&file).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrResourceNotFound, "文件不存在")
+		}
+		return nil, errors.Wrap(errors.ErrDatabase, "查询文件失败", err)
+	}
+	return &file, nil
+}
+
+func (s *service) updateChildrenPaths(ctx context.Context, oldPath, newPath string) error {
+	// 更新所有子文件夹的路径
+	if err := s.db.WithContext(ctx).Exec(`
+		UPDATE cloud_folder
+		SET PATH = CONCAT(?, SUBSTRING(PATH, ?))
+		WHERE PATH LIKE ? AND IS_ACTIVE = 'Y'
+	`, newPath, len(oldPath)+1, oldPath+"/%").Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "更新子文件夹路径失败", err)
+	}
+
+	// 更新所有子文件的路径
+	if err := s.db.WithContext(ctx).Exec(`
+		UPDATE cloud_file
+		SET PATH = CONCAT(?, SUBSTRING(PATH, ?))
+		WHERE PATH LIKE ? AND IS_ACTIVE = 'Y'
+	`, newPath, len(oldPath)+1, oldPath+"/%").Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "更新子文件路径失败", err)
+	}
+
+	return nil
+}
+
 func (s *service) generateShareCode() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 8)
@@ -429,39 +463,365 @@ func (s *service) generateShareCode() string {
 	return string(b)
 }
 
-// 其他方法的存根实现
+// RenameFolder 重命名文件夹
 func (s *service) RenameFolder(ctx context.Context, folderID uint, newName string, userID uint) error {
+	folder, err := s.getFolderByID(ctx, folderID)
+	if err != nil {
+		return err
+	}
+
+	// 检查权限
+	if folder.OwnerID != userID {
+		return errors.New(errors.ErrPermissionDenied, "无权限重命名此文件夹")
+	}
+
+	// 检查同名文件夹
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
+		Where("PARENT_ID = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
+			folder.ParentID, newName, userID, "Y", folderID).
+		Count(&count).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "检查文件夹失败", err)
+	}
+	if count > 0 {
+		return errors.New(errors.ErrResourceExists, "同名文件夹已存在")
+	}
+
+	// 更新文件夹名称和路径
+	oldPath := folder.Path
+	newPath := oldPath[:len(oldPath)-len(folder.Name)] + newName
+
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
+		Where("ID = ?", folderID).
+		Updates(map[string]interface{}{
+			"NAME":        newName,
+			"PATH":        newPath,
+			"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
+			"UPDATE_TIME": time.Now(),
+		}).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "重命名文件夹失败", err)
+	}
+
+	// 更新所有子文件夹和文件的路径
+	if err := s.updateChildrenPaths(ctx, oldPath, newPath); err != nil {
+		return err
+	}
+
 	return nil
 }
 
+// DownloadFile 下载文件
 func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudFile, error) {
-	return nil, nil, nil
+	file, err := s.getFileByID(ctx, fileID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 检查权限
+	if file.OwnerID != userID {
+		return nil, nil, errors.New(errors.ErrPermissionDenied, "无权限下载此文件")
+	}
+
+	// 从存储中下载文件
+	reader, err := s.storage.Download(ctx, file.StoragePath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 更新下载次数
+	s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("ID = ?", fileID).
+		Update("DOWNLOAD_COUNT", gorm.Expr("DOWNLOAD_COUNT + 1"))
+
+	return reader, file, nil
 }
 
+// DeleteFile 删除文件
 func (s *service) DeleteFile(ctx context.Context, fileID uint, userID uint) error {
+	file, err := s.getFileByID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	// 检查权限
+	if file.OwnerID != userID {
+		return errors.New(errors.ErrPermissionDenied, "无权限删除此文件")
+	}
+
+	// 软删除文件记录
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("ID = ?", fileID).
+		Update("IS_ACTIVE", "N").Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "删除文件失败", err)
+	}
+
+	// 更新配额
+	s.UpdateQuota(ctx, userID, -file.FileSize, -1)
+
+	// 异步删除物理文件（可选）
+	go func() {
+		_ = s.storage.Delete(context.Background(), file.StoragePath)
+	}()
+
 	return nil
 }
 
+// MoveFile 移动文件
 func (s *service) MoveFile(ctx context.Context, fileID uint, targetFolderID *uint, userID uint) error {
+	file, err := s.getFileByID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	// 检查权限
+	if file.OwnerID != userID {
+		return errors.New(errors.ErrPermissionDenied, "无权限移动此文件")
+	}
+
+	// 检查目标文件夹
+	var targetPath string
+	if targetFolderID != nil {
+		targetFolder, err := s.getFolderByID(ctx, *targetFolderID)
+		if err != nil {
+			return err
+		}
+		if targetFolder.OwnerID != userID {
+			return errors.New(errors.ErrPermissionDenied, "无权限移动到此文件夹")
+		}
+		targetPath = targetFolder.Path
+	}
+
+	// 检查目标位置是否已有同名文件
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("FOLDER_ID = ? AND FILE_NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
+			targetFolderID, file.FileName, userID, "Y", fileID).
+		Count(&count).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "检查文件失败", err)
+	}
+	if count > 0 {
+		return errors.New(errors.ErrResourceExists, "目标文件夹中已存在同名文件")
+	}
+
+	// 更新文件位置和路径
+	newPath := targetPath + "/" + file.FileName
+	if targetFolderID == nil {
+		newPath = "/" + file.FileName
+	}
+
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("ID = ?", fileID).
+		Updates(map[string]interface{}{
+			"FOLDER_ID":   targetFolderID,
+			"PATH":        newPath,
+			"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
+			"UPDATE_TIME": time.Now(),
+		}).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "移动文件失败", err)
+	}
+
 	return nil
 }
 
+// RenameFile 重命名文件
 func (s *service) RenameFile(ctx context.Context, fileID uint, newName string, userID uint) error {
+	file, err := s.getFileByID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	// 检查权限
+	if file.OwnerID != userID {
+		return errors.New(errors.ErrPermissionDenied, "无权限重命名此文件")
+	}
+
+	// 检查同名文件
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("FOLDER_ID = ? AND FILE_NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
+			file.FolderID, newName, userID, "Y", fileID).
+		Count(&count).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "检查文件失败", err)
+	}
+	if count > 0 {
+		return errors.New(errors.ErrResourceExists, "同名文件已存在")
+	}
+
+	// 更新文件名称和路径
+	oldPath := file.Path
+	newPath := oldPath[:len(oldPath)-len(file.FileName)] + newName
+
+	// 获取新的扩展名
+	newExt := filepath.Ext(newName)
+
+	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("ID = ?", fileID).
+		Updates(map[string]interface{}{
+			"FILE_NAME":   newName,
+			"FILE_EXT":    newExt,
+			"PATH":        newPath,
+			"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
+			"UPDATE_TIME": time.Now(),
+		}).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "重命名文件失败", err)
+	}
+
 	return nil
 }
 
+// ListFiles 列出文件
 func (s *service) ListFiles(ctx context.Context, folderID *uint, userID uint, page, pageSize int) ([]*entity.CloudFile, int64, error) {
-	return nil, 0, nil
+	var files []*entity.CloudFile
+	var total int64
+
+	query := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
+		Where("OWNER_ID = ? AND IS_ACTIVE = ?", userID, "Y")
+
+	if folderID == nil {
+		query = query.Where("FOLDER_ID IS NULL")
+	} else {
+		query = query.Where("FOLDER_ID = ?", *folderID)
+	}
+
+	// 查询总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, errors.Wrap(errors.ErrDatabase, "查询文件总数失败", err)
+	}
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	if err := query.Order("CREATE_TIME DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&files).Error; err != nil {
+		return nil, 0, errors.Wrap(errors.ErrDatabase, "查询文件失败", err)
+	}
+
+	return files, total, nil
 }
 
+// GetShareInfo 获取分享信息
 func (s *service) GetShareInfo(ctx context.Context, shareCode string, password string) (*ShareInfo, error) {
-	return nil, nil
+	var share entity.CloudShare
+	if err := s.db.WithContext(ctx).
+		Where("SHARE_CODE = ? AND IS_ACTIVE = ?", shareCode, "Y").
+		First(&share).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrResourceNotFound, "分享不存在或已失效")
+		}
+		return nil, errors.Wrap(errors.ErrDatabase, "查询分享失败", err)
+	}
+
+	// 检查状态
+	if share.Status != "active" {
+		return nil, errors.New(errors.ErrResourceNotFound, "分享已失效")
+	}
+
+	// 检查过期时间
+	if share.ExpireTime != nil && share.ExpireTime.Before(time.Now()) {
+		// 更新状态为过期
+		s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+			Where("ID = ?", share.ID).
+			Update("STATUS", "expired")
+		return nil, errors.New(errors.ErrResourceNotFound, "分享已过期")
+	}
+
+	// 检查密码
+	if share.ShareType == "password" {
+		if password == "" {
+			return nil, errors.New(errors.ErrInvalidParam, "需要访问密码")
+		}
+		if password != share.Password {
+			return nil, errors.New(errors.ErrInvalidParam, "访问密码错误")
+		}
+	}
+
+	// 获取资源详情
+	info := &ShareInfo{
+		Share:        &share,
+		ResourceType: share.ResourceType,
+	}
+
+	// 查询分享者信息
+	var user entity.SysUser
+	if err := s.db.WithContext(ctx).Where("ID = ?", share.SharerID).First(&user).Error; err == nil {
+		info.Sharer = user.Username
+	}
+
+	// 根据资源类型加载详情
+	if share.ResourceType == "file" {
+		var file entity.CloudFile
+		if err := s.db.WithContext(ctx).
+			Where("ID = ? AND IS_ACTIVE = ?", share.ResourceID, "Y").
+			First(&file).Error; err == nil {
+			info.File = &file
+		}
+	} else if share.ResourceType == "folder" {
+		var folder entity.CloudFolder
+		if err := s.db.WithContext(ctx).
+			Where("ID = ? AND IS_ACTIVE = ?", share.ResourceID, "Y").
+			First(&folder).Error; err == nil {
+			info.Folder = &folder
+		}
+	}
+
+	// 更新查看次数
+	s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+		Where("ID = ?", share.ID).
+		Update("VIEW_COUNT", gorm.Expr("VIEW_COUNT + 1"))
+
+	return info, nil
 }
 
+// AccessShare 访问分享
 func (s *service) AccessShare(ctx context.Context, shareCode string, password string) (*entity.CloudShare, error) {
-	return nil, nil
+	// 获取分享信息（包含验证）
+	info, err := s.GetShareInfo(ctx, shareCode, password)
+	if err != nil {
+		return nil, err
+	}
+
+	// 检查下载次数限制
+	if info.Share.MaxDownloads > 0 && info.Share.DownloadCount >= info.Share.MaxDownloads {
+		return nil, errors.New(errors.ErrResourceNotFound, "分享下载次数已达上限")
+	}
+
+	// 更新下载次数
+	s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+		Where("ID = ?", info.Share.ID).
+		Update("DOWNLOAD_COUNT", gorm.Expr("DOWNLOAD_COUNT + 1"))
+
+	return info.Share, nil
 }
 
+// CancelShare 取消分享
 func (s *service) CancelShare(ctx context.Context, shareID uint, userID uint) error {
+	var share entity.CloudShare
+	if err := s.db.WithContext(ctx).
+		Where("ID = ? AND IS_ACTIVE = ?", shareID, "Y").
+		First(&share).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.New(errors.ErrResourceNotFound, "分享不存在")
+		}
+		return errors.Wrap(errors.ErrDatabase, "查询分享失败", err)
+	}
+
+	// 检查权限
+	if share.SharerID != userID {
+		return errors.New(errors.ErrPermissionDenied, "无权限取消此分享")
+	}
+
+	// 更新分享状态
+	if err := s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+		Where("ID = ?", shareID).
+		Updates(map[string]interface{}{
+			"STATUS":      "disabled",
+			"IS_ACTIVE":   "N",
+			"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
+			"UPDATE_TIME": time.Now(),
+		}).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "取消分享失败", err)
+	}
+
 	return nil
 }
