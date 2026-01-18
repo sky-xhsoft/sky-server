@@ -17,6 +17,16 @@ import (
 
 // Service 云盘服务接口
 type Service interface {
+	// CloudItem 统一管理（新）
+	CreateItem(ctx context.Context, item *entity.CloudItem) error
+	GetItem(ctx context.Context, itemID uint, userID uint) (*entity.CloudItem, error)
+	ListItems(ctx context.Context, parentID *uint, userID uint) ([]*entity.CloudItem, error)
+	UpdateItem(ctx context.Context, item *entity.CloudItem) error
+	DeleteItem(ctx context.Context, itemID uint, userID uint) error
+	DeleteItemsByParentID(ctx context.Context, parentID uint, userID uint) error
+	MoveItem(ctx context.Context, itemID uint, targetParentID *uint, userID uint) error
+	RenameItem(ctx context.Context, itemID uint, newName string, userID uint) error
+
 	// 文件夹管理
 	CreateFolder(ctx context.Context, req *CreateFolderRequest, userID uint) (*entity.CloudFolder, error)
 	ListFolders(ctx context.Context, parentID *uint, userID uint) ([]*entity.CloudFolder, error)
@@ -25,12 +35,12 @@ type Service interface {
 	RenameFolder(ctx context.Context, folderID uint, newName string, userID uint) error
 
 	// 文件管理
-	UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudFile, error)
-	DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudFile, error)
+	UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudItem, error)
+	DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudItem, error)
 	DeleteFile(ctx context.Context, fileID uint, userID uint) error
 	MoveFile(ctx context.Context, fileID uint, targetFolderID *uint, userID uint) error
 	RenameFile(ctx context.Context, fileID uint, newName string, userID uint) error
-	ListFiles(ctx context.Context, folderID *uint, userID uint, page, pageSize int) ([]*entity.CloudFile, int64, error)
+	ListFiles(ctx context.Context, folderID *uint, userID uint, page, pageSize int) ([]*entity.CloudItem, int64, error)
 
 	// 文件分享
 	CreateShare(ctx context.Context, req *CreateShareRequest, userID uint) (*entity.CloudShare, error)
@@ -41,7 +51,7 @@ type Service interface {
 	// 配额管理
 	GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQuota, error)
 	CheckQuota(ctx context.Context, userID uint, fileSize int64) error
-	UpdateQuota(ctx context.Context, userID uint, sizeDelta int64, fileDelta int) error
+	UpdateQuota(ctx context.Context, userID uint, sizeDelta int64, fileDelta int, folderDelta int) error
 }
 
 // service 云盘服务实现
@@ -56,6 +66,16 @@ func NewService(db *gorm.DB, storage storage.Storage) Service {
 		db:      db,
 		storage: storage,
 	}
+}
+
+// getUsernameByID 根据用户ID获取用户名
+func (s *service) getUsernameByID(ctx context.Context, userID uint) string {
+	var user entity.SysUser
+	if err := s.db.WithContext(ctx).Select("USERNAME").Where("ID = ?", userID).First(&user).Error; err != nil {
+		// 如果查询失败，返回默认值
+		return fmt.Sprintf("user_%d", userID)
+	}
+	return user.Username
 }
 
 // CreateFolderRequest 创建文件夹请求
@@ -89,7 +109,7 @@ type CreateShareRequest struct {
 type ShareInfo struct {
 	Share        *entity.CloudShare  `json:"share"`
 	ResourceType string              `json:"resourceType"`
-	File         *entity.CloudFile   `json:"file,omitempty"`
+	File         *entity.CloudItem   `json:"file,omitempty"`
 	Folder       *entity.CloudFolder `json:"folder,omitempty"`
 	Sharer       string              `json:"sharer"` // 分享者名称
 }
@@ -128,10 +148,11 @@ func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, us
 	}
 
 	// 创建文件夹
+	username := s.getUsernameByID(ctx, userID)
 	folder := &entity.CloudFolder{
 		BaseModel: entity.BaseModel{
-			CreateBy: fmt.Sprintf("user_%d", userID),
-			UpdateBy: fmt.Sprintf("user_%d", userID),
+			CreateBy: username,
+			UpdateBy: username,
 			IsActive: "Y",
 		},
 		Name:        req.Name,
@@ -147,8 +168,8 @@ func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, us
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件夹失败", err)
 	}
 
-	// 更新配额
-	s.UpdateQuota(ctx, userID, 0, 0) // 文件夹数量+1在UpdateQuota中处理
+	// 更新配额：文件夹数量+1
+	s.UpdateQuota(ctx, userID, 0, 0, 1)
 
 	return folder, nil
 }
@@ -185,7 +206,7 @@ func (s *service) GetFolderTree(ctx context.Context, userID uint) ([]*FolderNode
 	}
 
 	// 构建树
-	return s.buildFolderTree(folders, nil), nil
+	return s.buildFolderTreeOptimized(folders), nil
 }
 
 // buildFolderTree 构建文件夹树
@@ -205,6 +226,46 @@ func (s *service) buildFolderTree(folders []*entity.CloudFolder, parentID *uint)
 	}
 
 	return nodes
+}
+
+// buildFolderTreeOptimized 优化的文件夹树构建方法 - O(n)时间复杂度
+// 使用 Map 预处理父子关系，避免每次递归都遍历整个列表
+func (s *service) buildFolderTreeOptimized(folders []*entity.CloudFolder) []*FolderNode {
+	// 1. 构建 parentID -> children 的映射表 O(n)
+	childrenMap := make(map[uint][]*entity.CloudFolder)
+	var roots []*entity.CloudFolder
+
+	for _, folder := range folders {
+		if folder.ParentID == nil {
+			// 根节点（无父节点）
+			roots = append(roots, folder)
+		} else {
+			// 子节点，添加到父节点的 children 列表中
+			childrenMap[*folder.ParentID] = append(childrenMap[*folder.ParentID], folder)
+		}
+	}
+
+	// 2. 递归构建树节点 O(n)
+	var result []*FolderNode
+	for _, root := range roots {
+		result = append(result, s.buildNodeRecursively(root, childrenMap))
+	}
+	return result
+}
+
+// buildNodeRecursively 递归构建节点
+// 使用预处理的 childrenMap，避免重复遍历
+func (s *service) buildNodeRecursively(folder *entity.CloudFolder, childrenMap map[uint][]*entity.CloudFolder) *FolderNode {
+	node := &FolderNode{CloudFolder: folder}
+
+	// 从 Map 中直接获取子节点，O(1) 查找
+	if children, ok := childrenMap[folder.ID]; ok {
+		for _, child := range children {
+			node.Children = append(node.Children, s.buildNodeRecursively(child, childrenMap))
+		}
+	}
+
+	return node
 }
 
 // DeleteFolder 删除文件夹
@@ -231,8 +292,8 @@ func (s *service) DeleteFolder(ctx context.Context, folderID uint, userID uint) 
 	}
 
 	// 检查是否有文件
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("FOLDER_ID = ? AND IS_ACTIVE = ?", folderID, "Y").
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("PARENT_ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", folderID, "file", "Y").
 		Count(&count).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "检查文件失败", err)
 	}
@@ -247,11 +308,14 @@ func (s *service) DeleteFolder(ctx context.Context, folderID uint, userID uint) 
 		return errors.Wrap(errors.ErrDatabase, "删除文件夹失败", err)
 	}
 
+	// 更新配额：文件夹数量-1
+	s.UpdateQuota(ctx, userID, 0, 0, -1)
+
 	return nil
 }
 
 // UploadFile 上传文件
-func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudFile, error) {
+func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudItem, error) {
 	// 检查配额
 	if err := s.CheckQuota(ctx, userID, req.FileSize); err != nil {
 		return nil, err
@@ -282,35 +346,41 @@ func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID
 		path = folder.Path + "/" + req.FileName
 	}
 
-	// 创建文件记录
-	file := &entity.CloudFile{
+	// 创建文件记录 - 使用 CloudItem
+	username := s.getUsernameByID(ctx, userID)
+	storageType := req.StorageType
+	fileSize := req.FileSize
+	fileType := req.FileType
+	item := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
-			CreateBy: fmt.Sprintf("user_%d", userID),
-			UpdateBy: fmt.Sprintf("user_%d", userID),
+			CreateBy: username,
+			UpdateBy: username,
 			IsActive: "Y",
 		},
-		FileName:    req.FileName,
-		FolderID:    req.FolderID,
-		Path:        path,
-		StorageType: req.StorageType,
-		StoragePath: storagePath,
-		FileSize:    req.FileSize,
-		FileType:    req.FileType,
-		FileExt:     ext,
-		OwnerID:     userID,
-		AccessURL:   accessURL,
+		ItemType: "file",
+		Name:     req.FileName,
+		ParentID: req.FolderID,
+		Path:     path,
+		OwnerID:  userID,
+		// 文件专属字段使用指针
+		StorageType: &storageType,
+		StoragePath: &storagePath,
+		FileSize:    &fileSize,
+		FileType:    &fileType,
+		FileExt:     &ext,
+		AccessURL:   &accessURL,
 	}
 
-	if err := s.db.WithContext(ctx).Create(file).Error; err != nil {
+	if err := s.db.WithContext(ctx).Create(item).Error; err != nil {
 		// 删除已上传的文件
 		s.storage.Delete(ctx, storagePath)
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
 	}
 
-	// 更新配额
-	s.UpdateQuota(ctx, userID, req.FileSize, 1)
+	// 更新配额：文件数量+1
+	s.UpdateQuota(ctx, userID, req.FileSize, 1, 0)
 
-	return file, nil
+	return item, nil
 }
 
 // CreateShare 创建分享
@@ -326,10 +396,11 @@ func (s *service) CreateShare(ctx context.Context, req *CreateShareRequest, user
 	}
 
 	// 创建分享记录
+	username := s.getUsernameByID(ctx, userID)
 	share := &entity.CloudShare{
 		BaseModel: entity.BaseModel{
-			CreateBy: fmt.Sprintf("user_%d", userID),
-			UpdateBy: fmt.Sprintf("user_%d", userID),
+			CreateBy: username,
+			UpdateBy: username,
 			IsActive: "Y",
 		},
 		ShareCode:    shareCode,
@@ -359,10 +430,11 @@ func (s *service) GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQ
 
 	if err == gorm.ErrRecordNotFound {
 		// 创建默认配额
+		username := s.getUsernameByID(ctx, userID)
 		quota = entity.CloudQuota{
 			BaseModel: entity.BaseModel{
-				CreateBy: fmt.Sprintf("user_%d", userID),
-				UpdateBy: fmt.Sprintf("user_%d", userID),
+				CreateBy: username,
+				UpdateBy: username,
 				IsActive: "Y",
 			},
 			UserID:      userID,
@@ -400,13 +472,20 @@ func (s *service) CheckQuota(ctx context.Context, userID uint, fileSize int64) e
 }
 
 // UpdateQuota 更新配额
-func (s *service) UpdateQuota(ctx context.Context, userID uint, sizeDelta int64, fileDelta int) error {
+func (s *service) UpdateQuota(ctx context.Context, userID uint, sizeDelta int64, fileDelta int, folderDelta int) error {
+	updates := map[string]interface{}{
+		"USED_SPACE": gorm.Expr("USED_SPACE + ?", sizeDelta),
+		"FILE_COUNT": gorm.Expr("FILE_COUNT + ?", fileDelta),
+	}
+
+	// 只有当 folderDelta 不为 0 时才更新文件夹数量
+	if folderDelta != 0 {
+		updates["FOLDER_COUNT"] = gorm.Expr("FOLDER_COUNT + ?", folderDelta)
+	}
+
 	return s.db.WithContext(ctx).Model(&entity.CloudQuota{}).
 		Where("USER_ID = ?", userID).
-		Updates(map[string]interface{}{
-			"USED_SPACE": gorm.Expr("USED_SPACE + ?", sizeDelta),
-			"FILE_COUNT": gorm.Expr("FILE_COUNT + ?", fileDelta),
-		}).Error
+		Updates(updates).Error
 }
 
 // 辅助方法
@@ -421,15 +500,17 @@ func (s *service) getFolderByID(ctx context.Context, folderID uint) (*entity.Clo
 	return &folder, nil
 }
 
-func (s *service) getFileByID(ctx context.Context, fileID uint) (*entity.CloudFile, error) {
-	var file entity.CloudFile
-	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", fileID, "Y").First(&file).Error; err != nil {
+func (s *service) getFileByID(ctx context.Context, fileID uint) (*entity.CloudItem, error) {
+	var item entity.CloudItem
+	if err := s.db.WithContext(ctx).
+		Where("ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", fileID, "file", "Y").
+		First(&item).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "文件不存在")
 		}
 		return nil, errors.Wrap(errors.ErrDatabase, "查询文件失败", err)
 	}
-	return &file, nil
+	return &item, nil
 }
 
 func (s *service) updateChildrenPaths(ctx context.Context, oldPath, newPath string) error {
@@ -442,9 +523,9 @@ func (s *service) updateChildrenPaths(ctx context.Context, oldPath, newPath stri
 		return errors.Wrap(errors.ErrDatabase, "更新子文件夹路径失败", err)
 	}
 
-	// 更新所有子文件的路径
+	// 更新所有子文件的路径 - 使用 cloud_item 表
 	if err := s.db.WithContext(ctx).Exec(`
-		UPDATE cloud_file
+		UPDATE cloud_item
 		SET PATH = CONCAT(?, SUBSTRING(PATH, ?))
 		WHERE PATH LIKE ? AND IS_ACTIVE = 'Y'
 	`, newPath, len(oldPath)+1, oldPath+"/%").Error; err != nil {
@@ -511,7 +592,7 @@ func (s *service) RenameFolder(ctx context.Context, folderID uint, newName strin
 }
 
 // DownloadFile 下载文件
-func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudFile, error) {
+func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudItem, error) {
 	file, err := s.getFileByID(ctx, fileID)
 	if err != nil {
 		return nil, nil, err
@@ -522,15 +603,20 @@ func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (i
 		return nil, nil, errors.New(errors.ErrPermissionDenied, "无权限下载此文件")
 	}
 
+	// StoragePath 是指针，需要解引用
+	if file.StoragePath == nil {
+		return nil, nil, errors.New(errors.ErrInvalidParam, "文件存储路径不存在")
+	}
+
 	// 从存储中下载文件
-	reader, err := s.storage.Download(ctx, file.StoragePath)
+	reader, err := s.storage.Download(ctx, *file.StoragePath)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// 更新下载次数
-	s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("ID = ?", fileID).
+	// 更新下载次数 - 使用 CloudItem 表并过滤 ITEM_TYPE = "file"
+	s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND ITEM_TYPE = ?", fileID, "file").
 		Update("DOWNLOAD_COUNT", gorm.Expr("DOWNLOAD_COUNT + 1"))
 
 	return reader, file, nil
@@ -548,20 +634,24 @@ func (s *service) DeleteFile(ctx context.Context, fileID uint, userID uint) erro
 		return errors.New(errors.ErrPermissionDenied, "无权限删除此文件")
 	}
 
-	// 软删除文件记录
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("ID = ?", fileID).
+	// 软删除文件记录 - 使用 CloudItem 表并过滤 ITEM_TYPE = "file"
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND ITEM_TYPE = ?", fileID, "file").
 		Update("IS_ACTIVE", "N").Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "删除文件失败", err)
 	}
 
-	// 更新配额
-	s.UpdateQuota(ctx, userID, -file.FileSize, -1)
+	// 更新配额：文件数量-1
+	if file.FileSize != nil {
+		s.UpdateQuota(ctx, userID, -*file.FileSize, -1, 0)
+	}
 
 	// 异步删除物理文件（可选）
-	go func() {
-		_ = s.storage.Delete(context.Background(), file.StoragePath)
-	}()
+	if file.StoragePath != nil {
+		go func() {
+			_ = s.storage.Delete(context.Background(), *file.StoragePath)
+		}()
+	}
 
 	return nil
 }
@@ -591,11 +681,11 @@ func (s *service) MoveFile(ctx context.Context, fileID uint, targetFolderID *uin
 		targetPath = targetFolder.Path
 	}
 
-	// 检查目标位置是否已有同名文件
+	// 检查目标位置是否已有同名文件 - 使用 CloudItem 表并过滤 ITEM_TYPE = "file"
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("FOLDER_ID = ? AND FILE_NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
-			targetFolderID, file.FileName, userID, "Y", fileID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("PARENT_ID = ? AND NAME = ? AND ITEM_TYPE = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
+			targetFolderID, file.Name, "file", userID, "Y", fileID).
 		Count(&count).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "检查文件失败", err)
 	}
@@ -604,13 +694,13 @@ func (s *service) MoveFile(ctx context.Context, fileID uint, targetFolderID *uin
 	}
 
 	// 更新文件位置和路径
-	newPath := targetPath + "/" + file.FileName
+	newPath := targetPath + "/" + file.Name
 	if targetFolderID == nil {
-		newPath = "/" + file.FileName
+		newPath = "/" + file.Name
 	}
 
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("ID = ?", fileID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND ITEM_TYPE = ?", fileID, "file").
 		Updates(map[string]interface{}{
 			"FOLDER_ID":   targetFolderID,
 			"PATH":        newPath,
@@ -635,11 +725,11 @@ func (s *service) RenameFile(ctx context.Context, fileID uint, newName string, u
 		return errors.New(errors.ErrPermissionDenied, "无权限重命名此文件")
 	}
 
-	// 检查同名文件
+	// 检查同名文件 - 使用 CloudItem 表并过滤 ITEM_TYPE = "file"
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("FOLDER_ID = ? AND FILE_NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
-			file.FolderID, newName, userID, "Y", fileID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("PARENT_ID = ? AND NAME = ? AND ITEM_TYPE = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
+			file.ParentID, newName, "file", userID, "Y", fileID).
 		Count(&count).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "检查文件失败", err)
 	}
@@ -649,15 +739,15 @@ func (s *service) RenameFile(ctx context.Context, fileID uint, newName string, u
 
 	// 更新文件名称和路径
 	oldPath := file.Path
-	newPath := oldPath[:len(oldPath)-len(file.FileName)] + newName
+	newPath := oldPath[:len(oldPath)-len(file.Name)] + newName
 
 	// 获取新的扩展名
 	newExt := filepath.Ext(newName)
 
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("ID = ?", fileID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND ITEM_TYPE = ?", fileID, "file").
 		Updates(map[string]interface{}{
-			"FILE_NAME":   newName,
+			"NAME":        newName,
 			"FILE_EXT":    newExt,
 			"PATH":        newPath,
 			"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
@@ -670,17 +760,17 @@ func (s *service) RenameFile(ctx context.Context, fileID uint, newName string, u
 }
 
 // ListFiles 列出文件
-func (s *service) ListFiles(ctx context.Context, folderID *uint, userID uint, page, pageSize int) ([]*entity.CloudFile, int64, error) {
-	var files []*entity.CloudFile
+func (s *service) ListFiles(ctx context.Context, folderID *uint, userID uint, page, pageSize int) ([]*entity.CloudItem, int64, error) {
+	var files []*entity.CloudItem
 	var total int64
 
-	query := s.db.WithContext(ctx).Model(&entity.CloudFile{}).
-		Where("OWNER_ID = ? AND IS_ACTIVE = ?", userID, "Y")
+	query := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("OWNER_ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", userID, "file", "Y")
 
 	if folderID == nil {
-		query = query.Where("FOLDER_ID IS NULL")
+		query = query.Where("PARENT_ID IS NULL")
 	} else {
-		query = query.Where("FOLDER_ID = ?", *folderID)
+		query = query.Where("PARENT_ID = ?", *folderID)
 	}
 
 	// 查询总数
@@ -750,11 +840,12 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 
 	// 根据资源类型加载详情
 	if share.ResourceType == "file" {
-		var file entity.CloudFile
+		// 使用 CloudItem 表并过滤 ITEM_TYPE = "file"
+		var item entity.CloudItem
 		if err := s.db.WithContext(ctx).
-			Where("ID = ? AND IS_ACTIVE = ?", share.ResourceID, "Y").
-			First(&file).Error; err == nil {
-			info.File = &file
+			Where("ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", share.ResourceID, "file", "Y").
+			First(&item).Error; err == nil {
+			info.File = &item
 		}
 	} else if share.ResourceType == "folder" {
 		var folder entity.CloudFolder

@@ -6,6 +6,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
+	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
@@ -19,29 +20,29 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/sequence"
 	"github.com/sky-xhsoft/sky-server/internal/service/sso"
 	"github.com/sky-xhsoft/sky-server/internal/service/workflow"
-	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // Services 服务集合
 type Services struct {
-	SSO       sso.Service
-	Metadata  metadata.Service
-	Dict      dict.Service
-	Sequence  sequence.Service
-	CRUD      crud.Service
-	Action    action.Service
-	Workflow  workflow.Service
-	Audit     audit.Service
-	Groups    groups.Service
-	Menu      menu.Service
-	File      file.Service
-	Message   message.Service
-	Cloud     cloud.Service
-	WSManager *ws.Manager
+	SSO             sso.Service
+	Metadata        metadata.Service
+	Dict            dict.Service
+	Sequence        sequence.Service
+	CRUD            crud.Service
+	Action          action.Service
+	Workflow        workflow.Service
+	Audit           audit.Service
+	Groups          groups.Service
+	Menu            menu.Service
+	File            file.Service
+	Message         message.Service
+	Cloud           cloud.Service
+	MultipartUpload cloud.MultipartUploadService
+	WSManager       *ws.Manager
 }
 
 // Setup 设置路由
@@ -110,7 +111,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerMessageRoutes(v1, jwtUtil, services.Message)
 
 		// 注册云盘路由
-		registerCloudRoutes(v1, jwtUtil, services.Cloud)
+		registerCloudRoutes(v1, jwtUtil, services)
 
 		// 注册WebSocket路由
 		registerWebSocketRoutes(v1, jwtUtil, services.WSManager, logger)
@@ -403,34 +404,90 @@ func registerMessageRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, messageService
 }
 
 // registerCloudRoutes 注册云盘路由
-func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, cloudService cloud.Service) {
-	cloudHandler := handler.NewCloudHandler(cloudService)
+func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Services) {
+	cloudHandler := handler.NewCloudHandler(services.Cloud)
+	cloudItemHandler := handler.NewCloudItemHandler(services.Cloud)
+	multipartHandler := handler.NewMultipartUploadHandler(services.MultipartUpload)
 
 	cloudRg := rg.Group("/cloud")
 	cloudRg.Use(middleware.AuthRequired(jwtUtil))
 	{
-		// 文件夹管理
+		// ==================== 新接口（推荐使用）====================
+
+		// 统一项目管理接口（文件+文件夹）
+		items := cloudRg.Group("/items")
+		{
+			items.GET("", cloudItemHandler.ListItems)
+			items.POST("", cloudItemHandler.CreateItem)
+			items.DELETE("/:id", cloudItemHandler.DeleteItem)
+			items.PUT("/:id/rename", cloudItemHandler.RenameItem)
+			items.PUT("/:id/move", cloudItemHandler.MoveItem)
+			items.POST("/batch/delete", cloudItemHandler.BatchDelete)
+			items.POST("/batch/move", cloudItemHandler.BatchMove)
+		}
+
+		// ==================== 旧接口（已废弃，保留向后兼容）====================
+		// 废弃日期: 2026-01-17
+		// 计划移除: 2026-06-01
+		// 迁移指南: 请使用 /cloud/items 统一接口
+
+		// 文件夹管理（已废弃）
 		folders := cloudRg.Group("/folders")
 		{
-			folders.POST("", cloudHandler.CreateFolder)
-			folders.GET("", cloudHandler.ListFolders)
-			folders.GET("/tree", cloudHandler.GetFolderTree)
-			folders.DELETE("/:id", cloudHandler.DeleteFolder)
-			folders.PUT("/:id/rename", cloudHandler.RenameFolder)
+			folders.POST("",
+				middleware.DeprecatedAPI("POST /api/v1/cloud/items", "2026-01-17"),
+				cloudHandler.CreateFolder)
+			folders.GET("",
+				middleware.DeprecatedAPI("GET /api/v1/cloud/items", "2026-01-17"),
+				cloudHandler.ListFolders)
+			folders.GET("/tree",
+				middleware.DeprecatedAPI("GET /api/v1/cloud/items", "2026-01-17"),
+				cloudHandler.GetFolderTree)
+			folders.GET("/content",
+				middleware.DeprecatedAPI("GET /api/v1/cloud/items", "2026-01-17"),
+				cloudHandler.GetFolderContent)
+			folders.DELETE("/:id",
+				middleware.DeprecatedAPI("DELETE /api/v1/cloud/items/:id", "2026-01-17"),
+				cloudHandler.DeleteFolder)
+			folders.PUT("/:id/rename",
+				middleware.DeprecatedAPI("PUT /api/v1/cloud/items/:id/rename", "2026-01-17"),
+				cloudHandler.RenameFolder)
 		}
 
-		// 文件管理
+		// 文件管理（已废弃）
 		files := cloudRg.Group("/files")
 		{
+			// 保留：上传和下载接口特殊，暂不废弃
 			files.POST("/upload", cloudHandler.UploadFile)
 			files.GET("/:id/download", cloudHandler.DownloadFile)
-			files.DELETE("/:id", cloudHandler.DeleteFile)
-			files.PUT("/:id/move", cloudHandler.MoveFile)
-			files.PUT("/:id/rename", cloudHandler.RenameFile)
-			files.GET("", cloudHandler.ListFiles)
+
+			// 已废弃的文件操作接口
+			files.DELETE("/:id",
+				middleware.DeprecatedAPI("DELETE /api/v1/cloud/items/:id", "2026-01-17"),
+				cloudHandler.DeleteFile)
+			files.PUT("/:id/move",
+				middleware.DeprecatedAPI("PUT /api/v1/cloud/items/:id/move", "2026-01-17"),
+				cloudHandler.MoveFile)
+			files.PUT("/:id/rename",
+				middleware.DeprecatedAPI("PUT /api/v1/cloud/items/:id/rename", "2026-01-17"),
+				cloudHandler.RenameFile)
+			files.GET("",
+				middleware.DeprecatedAPI("GET /api/v1/cloud/items", "2026-01-17"),
+				cloudHandler.ListFiles)
+
+			// 分片上传路由（保留）
+			multipart := files.Group("/multipart")
+			{
+				multipart.POST("/init", multipartHandler.InitUpload)
+				multipart.POST("/upload", multipartHandler.UploadChunk)
+				multipart.GET("/status", multipartHandler.GetUploadStatus)
+				multipart.POST("/complete", multipartHandler.CompleteUpload)
+				multipart.DELETE("/:sessionId", multipartHandler.AbortUpload)
+				multipart.POST("/resume", multipartHandler.ResumeUpload)
+			}
 		}
 
-		// 分享管理
+		// 分享管理（保留）
 		shares := cloudRg.Group("/shares")
 		{
 			shares.POST("", cloudHandler.CreateShare)
@@ -439,8 +496,16 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, cloudService clo
 			shares.DELETE("/:id", cloudHandler.CancelShare)
 		}
 
-		// 配额管理
+		// 配额管理（保留）
 		cloudRg.GET("/quota", cloudHandler.GetUserQuota)
+
+		// 批量操作（已废弃）
+		cloudRg.POST("/batch/delete",
+			middleware.DeprecatedAPI("POST /api/v1/cloud/items/batch/delete", "2026-01-17"),
+			cloudHandler.BatchDelete)
+		cloudRg.POST("/batch/move",
+			middleware.DeprecatedAPI("POST /api/v1/cloud/items/batch/move", "2026-01-17"),
+			cloudHandler.BatchMove)
 	}
 }
 

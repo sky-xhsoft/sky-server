@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"io"
 	"strconv"
 
@@ -292,9 +293,9 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 	defer reader.Close()
 
 	// 设置响应头
-	c.Header("Content-Disposition", "attachment; filename="+fileInfo.FileName)
-	c.Header("Content-Type", fileInfo.FileType)
-	c.Header("Content-Length", strconv.FormatInt(fileInfo.FileSize, 10))
+	c.Header("Content-Disposition", "attachment; filename="+fileInfo.Name)
+	c.Header("Content-Type", *fileInfo.FileType)
+	c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
@@ -622,9 +623,9 @@ func (h *CloudHandler) GetUserQuota(c *gin.Context) {
 
 // CreateFolderRequest 创建文件夹请求
 type CreateFolderRequest struct {
-	ParentID    *uint  `json:"parentId"`             // 父文件夹ID（nil表示根目录）
+	ParentID    *uint  `json:"parentId"`                      // 父文件夹ID（nil表示根目录）
 	FolderName  string `json:"folderName" binding:"required"` // 文件夹名称
-	Description string `json:"description"`          // 描述
+	Description string `json:"description"`                   // 描述
 }
 
 // RenameFolderRequest 重命名文件夹请求
@@ -663,4 +664,89 @@ type ListFilesResponse struct {
 	Total    int64       `json:"total"`
 	Page     int         `json:"page"`
 	PageSize int         `json:"pageSize"`
+}
+
+// GetFolderContent 获取文件夹内容（子文件夹+文件）
+// @Summary 获取文件夹内容
+// @Description 获取指定文件夹下的子文件夹和文件列表
+// @Tags Cloud
+// @Accept json
+// @Produce json
+// @Param folderId query int false "文件夹ID（0或空表示根目录）"
+// @Success 200 {object} FolderContentResponse
+// @Router /api/v1/cloud/folders/content [get]
+func (h *CloudHandler) GetFolderContent(c *gin.Context) {
+	folderIDStr := c.Query("folderId")
+	var folderID *uint = nil
+	if folderIDStr != "" {
+		id, err := strconv.ParseUint(folderIDStr, 10, 32)
+		if err != nil {
+			utils.BadRequest(c, "folderId 格式错误")
+			return
+		}
+		// 将 0 视为根目录（nil）
+		if id > 0 {
+			fid := uint(id)
+			folderID = &fid
+		}
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	uid := userID.(uint)
+
+	// 并发获取文件夹和文件
+	type foldersResult struct {
+		folders []*entity.CloudFolder
+		err     error
+	}
+	type filesResult struct {
+		files []*entity.CloudItem
+		total int64
+		err   error
+	}
+
+	foldersChan := make(chan foldersResult, 1)
+	filesChan := make(chan filesResult, 1)
+
+	// 获取子文件夹
+	go func() {
+		folders, err := h.cloudService.ListFolders(c.Request.Context(), folderID, uid)
+		foldersChan <- foldersResult{folders: folders, err: err}
+	}()
+
+	// 获取文件列表（不分页，获取全部）
+	go func() {
+		files, total, err := h.cloudService.ListFiles(c.Request.Context(), folderID, uid, 1, 10000)
+		filesChan <- filesResult{files: files, total: total, err: err}
+	}()
+
+	// 等待结果
+	foldersRes := <-foldersChan
+	filesRes := <-filesChan
+
+	// 检查错误
+	if foldersRes.err != nil {
+		utils.InternalError(c, "查询文件夹失败: "+foldersRes.err.Error())
+		return
+	}
+	if filesRes.err != nil {
+		utils.InternalError(c, "查询文件失败: "+filesRes.err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"folders": foldersRes.folders,
+		"files":   filesRes.files,
+	})
+}
+
+// FolderContentResponse 文件夹内容响应
+type FolderContentResponse struct {
+	Folders []*entity.CloudFolder `json:"folders"` // 子文件夹列表
+	Files   []*entity.CloudItem   `json:"files"`   // 文件列表
 }

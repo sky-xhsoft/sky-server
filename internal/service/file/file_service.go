@@ -56,10 +56,10 @@ type ListFilesRequest struct {
 
 // service 文件服务实现
 type service struct {
-	db           *gorm.DB
-	uploadDir    string // 上传目录
-	maxFileSize  int64  // 最大文件大小（字节）
-	allowedExts  []string // 允许的文件扩展名
+	db          *gorm.DB
+	uploadDir   string   // 上传目录
+	maxFileSize int64    // 最大文件大小（字节）
+	allowedExts []string // 允许的文件扩展名
 }
 
 // Config 文件服务配置
@@ -95,6 +95,16 @@ func NewService(db *gorm.DB, cfg *Config) Service {
 	}
 }
 
+// getUsernameByID 根据用户ID获取用户名
+func (s *service) getUsernameByID(ctx context.Context, userID uint) string {
+	var user entity.SysUser
+	if err := s.db.WithContext(ctx).Select("USERNAME").Where("ID = ?", userID).First(&user).Error; err != nil {
+		// 如果查询失败，返回默认值
+		return fmt.Sprintf("user_%d", userID)
+	}
+	return user.Username
+}
+
 // UploadFile 上传文件
 func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHeader, category string, userID uint, uploadIP string) (*entity.SysFile, error) {
 	// 验证文件大小
@@ -126,10 +136,11 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 	existingFile, err := s.GetFileByMD5(ctx, md5Sum)
 	if err == nil && existingFile != nil {
 		// 文件已存在，创建新的文件记录但共享同一个物理文件
+		username := s.getUsernameByID(ctx, userID)
 		newFile := &entity.SysFile{
 			BaseModel: entity.BaseModel{
-				CreateBy: fmt.Sprintf("user_%d", userID),
-				UpdateBy: fmt.Sprintf("user_%d", userID),
+				CreateBy: username,
+				UpdateBy: username,
 				IsActive: "Y",
 			},
 			FileName:      fileHeader.Filename,
@@ -188,11 +199,13 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 	// 生成访问URL
 	accessURL := fmt.Sprintf("/api/v1/files/download/%s", storageName)
 
+	// 获取用户名
+	username := s.getUsernameByID(ctx, userID)
 	// 创建文件记录
 	sysFile := &entity.SysFile{
 		BaseModel: entity.BaseModel{
-			CreateBy: fmt.Sprintf("user_%d", userID),
-			UpdateBy: fmt.Sprintf("user_%d", userID),
+			CreateBy: username,
+			UpdateBy: username,
 			IsActive: "Y",
 		},
 		FileName:      fileHeader.Filename,

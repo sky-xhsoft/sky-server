@@ -219,7 +219,7 @@ func (h *CrudHandler) Delete(c *gin.Context) {
 func (h *CrudHandler) BatchDelete(c *gin.Context) {
 	tableName := c.Param("tableName")
 
-	var req BatchDeleteRequest
+	var req CRUDBatchDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
 		return
@@ -240,7 +240,7 @@ func (h *CrudHandler) BatchDelete(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "批量删除成功"})
 }
 
-// BatchDeleteRequest 批量删除请求
-type BatchDeleteRequest struct {
+// CRUDBatchDeleteRequest 批量删除请求
+type CRUDBatchDeleteRequest struct {
 	IDs []uint `json:"ids" binding:"required"`
 }

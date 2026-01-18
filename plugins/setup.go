@@ -1,10 +1,6 @@
 package plugins
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/sky-xhsoft/sky-server/internal/pkg/executor"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"github.com/sky-xhsoft/sky-server/plugins/hotload"
@@ -12,6 +8,9 @@ import (
 
 	// 导入内置插件包以触发 init() 注册
 	_ "github.com/sky-xhsoft/sky-server/plugins/builtin"
+
+	// 导入 hooks 包以触发 init() 自动注册所有 hooks
+	"github.com/sky-xhsoft/sky-server/plugins/hooks"
 
 	// 注意：自定义插件会通过 plugins_gen.go 自动导入
 	// 如需添加新插件，请运行: make plugin-scan
@@ -54,127 +53,16 @@ func Setup(db *gorm.DB) *core.Manager {
 
 // registerGoHooks 注册 Go 钩子函数到执行器
 // 将插件系统与 GoFuncRegistry 集成
+// 所有 hooks 通过 init() 自动注册，这里只需调用 RegisterAll
 func registerGoHooks(manager *core.Manager) {
-	// 注册 sys_table 创建后钩子
-	registerSysTableAfterCreateHook(manager)
+	// 自动注册所有 hooks
+	hooks.RegisterAll(manager)
 
-	// 注册 sys_table 删除前钩子
-	registerSysTableBeforeDeleteHook(manager)
-
-	logger.Info("Go 钩子函数已注册到执行器")
-}
-
-// registerSysTableAfterCreateHook 注册 sys_table 创建后钩子
-func registerSysTableAfterCreateHook(manager *core.Manager) {
-	executor.RegisterGoFunc("SYS_TABLE_AFTER_CREATE", func(params map[string]interface{}) (interface{}, error) {
-		logger.Info("执行 SYS_TABLE_AFTER_CREATE 钩子", zap.Any("params", params))
-
-		// 从 params 获取数据库连接（事务连接）
-		txDB, ok := params["__db__"].(*gorm.DB)
-		if !ok || txDB == nil {
-			return nil, fmt.Errorf("无法获取数据库连接")
-		}
-
-		// 获取表 ID - 尝试多种类型转换
-		var recordID uint
-		if id, ok := params["ID"].(uint); ok {
-			recordID = id
-		} else if id, ok := params["ID"].(int64); ok {
-			recordID = uint(id)
-		} else if id, ok := params["ID"].(float64); ok {
-			recordID = uint(id)
-		} else if id, ok := params["ID"].(int); ok {
-			recordID = uint(id)
-		}
-
-		if recordID == 0 {
-			return nil, fmt.Errorf("无法获取记录ID")
-		}
-
-		// 获取公司 ID
-		var companyID uint
-		if cid, ok := params["SYS_COMPANY_ID"].(uint); ok {
-			companyID = cid
-		} else if cid, ok := params["SYS_COMPANY_ID"].(int64); ok {
-			companyID = uint(cid)
-		} else if cid, ok := params["SYS_COMPANY_ID"].(float64); ok {
-			companyID = uint(cid)
-		} else if cid, ok := params["SYS_COMPANY_ID"].(int); ok {
-			companyID = uint(cid)
-		}
-
-		// 构造插件数据
-		pluginData := core.PluginData{
-			TableName: "sys_table",
-			Action:    "create",
-			Timing:    "after",
-			RecordID:  recordID,
-			CompanyID: companyID,
-			Data:      params,
-		}
-
-		// 执行插件（使用事务连接）
-		ctx := context.Background()
-		if err := manager.ExecuteWithDB(ctx, txDB, pluginData); err != nil {
-			logger.Error("执行插件失败", zap.Error(err))
-			return nil, err
-		}
-
-		return map[string]interface{}{
-			"success": true,
-			"message": "sys_table 创建后钩子执行成功",
-		}, nil
-	})
-}
-
-// registerSysTableBeforeDeleteHook 注册 sys_table 删除前钩子
-func registerSysTableBeforeDeleteHook(manager *core.Manager) {
-	executor.RegisterGoFunc("SYS_TABLE_BEFORE_DELETE", func(params map[string]interface{}) (interface{}, error) {
-		logger.Info("执行 SYS_TABLE_BEFORE_DELETE 钩子", zap.Any("params", params))
-
-		// 从 params 获取数据库连接（事务连接）
-		txDB, ok := params["__db__"].(*gorm.DB)
-		if !ok || txDB == nil {
-			return nil, fmt.Errorf("无法获取数据库连接")
-		}
-
-		// 获取表 ID
-		var recordID uint
-		if id, ok := params["ID"].(uint); ok {
-			recordID = id
-		} else if id, ok := params["ID"].(int64); ok {
-			recordID = uint(id)
-		} else if id, ok := params["ID"].(float64); ok {
-			recordID = uint(id)
-		} else if id, ok := params["ID"].(int); ok {
-			recordID = uint(id)
-		}
-
-		if recordID == 0 {
-			return nil, fmt.Errorf("无法获取记录ID")
-		}
-
-		// 构造插件数据
-		pluginData := core.PluginData{
-			TableName: "sys_table",
-			Action:    "delete",
-			Timing:    "before",
-			RecordID:  recordID,
-			Data:      params,
-		}
-
-		// 执行插件（使用事务连接）
-		ctx := context.Background()
-		if err := manager.ExecuteWithDB(ctx, txDB, pluginData); err != nil {
-			logger.Error("执行插件失败", zap.Error(err))
-			return nil, err
-		}
-
-		return map[string]interface{}{
-			"success": true,
-			"message": "sys_table 删除前钩子执行成功",
-		}, nil
-	})
+	// 输出已注册的 hooks
+	registeredHooks := hooks.GetRegisteredHooks()
+	logger.Info("Go 钩子函数已自动注册到执行器",
+		zap.Int("count", len(registeredHooks)),
+		zap.Strings("hooks", registeredHooks))
 }
 
 // setupHotloadManager 设置热加载管理器
