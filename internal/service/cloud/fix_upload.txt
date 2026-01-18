@@ -1,0 +1,65 @@
+335,363c335,369
+< 	// 创建文件记录
+< 	file := &entity.CloudFile{
+< 		BaseModel: entity.BaseModel{
+< 			CreateBy: fmt.Sprintf("user_%d", userID),
+< 			UpdateBy: fmt.Sprintf("user_%d", userID),
+< 			IsActive: "Y",
+< 		},
+< 		FileName:    req.FileName,
+< 		FolderID:    req.FolderID,
+< 		Path:        path,
+< 		StorageType: req.StorageType,
+< 		StoragePath: storagePath,
+< 		FileSize:    req.FileSize,
+< 		FileType:    req.FileType,
+< 		FileExt:     ext,
+< 		OwnerID:     userID,
+< 		AccessURL:   accessURL,
+< 	}
+< 
+< 	if err := s.db.WithContext(ctx).Create(file).Error; err != nil {
+< 		// 删除已上传的文件
+< 		s.storage.Delete(ctx, storagePath)
+< 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
+< 	}
+< 
+< 	// 更新配额
+< 	s.UpdateQuota(ctx, userID, req.FileSize, 1)
+< 
+< 	return file, nil
+---
+> 	// 创建文件记录 - 使用 CloudItem
+> 	storageType := req.StorageType
+> 	fileSize := req.FileSize
+> 	fileType := req.FileType
+> 	item := &entity.CloudItem{
+> 		BaseModel: entity.BaseModel{
+> 			CreateBy: fmt.Sprintf("user_%d", userID),
+> 			UpdateBy: fmt.Sprintf("user_%d", userID),
+> 			IsActive: "Y",
+> 		},
+> 		ItemType:    "file",
+> 		Name:        req.FileName,
+> 		ParentID:    req.FolderID,
+> 		Path:        path,
+> 		OwnerID:     userID,
+> 		// 文件专属字段使用指针
+> 		StorageType: &storageType,
+> 		StoragePath: &storagePath,
+> 		FileSize:    &fileSize,
+> 		FileType:    &fileType,
+> 		FileExt:     &ext,
+> 		AccessURL:   &accessURL,
+> 	}
+> 
+> 	if err := s.db.WithContext(ctx).Create(item).Error; err != nil {
+> 		// 删除已上传的文件
+> 		s.storage.Delete(ctx, storagePath)
+> 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
+> 	}
+> 
+> 	// 更新配额
+> 	s.UpdateQuota(ctx, userID, req.FileSize, 1)
+> 
+> 	return item, nil

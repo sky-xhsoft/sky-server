@@ -198,6 +198,18 @@ func main() {
 	// 初始化云盘服务
 	cloudService := cloud.NewService(db, cloudStorage)
 
+	// 初始化分片上传服务
+	multipartService := cloud.NewMultipartUploadService(
+		db,
+		cloudStorage,
+		cloudService,
+		cfg.MultipartUpload.ChunkSize,
+		cfg.MultipartUpload.SessionExpireHours,
+	)
+	logger.Info("Multipart upload service initialized",
+		zap.Int("defaultChunkSize", cfg.MultipartUpload.ChunkSize),
+		zap.Int("sessionExpireHours", cfg.MultipartUpload.SessionExpireHours))
+
 	logger.Info("Services initialized")
 
 	// 8. 初始化Gin引擎
@@ -212,25 +224,44 @@ func main() {
 
 	// 9. 注册路由
 	services := &router.Services{
-		SSO:       ssoService,
-		Metadata:  metadataService,
-		Dict:      dictService,
-		Sequence:  seqService,
-		CRUD:      crudService,
-		Action:    actionService,
-		Workflow:  workflowService,
-		Audit:     auditService,
-		Groups:    groupsService,
-		Menu:      menuService,
-		File:      fileService,
-		Message:   messageService,
-		Cloud:     cloudService,
-		WSManager: wsManager,
+		SSO:             ssoService,
+		Metadata:        metadataService,
+		Dict:            dictService,
+		Sequence:        seqService,
+		CRUD:            crudService,
+		Action:          actionService,
+		Workflow:        workflowService,
+		Audit:           auditService,
+		Groups:          groupsService,
+		Menu:            menuService,
+		File:            fileService,
+		Message:         messageService,
+		Cloud:           cloudService,
+		MultipartUpload: multipartService,
+		WSManager:       wsManager,
 	}
 	router.Setup(engine, cfg, jwtUtil, services, log, db)
 	logger.Info("Routes registered successfully")
 
-	// 10. 启动HTTP服务器
+	// 10. 启动定时清理任务
+	go func() {
+		ticker := time.NewTicker(time.Duration(cfg.MultipartUpload.CleanupInterval) * time.Second)
+		defer ticker.Stop()
+
+		logger.Info("分片上传清理任务已启动",
+			zap.Int("intervalSeconds", cfg.MultipartUpload.CleanupInterval))
+
+		for range ticker.C {
+			ctx := context.Background()
+			if err := multipartService.CleanupExpiredSessions(ctx); err != nil {
+				logger.Error("清理过期会话失败", zap.Error(err))
+			} else {
+				logger.Info("过期会话清理完成")
+			}
+		}
+	}()
+
+	// 11. 启动HTTP服务器
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.App.Port),
 		Handler: engine,
@@ -244,7 +275,7 @@ func main() {
 		}
 	}()
 
-	// 11. 优雅关闭
+	// 12. 优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

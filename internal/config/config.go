@@ -8,20 +8,21 @@ import (
 
 // Config 应用配置结构
 type Config struct {
-	App        AppConfig        `mapstructure:"app"`
-	Database   DatabaseConfig   `mapstructure:"database"`
-	Redis      RedisConfig      `mapstructure:"redis"`
-	JWT        JWTConfig        `mapstructure:"jwt"`
-	Log        LogConfig        `mapstructure:"log"`
-	CORS       CORSConfig       `mapstructure:"cors"`
-	Cache      CacheConfig      `mapstructure:"cache"`
-	Action     ActionConfig     `mapstructure:"action"`
-	RateLimit  RateLimitConfig  `mapstructure:"rateLimit"`
-	Upload     UploadConfig     `mapstructure:"upload"`
-	File       FileConfig       `mapstructure:"file"`
-	Swagger    SwaggerConfig    `mapstructure:"swagger"`
-	Security   SecurityConfig   `mapstructure:"security"`
-	Monitoring MonitoringConfig `mapstructure:"monitoring"`
+	App             AppConfig             `mapstructure:"app"`
+	Database        DatabaseConfig        `mapstructure:"database"`
+	Redis           RedisConfig           `mapstructure:"redis"`
+	JWT             JWTConfig             `mapstructure:"jwt"`
+	Log             LogConfig             `mapstructure:"log"`
+	CORS            CORSConfig            `mapstructure:"cors"`
+	Cache           CacheConfig           `mapstructure:"cache"`
+	Action          ActionConfig          `mapstructure:"action"`
+	RateLimit       RateLimitConfig       `mapstructure:"rateLimit"`
+	Upload          UploadConfig          `mapstructure:"upload"`
+	File            FileConfig            `mapstructure:"file"`
+	MultipartUpload MultipartUploadConfig `mapstructure:"multipartUpload"`
+	Swagger         SwaggerConfig         `mapstructure:"swagger"`
+	Security        SecurityConfig        `mapstructure:"security"`
+	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
 }
 
 // AppConfig 应用配置
@@ -66,9 +67,9 @@ type RedisConfig struct {
 
 // JWTConfig JWT配置
 type JWTConfig struct {
-	Secret              string `mapstructure:"secret"`
-	AccessTokenExpire   int    `mapstructure:"accessTokenExpire"`
-	RefreshTokenExpire  int    `mapstructure:"refreshTokenExpire"`
+	Secret             string `mapstructure:"secret"`
+	AccessTokenExpire  int    `mapstructure:"accessTokenExpire"`
+	RefreshTokenExpire int    `mapstructure:"refreshTokenExpire"`
 }
 
 // LogConfig 日志配置
@@ -124,6 +125,13 @@ type FileConfig struct {
 	UploadDir   string   `mapstructure:"uploadDir"`   // 上传目录
 	MaxFileSize int64    `mapstructure:"maxFileSize"` // 最大文件大小（字节）
 	AllowedExts []string `mapstructure:"allowedExts"` // 允许的文件扩展名
+}
+
+// MultipartUploadConfig 分片上传配置
+type MultipartUploadConfig struct {
+	ChunkSize          int `mapstructure:"chunkSize"`          // 默认分片大小（字节）
+	SessionExpireHours int `mapstructure:"sessionExpireHours"` // 会话过期时间（小时）
+	CleanupInterval    int `mapstructure:"cleanupInterval"`    // 清理任务执行间隔（秒）
 }
 
 // SwaggerConfig Swagger配置
