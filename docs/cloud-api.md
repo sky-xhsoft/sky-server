@@ -647,70 +647,70 @@ Authorization: Bearer {token}
 ```javascript
 // 1. 创建文件夹
 async function createFolder(parentId, folderName) {
-  const response = await axios.post('/api/v1/cloud/folders', {
-    parentId: parentId,
-    folderName: folderName
-  }, {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
-  return response.data;
+    const response = await axios.post('/api/v1/cloud/folders', {
+        parentId: parentId,
+        folderName: folderName
+    }, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    return response.data;
 }
 
 // 2. 上传文件
 async function uploadFile(file, folderId = 0) {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('folderId', folderId);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folderId', folderId);
 
-  const response = await axios.post('/api/v1/cloud/files/upload', formData, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data'
-    }
-  });
-  return response.data;
+    const response = await axios.post('/api/v1/cloud/files/upload', formData, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+    return response.data;
 }
 
 // 3. 列出文件
 async function listFiles(folderId = 0) {
-  const response = await axios.get('/api/v1/cloud/files', {
-    params: { folderId: folderId },
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
-  return response.data;
+    const response = await axios.get('/api/v1/cloud/files', {
+        params: { folderId: folderId },
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    return response.data;
 }
 
 // 4. 下载文件
 function downloadFile(fileId, fileName) {
-  window.open(`/api/v1/cloud/files/${fileId}/download`, '_blank');
+    window.open(`/api/v1/cloud/files/${fileId}/download`, '_blank');
 }
 
 // 5. 创建分享
 async function createShare(fileId, expireDays = 7, password = '') {
-  const response = await axios.post('/api/v1/cloud/shares', {
-    fileId: fileId,
-    expireDays: expireDays,
-    password: password
-  }, {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
-  return response.data;
+    const response = await axios.post('/api/v1/cloud/shares', {
+        fileId: fileId,
+        expireDays: expireDays,
+        password: password
+    }, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    return response.data;
 }
 
 // 6. 获取配额信息
 async function getQuota() {
-  const response = await axios.get('/api/v1/cloud/quota', {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
-  return response.data;
+    const response = await axios.get('/api/v1/cloud/quota', {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    return response.data;
 }
 ```
 
@@ -722,46 +722,46 @@ import axios from 'axios';
 
 // 自定义 Hook：获取文件列表
 function useFiles(folderId) {
-  const [files, setFiles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+    const [files, setFiles] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchFiles = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get('/api/v1/cloud/files', {
-          params: { folderId },
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setFiles(response.data.data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+    useEffect(() => {
+        const fetchFiles = async () => {
+            try {
+                setLoading(true);
+                const response = await axios.get('/api/v1/cloud/files', {
+                    params: { folderId },
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                setFiles(response.data.data);
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    fetchFiles();
-  }, [folderId]);
+        fetchFiles();
+    }, [folderId]);
 
-  return { files, loading, error };
+    return { files, loading, error };
 }
 
 // 使用示例
 function FileList({ folderId }) {
-  const { files, loading, error } = useFiles(folderId);
+    const { files, loading, error } = useFiles(folderId);
 
-  if (loading) return <div>加载中...</div>;
-  if (error) return <div>错误: {error}</div>;
+    if (loading) return <div>加载中...</div>;
+    if (error) return <div>错误: {error}</div>;
 
-  return (
-    <ul>
-      {files.map(file => (
-        <li key={file.ID}>{file.FileName} ({file.FileSize} bytes)</li>
-      ))}
-    </ul>
-  );
+    return (
+        <ul>
+            {files.map(file => (
+                <li key={file.ID}>{file.FileName} ({file.FileSize} bytes)</li>
+            ))}
+        </ul>
+    );
 }
 ```
 

@@ -93,7 +93,7 @@ rateLimit:
 
 # 文件上传配置
 upload:
-  maxSize: 21474836480  # 10MB（字节）
+  maxSize: 21474836480  # 20GB（字节）
   allowedTypes:
     - "image/jpeg"
     - "image/png"
@@ -129,6 +129,12 @@ file:
     - ".mp3"
     - ".wav"
     - ".mp4"
+
+# 分片上传配置
+multipartUpload:
+  chunkSize: 20971520  # 默认分片大小：20MB（字节）
+  sessionExpireHours: 24  # 上传会话过期时间（小时）
+  cleanupInterval: 3600  # 清理任务执行间隔（秒），默认1小时
 
 # Swagger配置
 swagger:
