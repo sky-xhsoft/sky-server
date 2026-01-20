@@ -154,10 +154,16 @@ func registerMetadataRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, metadataServi
 	metadata := rg.Group("/metadata")
 	metadata.Use(middleware.AuthRequired(jwtUtil))
 	{
-		metadata.GET("/tables/:tableName", metadataHandler.GetTable)
-		metadata.GET("/tables/:tableName/columns", metadataHandler.GetColumns)
-		metadata.GET("/tables/:tableName/refs", metadataHandler.GetTableRefs)
-		metadata.GET("/tables/:tableName/actions", metadataHandler.GetActions)
+		// 获取表配置（完整配置：表信息+字段列表）- 使用数字ID
+		metadata.GET("/tables/:tableId/config", metadataHandler.GetTableConfig)
+		metadata.GET("/tables/:tableId/columns", metadataHandler.GetColumns)
+		metadata.GET("/tables/:tableId/refs", metadataHandler.GetTableRefs)
+		metadata.GET("/tables/:tableId/actions", metadataHandler.GetActions)
+
+		// 获取表信息（通过表名）
+		metadata.GET("/table-by-name/:tableName", metadataHandler.GetTable)
+
+		// 缓存管理
 		metadata.POST("/refresh", metadataHandler.RefreshCache)
 		metadata.GET("/version", metadataHandler.GetMetadataVersion)
 	}

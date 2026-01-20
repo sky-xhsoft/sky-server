@@ -14,8 +14,11 @@ import (
 
 // Service 元数据服务接口
 type Service interface {
-	// 获取表元数据
+	// 获取表元数据（通过表名）
 	GetTable(tableName string) (*entity.SysTable, error)
+
+	// 获取表元数据（通过ID）
+	GetTableByID(tableID uint) (*entity.SysTable, error)
 
 	// 获取表的所有字段
 	GetColumns(tableID uint) ([]*entity.SysColumn, error)
@@ -53,9 +56,9 @@ func NewService(repo repository.MetadataRepository, redisClient *redis.Client, c
 	}
 }
 
-// GetTable 获取表元数据
+// GetTable 获取表元数据（通过表名）
 func (s *service) GetTable(tableName string) (*entity.SysTable, error) {
-	cacheKey := fmt.Sprintf("metadata:table:%s", tableName)
+	cacheKey := fmt.Sprintf("metadata:table:name:%s", tableName)
 
 	// 尝试从缓存获取
 	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
@@ -68,6 +71,32 @@ func (s *service) GetTable(tableName string) (*entity.SysTable, error) {
 
 	// 从数据库查询
 	table, err := s.repo.GetTableByName(tableName)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
+	}
+
+	// 缓存结果
+	data, _ := json.Marshal(table)
+	s.redisClient.Set(s.ctx, cacheKey, data, s.cacheTTL)
+
+	return table, nil
+}
+
+// GetTableByID 获取表元数据（通过ID）
+func (s *service) GetTableByID(tableID uint) (*entity.SysTable, error) {
+	cacheKey := fmt.Sprintf("metadata:table:id:%d", tableID)
+
+	// 尝试从缓存获取
+	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
+	if err == nil {
+		var table entity.SysTable
+		if err := json.Unmarshal([]byte(cached), &table); err == nil {
+			return &table, nil
+		}
+	}
+
+	// 从数据库查询
+	table, err := s.repo.GetTableByID(tableID)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
 	}
