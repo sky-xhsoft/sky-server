@@ -20,6 +20,49 @@ func NewMetadataHandler(metadataService metadata.Service) *MetadataHandler {
 	}
 }
 
+// GetTableConfig 获取表的完整配置（表信息+字段列表）
+// @Summary 获取表的完整配置
+// @Description 根据表ID获取表的元数据定义和所有字段定义
+// @Tags 元数据
+// @Accept json
+// @Produce json
+// @Param tableId path int true "表ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/metadata/tables/{tableId}/config [get]
+func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
+	tableIDStr := c.Param("tableId")
+	tableID, err := strconv.ParseUint(tableIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "表ID格式错误")
+		return
+	}
+
+	// 获取表信息
+	table, err := h.metadataService.GetTableByID(uint(tableID))
+	if err != nil {
+		utils.InternalError(c, "获取表定义失败: "+err.Error())
+		return
+	}
+
+	if table == nil {
+		utils.NotFound(c, "表不存在")
+		return
+	}
+
+	// 获取字段列表
+	columns, err := h.metadataService.GetColumns(uint(tableID))
+	if err != nil {
+		utils.InternalError(c, "获取字段定义失败: "+err.Error())
+		return
+	}
+
+	// 返回完整配置
+	utils.Success(c, gin.H{
+		"table":   table,
+		"columns": columns,
+	})
+}
+
 // GetTable 获取表定义
 // @Summary 获取表定义
 // @Description 根据表名获取表的元数据定义
@@ -60,7 +103,7 @@ func (h *MetadataHandler) GetTable(c *gin.Context) {
 // @Success 200 {array} entity.SysColumn
 // @Router /api/v1/metadata/tables/{tableId}/columns [get]
 func (h *MetadataHandler) GetColumns(c *gin.Context) {
-	tableIDStr := c.Param("tableName")
+	tableIDStr := c.Param("tableId")
 	tableID, err := strconv.ParseUint(tableIDStr, 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "表ID格式错误")
@@ -86,7 +129,7 @@ func (h *MetadataHandler) GetColumns(c *gin.Context) {
 // @Success 200 {array} entity.SysTableRef
 // @Router /api/v1/metadata/tables/{tableId}/refs [get]
 func (h *MetadataHandler) GetTableRefs(c *gin.Context) {
-	tableIDStr := c.Param("tableName")
+	tableIDStr := c.Param("tableId")
 	tableID, err := strconv.ParseUint(tableIDStr, 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "表ID格式错误")
@@ -112,7 +155,7 @@ func (h *MetadataHandler) GetTableRefs(c *gin.Context) {
 // @Success 200 {array} entity.SysAction
 // @Router /api/v1/metadata/tables/{tableId}/actions [get]
 func (h *MetadataHandler) GetActions(c *gin.Context) {
-	tableIDStr := c.Param("tableName")
+	tableIDStr := c.Param("tableId")
 	tableID, err := strconv.ParseUint(tableIDStr, 10, 32)
 	if err != nil {
 		utils.BadRequest(c, "表ID格式错误")

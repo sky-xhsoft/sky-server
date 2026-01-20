@@ -116,6 +116,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("[DEBUG] GetOne - 查询字段: %s\n", selectFields)
 
 	// 获取数据过滤条件
 	dataFilter, err := s.groupsService.GetUserDataFilter(ctx, userID, table.ID)
@@ -131,7 +132,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 
 	// 添加数据过滤条件
 	if dataFilter != nil && len(dataFilter) > 0 {
-		query = s.applyFilters(query, dataFilter)
+		query = s.applyFilters(query, dataFilter, columns)
 	}
 
 	// 添加IS_ACTIVE条件
@@ -200,7 +201,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 
 	// 添加数据过滤条件
 	if dataFilter != nil && len(dataFilter) > 0 {
-		query = s.applyFilters(query, dataFilter)
+		query = s.applyFilters(query, dataFilter, columns)
 	}
 
 	// 添加IS_ACTIVE条件
@@ -208,7 +209,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 
 	// 添加过滤条件
 	if req.Filters != nil && len(req.Filters) > 0 {
-		query = s.applyFilters(query, req.Filters)
+		query = s.applyFilters(query, req.Filters, columns)
 	}
 
 	// 计算总数
@@ -291,9 +292,14 @@ func (s *service) Create(ctx context.Context, tableName string, data map[string]
 		// 设置创建人和公司ID
 		processedData["CREATE_BY"] = user.Username
 		processedData["SYS_COMPANY_ID"] = user.SysCompanyID
+		fmt.Printf("[DEBUG] 设置审计字段: CREATE_BY=%s, SYS_COMPANY_ID=%d\n", user.Username, user.SysCompanyID)
+	} else {
+		fmt.Printf("[DEBUG] 获取用户信息失败: userID=%d, err=%v\n", userID, userErr)
 	}
 	// 设置创建时间
 	processedData["CREATE_TIME"] = time.Now()
+
+	fmt.Printf("[DEBUG] 准备插入的数据: %+v\n", processedData)
 
 	// 在事务中执行：before钩子 + 插入 + after钩子
 	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
@@ -507,22 +513,51 @@ func (s *service) BatchDelete(ctx context.Context, tableName string, ids []uint,
 func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, operation string) (string, error) {
 	var fields []string
 
+	// 定义标准的系统审计字段（无论MASK如何配置都应包含）
+	standardFields := map[string]bool{
+		"ID":             true,
+		"SYS_COMPANY_ID": true,
+		"CREATE_BY":      true,
+		"CREATE_TIME":    true,
+		"UPDATE_BY":      true,
+		"UPDATE_TIME":    true,
+		"IS_ACTIVE":      true,
+	}
+
+	// 跟踪哪些系统字段已经被添加
+	addedStandardFields := make(map[string]bool)
+
 	for _, col := range columns {
 		// TODO: 检查字段权限（基于SGRADE）- 需要集成groups权限服务
 		// 暂时允许所有字段访问
 
-		// 主键字段始终包含，不受MASK限制
+		// 主键字段和系统审计字段始终包含，不受MASK限制
 		isPrimaryKey := col.IsAK == "Y" || col.SetValueType == "pk"
+		isStandardField := standardFields[col.DbName]
 
-		// 检查MASK可见性
-		if !isPrimaryKey && col.Mask != "" {
-			fieldMask := mask.ParseMask(col.Mask)
-			if !fieldMask.IsVisible(operation) {
-				continue
+		if isStandardField {
+			addedStandardFields[col.DbName] = true
+		}
+
+		if !isPrimaryKey && !isStandardField {
+			// 对于业务字段，检查MASK可见性
+			if col.Mask != "" {
+				fieldMask := mask.ParseMask(col.Mask)
+				if !fieldMask.IsVisible(operation) {
+					continue
+				}
 			}
 		}
 
 		fields = append(fields, col.DbName)
+	}
+
+	// 确保所有系统审计字段都被包含（即使它们不在 sys_column 中定义）
+	for fieldName := range standardFields {
+		if !addedStandardFields[fieldName] {
+			fields = append(fields, fieldName)
+			fmt.Printf("[DEBUG] 强制添加系统字段: %s\n", fieldName)
+		}
 	}
 
 	if len(fields) == 0 {
@@ -583,7 +618,7 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 }
 
 // applyDataFilter 应用数据过滤条件
-func (s *service) applyDataFilter(query *gorm.DB, filterJSON string) *gorm.DB {
+func (s *service) applyDataFilter(query *gorm.DB, filterJSON string, columns []*entity.SysColumn) *gorm.DB {
 	if filterJSON == "" {
 		return query
 	}
@@ -593,15 +628,40 @@ func (s *service) applyDataFilter(query *gorm.DB, filterJSON string) *gorm.DB {
 		return query
 	}
 
-	return s.applyFilters(query, filter)
+	return s.applyFilters(query, filter, columns)
 }
 
 // applyFilters 应用过滤条件
-func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}) *gorm.DB {
+// 对于 text 类型字段使用 LIKE 模糊匹配，其他类型使用精确匹配
+func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, columns []*entity.SysColumn) *gorm.DB {
+	// 构建字段类型映射，方便快速查找
+	columnTypeMap := make(map[string]string)
+	if columns != nil {
+		for _, col := range columns {
+			columnTypeMap[col.DbName] = col.DisplayType
+		}
+	}
+
 	for field, value := range filters {
-		// 简单的等值过滤
-		// TODO: 支持更复杂的过滤操作符（like, in, between, etc.）
-		query = query.Where(fmt.Sprintf("%s = ?", field), value)
+		// 跳过 nil 值
+		if value == nil {
+			continue
+		}
+
+		// 获取字段的显示类型
+		displayType := columnTypeMap[field]
+
+		// 对于 text 类型字段（text, textarea），使用 LIKE 模糊查询
+		// 根据 DisplayType 字段定义：blank,button,hr,check,file,image,select,text,textarea,date,datetime,clob,xml,json
+		if displayType == "text" || displayType == "textarea" || displayType == "clob" {
+			// 转换为字符串并添加通配符
+			if strValue, ok := value.(string); ok && strValue != "" {
+				query = query.Where(fmt.Sprintf("%s LIKE ?", field), "%"+strValue+"%")
+			}
+		} else {
+			// 其他类型使用精确匹配（select, date, datetime, check 等）
+			query = query.Where(fmt.Sprintf("%s = ?", field), value)
+		}
 	}
 
 	return query
