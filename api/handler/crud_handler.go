@@ -69,14 +69,53 @@ func (h *CrudHandler) GetOne(c *gin.Context) {
 func (h *CrudHandler) GetList(c *gin.Context) {
 	tableName := c.Param("tableName")
 
-	var req crud.QueryRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// 首先解析为 map 以获取所有字段
+	var rawData map[string]interface{}
+	if err := c.ShouldBindJSON(&rawData); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
 
-	// 设置表名（覆盖请求体中的表名）
-	req.TableName = tableName
+	// 构建 QueryRequest
+	req := crud.QueryRequest{
+		TableName: tableName,
+	}
+
+	// 提取标准查询参数
+	if page, ok := rawData["page"].(float64); ok {
+		req.Page = int(page)
+	}
+	if pageSize, ok := rawData["pageSize"].(float64); ok {
+		req.PageSize = int(pageSize)
+	}
+	if orderBy, ok := rawData["orderBy"].(string); ok {
+		req.OrderBy = orderBy
+	}
+	if order, ok := rawData["order"].(string); ok {
+		req.Order = order
+	}
+
+	// 提取 filters 字段（如果存在）
+	if filters, ok := rawData["filters"].(map[string]interface{}); ok {
+		req.Filters = filters
+	} else {
+		// 如果没有 filters 字段，将所有非标准字段作为过滤条件
+		req.Filters = make(map[string]interface{})
+		standardFields := map[string]bool{
+			"tableName": true,
+			"page":      true,
+			"pageSize":  true,
+			"orderBy":   true,
+			"order":     true,
+			"filters":   true,
+			"include":   true,
+		}
+		for key, value := range rawData {
+			if !standardFields[key] {
+				req.Filters[key] = value
+			}
+		}
+	}
 
 	// 获取当前用户ID
 	userID, exists := c.Get("userID")
