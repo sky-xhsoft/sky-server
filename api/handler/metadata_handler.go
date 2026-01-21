@@ -200,3 +200,96 @@ func (h *MetadataHandler) GetMetadataVersion(c *gin.Context) {
 	version := h.metadataService.GetMetadataVersion()
 	utils.Success(c, gin.H{"version": version})
 }
+
+// GetForeignKeyOptions 获取外键选项列表
+// @Summary 获取外键选项列表
+// @Description 根据表ID获取外键字段的可选项列表，支持搜索和分页
+// @Tags 元数据
+// @Accept json
+// @Produce json
+// @Param tableId query int true "关联表ID"
+// @Param columnId query int false "显示字段ID（可选，默认使用表的DK字段）"
+// @Param search query string false "搜索关键字"
+// @Param page query int false "页码" default(1)
+// @Param pageSize query int false "每页条数" default(100)
+// @Success 200 {object} utils.Response
+// @Router /api/v1/metadata/foreign-key-options [get]
+func (h *MetadataHandler) GetForeignKeyOptions(c *gin.Context) {
+	tableIDStr := c.Query("tableId")
+	tableID, err := strconv.ParseUint(tableIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "表ID格式错误")
+		return
+	}
+
+	columnIDStr := c.Query("columnId")
+	var columnID *uint
+	if columnIDStr != "" {
+		cid, err := strconv.ParseUint(columnIDStr, 10, 32)
+		if err == nil {
+			cidUint := uint(cid)
+			columnID = &cidUint
+		}
+	}
+
+	search := c.Query("search")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "100"))
+
+	options, total, err := h.metadataService.GetForeignKeyOptions(uint(tableID), columnID, search, page, pageSize)
+	if err != nil {
+		utils.InternalError(c, "获取外键选项失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"list":     options,
+		"total":    total,
+		"page":     page,
+		"pageSize": pageSize,
+	})
+}
+
+// GetForeignKeyDisplayValue 获取外键显示值
+// @Summary 获取外键显示值
+// @Description 根据外键值获取对应的显示文本
+// @Tags 元数据
+// @Accept json
+// @Produce json
+// @Param tableId query int true "关联表ID"
+// @Param value query string true "外键值"
+// @Param columnId query int false "显示字段ID（可选）"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/metadata/foreign-key-display-value [get]
+func (h *MetadataHandler) GetForeignKeyDisplayValue(c *gin.Context) {
+	tableIDStr := c.Query("tableId")
+	tableID, err := strconv.ParseUint(tableIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "表ID格式错误")
+		return
+	}
+
+	value := c.Query("value")
+	if value == "" {
+		utils.BadRequest(c, "值不能为空")
+		return
+	}
+
+	columnIDStr := c.Query("columnId")
+	var columnID *uint
+	if columnIDStr != "" {
+		cid, err := strconv.ParseUint(columnIDStr, 10, 32)
+		if err == nil {
+			cidUint := uint(cid)
+			columnID = &cidUint
+		}
+	}
+
+	displayValue, err := h.metadataService.GetForeignKeyDisplayValue(uint(tableID), value, columnID)
+	if err != nil {
+		utils.InternalError(c, "获取显示值失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, displayValue)
+}

@@ -34,6 +34,12 @@ type Service interface {
 
 	// 获取元数据版本号
 	GetMetadataVersion() string
+
+	// 获取外键选项列表
+	GetForeignKeyOptions(tableID uint, columnID *uint, search string, page, pageSize int) ([]map[string]interface{}, int64, error)
+
+	// 获取外键显示值
+	GetForeignKeyDisplayValue(tableID uint, value string, columnID *uint) (string, error)
 }
 
 // service 元数据服务实现
@@ -217,4 +223,145 @@ func (s *service) RefreshCache() error {
 // GetMetadataVersion 获取元数据版本号
 func (s *service) GetMetadataVersion() string {
 	return s.metaVersion
+}
+
+// GetForeignKeyOptions 获取外键选项列表
+func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search string, page, pageSize int) ([]map[string]interface{}, int64, error) {
+	// 1. 获取目标表的元数据
+	table, err := s.GetTableByID(tableID)
+	if err != nil {
+		return nil, 0, errors.Wrap(errors.ErrNotFound, "表不存在", err)
+	}
+
+	// 2. 确定显示字段
+	var displayColumn *entity.SysColumn
+	if columnID != nil {
+		// 使用指定的字段
+		columns, err := s.GetColumns(tableID)
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, col := range columns {
+			if col.ID == *columnID {
+				displayColumn = col
+				break
+			}
+		}
+	} else {
+		// 使用表的 DK（显示键）字段
+		columns, err := s.GetColumns(tableID)
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, col := range columns {
+			if col.IsDK == "Y" {
+				displayColumn = col
+				break
+			}
+		}
+		// 如果没有 DK 字段，使用第一个 VARCHAR 类型的字段
+		if displayColumn == nil {
+			for _, col := range columns {
+				if col.ColType == "varchar" || col.ColType == "char" {
+					displayColumn = col
+					break
+				}
+			}
+		}
+	}
+
+	if displayColumn == nil {
+		return nil, 0, errors.New(errors.ErrNotFound, "未找到显示字段")
+	}
+
+	// 3. 构建查询（使用原生 SQL 查询）
+	offset := (page - 1) * pageSize
+	options := []map[string]interface{}{}
+	var total int64
+
+	// 查询总数
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE IS_ACTIVE = 'Y'", table.Name)
+	if search != "" {
+		countSQL += fmt.Sprintf(" AND %s LIKE ?", displayColumn.DBName)
+		if err := s.repo.CountBySql(countSQL, "%"+search+"%").Scan(&total).Error; err != nil {
+			return nil, 0, errors.Wrap(errors.ErrDatabase, "查询总数失败", err)
+		}
+	} else {
+		if err := s.repo.CountBySql(countSQL).Scan(&total).Error; err != nil {
+			return nil, 0, errors.Wrap(errors.ErrDatabase, "查询总数失败", err)
+		}
+	}
+
+	// 查询数据
+	dataSQL := fmt.Sprintf("SELECT ID as value, %s as label FROM %s WHERE IS_ACTIVE = 'Y'", displayColumn.DBName, table.Name)
+	if search != "" {
+		dataSQL += fmt.Sprintf(" AND %s LIKE ?", displayColumn.DBName)
+		dataSQL += fmt.Sprintf(" ORDER BY %s LIMIT ? OFFSET ?", displayColumn.DBName)
+		if err := s.repo.RawQuery(dataSQL, "%"+search+"%", pageSize, offset).Scan(&options).Error; err != nil {
+			return nil, 0, errors.Wrap(errors.ErrDatabase, "查询数据失败", err)
+		}
+	} else {
+		dataSQL += fmt.Sprintf(" ORDER BY %s LIMIT ? OFFSET ?", displayColumn.DBName)
+		if err := s.repo.RawQuery(dataSQL, pageSize, offset).Scan(&options).Error; err != nil {
+			return nil, 0, errors.Wrap(errors.ErrDatabase, "查询数据失败", err)
+		}
+	}
+
+	return options, total, nil
+}
+
+// GetForeignKeyDisplayValue 获取外键显示值
+func (s *service) GetForeignKeyDisplayValue(tableID uint, value string, columnID *uint) (string, error) {
+	// 1. 获取目标表的元数据
+	table, err := s.GetTableByID(tableID)
+	if err != nil {
+		return "", errors.Wrap(errors.ErrNotFound, "表不存在", err)
+	}
+
+	// 2. 确定显示字段（逻辑同上）
+	var displayColumn *entity.SysColumn
+	if columnID != nil {
+		columns, err := s.GetColumns(tableID)
+		if err != nil {
+			return "", err
+		}
+		for _, col := range columns {
+			if col.ID == *columnID {
+				displayColumn = col
+				break
+			}
+		}
+	} else {
+		columns, err := s.GetColumns(tableID)
+		if err != nil {
+			return "", err
+		}
+		for _, col := range columns {
+			if col.IsDK == "Y" {
+				displayColumn = col
+				break
+			}
+		}
+		if displayColumn == nil {
+			for _, col := range columns {
+				if col.ColType == "varchar" || col.ColType == "char" {
+					displayColumn = col
+					break
+				}
+			}
+		}
+	}
+
+	if displayColumn == nil {
+		return "", errors.New(errors.ErrNotFound, "未找到显示字段")
+	}
+
+	// 3. 查询显示值
+	querySQL := fmt.Sprintf("SELECT %s FROM %s WHERE ID = ? AND IS_ACTIVE = 'Y'", displayColumn.DBName, table.Name)
+	var displayValue string
+	if err := s.repo.RawQuery(querySQL, value).Scan(&displayValue).Error; err != nil {
+		return "", errors.Wrap(errors.ErrDatabase, "查询显示值失败", err)
+	}
+
+	return displayValue, nil
 }
