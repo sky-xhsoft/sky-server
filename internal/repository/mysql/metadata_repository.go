@@ -116,3 +116,13 @@ func (r *metadataRepository) GetTableCmdsByAction(tableID uint, action, event st
 		Find(&cmds).Error
 	return cmds, err
 }
+
+// ========== 原生SQL查询 ==========
+
+func (r *metadataRepository) RawQuery(sql string, args ...interface{}) *gorm.DB {
+	return r.db.Raw(sql, args...)
+}
+
+func (r *metadataRepository) CountBySql(sql string, args ...interface{}) *gorm.DB {
+	return r.db.Raw(sql, args...)
+}

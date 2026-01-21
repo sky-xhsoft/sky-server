@@ -1,6 +1,9 @@
 package repository
 
-import "github.com/sky-xhsoft/sky-server/internal/model/entity"
+import (
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"gorm.io/gorm"
+)
 
 // MetadataRepository 元数据仓储接口
 type MetadataRepository interface {
@@ -41,4 +44,11 @@ type MetadataRepository interface {
 
 	// 获取表的特定操作钩子
 	GetTableCmdsByAction(tableID uint, action, event string) ([]*entity.SysTableCmd, error)
+
+	// ========== 原生SQL查询 ==========
+	// 执行原生查询
+	RawQuery(sql string, args ...interface{}) *gorm.DB
+
+	// 执行原生计数查询
+	CountBySql(sql string, args ...interface{}) *gorm.DB
 }

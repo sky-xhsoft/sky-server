@@ -166,6 +166,10 @@ func registerMetadataRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, metadataServi
 		// 缓存管理
 		metadata.POST("/refresh", metadataHandler.RefreshCache)
 		metadata.GET("/version", metadataHandler.GetMetadataVersion)
+
+		// 外键接口
+		metadata.GET("/foreign-key-options", metadataHandler.GetForeignKeyOptions)
+		metadata.GET("/foreign-key-display-value", metadataHandler.GetForeignKeyDisplayValue)
 	}
 }
 
