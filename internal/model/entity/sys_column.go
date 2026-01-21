@@ -39,6 +39,9 @@ type SysColumn struct {
 	ShowColumnVal  string `gorm:"column:SHOW_COLUMN_VAL;size:255" json:"showColumnVal"`
 	Description    string `gorm:"column:DESCRIPTION;size:255" json:"description"`
 	Sgrade         int    `gorm:"column:SGRADE" json:"sgrade"` // 字段访问级别
+
+	// 运行时填充字段（不存储到数据库）
+	RefTableIsDropdown string `gorm:"-" json:"refTableIsDropdown"` // 引用表的 IS_DROPDOWN 配置
 }
 
 // TableName 指定表名
