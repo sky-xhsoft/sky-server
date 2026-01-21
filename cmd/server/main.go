@@ -116,6 +116,7 @@ func main() {
 
 	metadataService := metadata.NewService(
 		metadataRepo,
+		userRepo,
 		redisClient,
 		cfg.Cache.MetadataTTL,
 	)

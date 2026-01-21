@@ -236,17 +236,25 @@ func (h *MetadataHandler) GetForeignKeyOptions(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "100"))
 
-	options, total, err := h.metadataService.GetForeignKeyOptions(uint(tableID), columnID, search, page, pageSize)
+	// Extract userID from context for company-based filtering
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	options, total, isDropdown, err := h.metadataService.GetForeignKeyOptions(uint(tableID), columnID, search, page, pageSize, userID.(uint))
 	if err != nil {
 		utils.InternalError(c, "获取外键选项失败: "+err.Error())
 		return
 	}
 
 	utils.Success(c, gin.H{
-		"list":     options,
-		"total":    total,
-		"page":     page,
-		"pageSize": pageSize,
+		"list":       options,
+		"total":      total,
+		"page":       page,
+		"pageSize":   pageSize,
+		"isDropdown": isDropdown,
 	})
 }
 
@@ -285,7 +293,14 @@ func (h *MetadataHandler) GetForeignKeyDisplayValue(c *gin.Context) {
 		}
 	}
 
-	displayValue, err := h.metadataService.GetForeignKeyDisplayValue(uint(tableID), value, columnID)
+	// Extract userID from context for company-based filtering
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	displayValue, err := h.metadataService.GetForeignKeyDisplayValue(uint(tableID), value, columnID, userID.(uint))
 	if err != nil {
 		utils.InternalError(c, "获取显示值失败: "+err.Error())
 		return
