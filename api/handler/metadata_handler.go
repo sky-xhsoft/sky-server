@@ -1,22 +1,27 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
+	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
 )
 
 // MetadataHandler 元数据处理器
 type MetadataHandler struct {
 	metadataService metadata.Service
+	dictRepo        repository.DictRepository
 }
 
 // NewMetadataHandler 创建元数据处理器
-func NewMetadataHandler(metadataService metadata.Service) *MetadataHandler {
+func NewMetadataHandler(metadataService metadata.Service, dictRepo repository.DictRepository) *MetadataHandler {
 	return &MetadataHandler{
 		metadataService: metadataService,
+		dictRepo:        dictRepo,
 	}
 }
 
@@ -56,10 +61,37 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 		return
 	}
 
+	// 收集所有需要的字典ID
+	dictIDs := make(map[uint]bool)
+	for _, col := range columns {
+		if col.SetValueType == "select" && col.SysDictID != "" {
+			// SysDictID 是字符串，需要转换为uint
+			dictID, err := strconv.ParseUint(col.SysDictID, 10, 32)
+			if err != nil {
+				fmt.Printf("[WARN] 字段 %s 的字典ID格式错误: %s\n", col.DbName, col.SysDictID)
+				continue
+			}
+			dictIDs[uint(dictID)] = true
+		}
+	}
+
+	// 获取字典数据
+	dictData := make(map[uint][]*entity.SysDictItem)
+	for dictID := range dictIDs {
+		items, err := h.dictRepo.GetDictItems(dictID)
+		if err != nil {
+			// 字典获取失败不影响整体返回，只记录日志
+			fmt.Printf("[WARN] 获取字典 %d 失败: %v\n", dictID, err)
+			continue
+		}
+		dictData[dictID] = items
+	}
+
 	// 返回完整配置
 	utils.Success(c, gin.H{
-		"table":   table,
-		"columns": columns,
+		"table":    table,
+		"columns":  columns,
+		"dictData": dictData,
 	})
 }
 

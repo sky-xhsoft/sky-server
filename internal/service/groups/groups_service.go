@@ -12,14 +12,16 @@ import (
 
 // 权限位定义
 const (
-	PermNone   = 0      // 无权限
-	PermRead   = 1 << 0 // 1 - 读取
-	PermCreate = 1 << 1 // 2 - 创建
-	PermUpdate = 1 << 2 // 4 - 更新
-	PermDelete = 1 << 3 // 8 - 删除
-	PermExport = 1 << 4 // 16 - 导出
-	PermImport = 1 << 5 // 32 - 导入
-	PermAll    = 63     // 111111 - 所有权限
+	PermNone     = 0      // 无权限
+	PermRead     = 1 << 0 // 1 - 读取
+	PermCreate   = 1 << 1 // 2 - 创建
+	PermUpdate   = 1 << 2 // 4 - 更新
+	PermDelete   = 1 << 3 // 8 - 删除
+	PermSubmit   = 1 << 4 // 16 - 提交
+	PermUnsubmit = 1 << 5 // 32 - 反提交
+	PermExport   = 1 << 6 // 64 - 导出
+	PermImport   = 1 << 7 // 128 - 导入
+	PermAll      = 255    // 11111111 - 所有权限
 )
 
 // Service 权限组服务接口
