@@ -88,11 +88,12 @@ func (h *CrudHandler) GetList(c *gin.Context) {
 	if pageSize, ok := rawData["pageSize"].(float64); ok {
 		req.PageSize = int(pageSize)
 	}
+	// 支持多字段排序（逗号分隔）
 	if orderBy, ok := rawData["orderBy"].(string); ok {
-		req.OrderBy = orderBy
+		req.OrderBy = orderBy // 例如: "NAME,CREATE_TIME"
 	}
 	if order, ok := rawData["order"].(string); ok {
-		req.Order = order
+		req.Order = order // 例如: "asc,desc"
 	}
 
 	// 提取 filters 字段（如果存在）
@@ -282,4 +283,74 @@ func (h *CrudHandler) BatchDelete(c *gin.Context) {
 // CRUDBatchDeleteRequest 批量删除请求
 type CRUDBatchDeleteRequest struct {
 	IDs []uint `json:"ids" binding:"required"`
+}
+
+// Submit 提交记录
+// @Summary 提交记录
+// @Description 提交指定记录，执行提交前后钩子
+// @Tags CRUD
+// @Accept json
+// @Produce json
+// @Param tableName path string true "表名"
+// @Param id path int true "记录ID"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/data/{tableName}/{id}/submit [post]
+func (h *CrudHandler) Submit(c *gin.Context) {
+	tableName := c.Param("tableName")
+	idStr := c.Param("id")
+
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	if err := h.crudService.Submit(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
+		utils.InternalError(c, "提交失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "提交成功"})
+}
+
+// Unsubmit 反提交记录
+// @Summary 反提交记录
+// @Description 反提交指定记录，执行反提交前后钩子
+// @Tags CRUD
+// @Accept json
+// @Produce json
+// @Param tableName path string true "表名"
+// @Param id path int true "记录ID"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/data/{tableName}/{id}/unsubmit [post]
+func (h *CrudHandler) Unsubmit(c *gin.Context) {
+	tableName := c.Param("tableName")
+	idStr := c.Param("id")
+
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	if err := h.crudService.Unsubmit(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
+		utils.InternalError(c, "反提交失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "反提交成功"})
 }

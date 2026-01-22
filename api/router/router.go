@@ -6,6 +6,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
+	"github.com/sky-xhsoft/sky-server/internal/repository"
 	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
@@ -45,8 +46,13 @@ type Services struct {
 	WSManager       *ws.Manager
 }
 
+// Repositories 仓储集合
+type Repositories struct {
+	DictRepo repository.DictRepository
+}
+
 // Setup 设置路由
-func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, logger *zap.Logger, db *gorm.DB) {
+func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, repos *Repositories, logger *zap.Logger, db *gorm.DB) {
 	// 全局中间件
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.Recovery())
@@ -75,7 +81,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerAuthRoutes(v1, jwtUtil, services.SSO)
 
 		// 注册元数据路由
-		registerMetadataRoutes(v1, jwtUtil, services.Metadata)
+		registerMetadataRoutes(v1, jwtUtil, services.Metadata, repos.DictRepo)
 
 		// 注册字典路由
 		registerDictRoutes(v1, jwtUtil, services.Dict)
@@ -148,8 +154,8 @@ func registerAuthRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, ssoService sso.Se
 }
 
 // registerMetadataRoutes 注册元数据路由
-func registerMetadataRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, metadataService metadata.Service) {
-	metadataHandler := handler.NewMetadataHandler(metadataService)
+func registerMetadataRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, metadataService metadata.Service, dictRepo repository.DictRepository) {
+	metadataHandler := handler.NewMetadataHandler(metadataService, dictRepo)
 
 	metadata := rg.Group("/metadata")
 	metadata.Use(middleware.AuthRequired(jwtUtil))
@@ -214,6 +220,8 @@ func registerCRUDRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, crudService crud.
 		data.PUT("/:tableName/:id", crudHandler.Update)
 		data.DELETE("/:tableName/:id", crudHandler.Delete)
 		data.POST("/:tableName/batch-delete", crudHandler.BatchDelete)
+		data.POST("/:tableName/:id/submit", crudHandler.Submit)
+		data.POST("/:tableName/:id/unsubmit", crudHandler.Unsubmit)
 	}
 }
 

@@ -241,7 +241,13 @@ func main() {
 		MultipartUpload: multipartService,
 		WSManager:       wsManager,
 	}
-	router.Setup(engine, cfg, jwtUtil, services, log, db)
+
+	// 创建仓储集合
+	repos := &router.Repositories{
+		DictRepo: dictRepo,
+	}
+
+	router.Setup(engine, cfg, jwtUtil, services, repos, log, db)
 	logger.Info("Routes registered successfully")
 
 	// 10. 启动定时清理任务

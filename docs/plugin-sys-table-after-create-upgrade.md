@@ -15,7 +15,7 @@
 
 **规则**：
 - MASK 必须是 8 位字符
-- 每位字符必须是 `AMDSQPGU` 中的一个
+- 每位字符必须是 `AMDSQPGUIE` 中的一个
 
 **MASK 字符含义**：
 - `A` - Add (新增)
@@ -24,8 +24,10 @@
 - `S` - Submit (提交)
 - `Q` - Query (查询)
 - `P` - Print (打印)
-- `G` - Grant (授权)
+- `G` - Group (批量操作)
 - `U` - Unsubmit (反提交)
+- `I` - Imp (导入)
+- `E` - EXP (导入)
 
 **示例**：
 ```go
