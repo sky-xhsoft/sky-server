@@ -87,11 +87,68 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 		dictData[dictID] = items
 	}
 
+	// 获取子表配置
+	childTables := []gin.H{}
+	tableRefs, err := h.metadataService.GetTableRefs(uint(tableID))
+	if err != nil {
+		fmt.Printf("[WARN] 获取表关联关系失败: %v\n", err)
+	} else if len(tableRefs) > 0 {
+		// 为每个子表获取完整配置
+		for _, ref := range tableRefs {
+			// 获取子表信息
+			childTable, err := h.metadataService.GetTableByID(uint(ref.RefTableID))
+			if err != nil {
+				fmt.Printf("[WARN] 获取子表 %d 定义失败: %v\n", ref.RefTableID, err)
+				continue
+			}
+
+			// 获取子表字段列表
+			childColumns, err := h.metadataService.GetColumns(uint(ref.RefTableID))
+			if err != nil {
+				fmt.Printf("[WARN] 获取子表 %d 字段定义失败: %v\n", ref.RefTableID, err)
+				continue
+			}
+
+			// 收集子表的字典ID
+			childDictIDs := make(map[uint]bool)
+			for _, col := range childColumns {
+				if col.SetValueType == "select" && col.SysDictID != "" {
+					dictID, err := strconv.ParseUint(col.SysDictID, 10, 32)
+					if err != nil {
+						fmt.Printf("[WARN] 子表字段 %s 的字典ID格式错误: %s\n", col.DbName, col.SysDictID)
+						continue
+					}
+					childDictIDs[uint(dictID)] = true
+				}
+			}
+
+			// 获取子表的字典数据
+			childDictData := make(map[uint][]*entity.SysDictItem)
+			for dictID := range childDictIDs {
+				items, err := h.dictRepo.GetDictItems(dictID)
+				if err != nil {
+					fmt.Printf("[WARN] 获取子表字典 %d 失败: %v\n", dictID, err)
+					continue
+				}
+				childDictData[dictID] = items
+			}
+
+			// 添加到子表列表
+			childTables = append(childTables, gin.H{
+				"ref":      ref,
+				"table":    childTable,
+				"columns":  childColumns,
+				"dictData": childDictData,
+			})
+		}
+	}
+
 	// 返回完整配置
 	utils.Success(c, gin.H{
-		"table":    table,
-		"columns":  columns,
-		"dictData": dictData,
+		"table":       table,
+		"columns":     columns,
+		"dictData":    dictData,
+		"childTables": childTables,
 	})
 }
 

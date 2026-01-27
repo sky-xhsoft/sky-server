@@ -31,16 +31,17 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 		// TODO: 检查字段权限（基于SGRADE）- 需要集成groups权限服务
 		// 暂时允许所有字段访问
 
-		// 主键字段和系统审计字段始终包含，不受MASK限制
+		// 主键字段、系统审计字段和外键字段始终包含，不受MASK限制
 		isPrimaryKey := col.IsAK == "Y" || col.SetValueType == "pk"
 		isStandardField := standardFields[col.DbName]
+		isForeignKey := col.SetValueType == "fk"
 
 		if isStandardField {
 			addedStandardFields[col.DbName] = true
 		}
 
-		if !isPrimaryKey && !isStandardField {
-			// 对于业务字段，检查MASK可见性
+		if !isPrimaryKey && !isStandardField && !isForeignKey {
+			// 对于业务字段（非FK），检查MASK可见性
 			if col.Mask != "" {
 				fieldMask := mask.ParseMask(col.Mask)
 				if !fieldMask.IsVisible(operation) {
@@ -74,7 +75,25 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 	for _, col := range columns {
 		// TODO: 检查字段权限 - 需要集成groups权限服务
 
-		// 检查MASK可编辑性
+		// 获取字段值
+		value, exists := data[col.DbName]
+
+		// 特殊处理：外键字段（作为子表的父表关联字段）
+		// 如果请求数据中包含外键字段值，即使 MASK 不允许编辑，也应该接受该值
+		// 这是为了支持主从表（父子表）场景，前端会自动设置外键字段的值
+		if exists && col.SetValueType == "fk" && col.RefTableID != nil {
+			// 验证FK字段值
+			if value != nil {
+				if err := s.validateForeignKeyValue(*col.RefTableID, value); err != nil {
+					return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: %s", col.DisplayName, err.Error()), err)
+				}
+			}
+			// 外键字段允许传入，不受 MASK 限制
+			processedData[col.DbName] = value
+			continue
+		}
+
+		// 检查MASK可编辑性（非外键字段需要遵守 MASK）
 		if col.Mask != "" {
 			fieldMask := mask.ParseMask(col.Mask)
 			if !fieldMask.IsEditable("add") {
@@ -82,15 +101,8 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 			}
 		}
 
-		// 获取字段值
-		value, exists := data[col.DbName]
+		// 普通字段处理
 		if exists {
-			// 验证FK字段值
-			if col.SetValueType == "fk" && col.RefTableID != nil && value != nil {
-				if err := s.validateForeignKeyValue(*col.RefTableID, value); err != nil {
-					return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: %s", col.DisplayName, err.Error()), err)
-				}
-			}
 			processedData[col.DbName] = value
 		}
 	}
@@ -105,7 +117,25 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 	for _, col := range columns {
 		// TODO: 检查字段权限 - 需要集成groups权限服务
 
-		// 检查MASK可编辑性
+		// 获取字段值
+		value, exists := data[col.DbName]
+
+		// 特殊处理：外键字段（作为子表的父表关联字段）
+		// 如果请求数据中包含外键字段值，即使 MASK 不允许编辑，也应该接受该值
+		// 这是为了支持主从表（父子表）场景的灵活性
+		if exists && col.SetValueType == "fk" && col.RefTableID != nil {
+			// 验证FK字段值
+			if value != nil {
+				if err := s.validateForeignKeyValue(*col.RefTableID, value); err != nil {
+					return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: %s", col.DisplayName, err.Error()), err)
+				}
+			}
+			// 外键字段允许传入，不受 MASK 限制
+			processedData[col.DbName] = value
+			continue
+		}
+
+		// 检查MASK可编辑性（非外键字段需要遵守 MASK）
 		if col.Mask != "" {
 			fieldMask := mask.ParseMask(col.Mask)
 			if !fieldMask.IsEditable("edit") {
@@ -113,15 +143,8 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 			}
 		}
 
-		// 获取字段值
-		value, exists := data[col.DbName]
+		// 普通字段处理
 		if exists {
-			// 验证FK字段值
-			if col.SetValueType == "fk" && col.RefTableID != nil && value != nil {
-				if err := s.validateForeignKeyValue(*col.RefTableID, value); err != nil {
-					return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: %s", col.DisplayName, err.Error()), err)
-				}
-			}
 			processedData[col.DbName] = value
 		}
 	}
