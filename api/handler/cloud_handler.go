@@ -689,6 +689,68 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	}
 }
 
+// GetShareFolderContent 获取分享文件夹的内容
+// @Summary 获取分享文件夹的内容
+// @Description 通过分享码获取文件夹内容（不需要认证，但需要先验证密码）
+// @Tags Cloud
+// @Accept json
+// @Produce json
+// @Param code path string true "分享码"
+// @Param parentId query int false "父文件夹ID（0或空表示根目录）"
+// @Success 200 {object} FolderContentResponse
+// @Router /api/v1/cloud/shares/{code}/content [get]
+func (h *CloudHandler) GetShareFolderContent(c *gin.Context) {
+	code := c.Param("code")
+
+	// 获取分享记录（不验证密码）
+	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
+	if err != nil {
+		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		return
+	}
+
+	// 只支持文件夹分享
+	if share.ResourceType != "folder" {
+		utils.BadRequest(c, "只能查看文件夹分享内容")
+		return
+	}
+
+	// 获取 parentId 参数
+	parentIDStr := c.Query("parentId")
+	var parentID *uint
+	if parentIDStr != "" && parentIDStr != "0" {
+		id, err := strconv.ParseUint(parentIDStr, 10, 32)
+		if err != nil {
+			utils.BadRequest(c, "parentId 格式错误")
+			return
+		}
+		pid := uint(id)
+		parentID = &pid
+	} else {
+		// 如果没有指定 parentId，使用分享的根文件夹ID
+		pid := share.ResourceID
+		parentID = &pid
+	}
+
+	// 获取文件夹内容（使用分享者的 userID）
+	folders, err := h.cloudService.ListFolders(c.Request.Context(), parentID, share.SharerID)
+	if err != nil {
+		utils.InternalError(c, "查询文件夹失败: "+err.Error())
+		return
+	}
+
+	files, _, err := h.cloudService.ListFiles(c.Request.Context(), parentID, share.SharerID, 1, 10000)
+	if err != nil {
+		utils.InternalError(c, "查询文件失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"folders": folders,
+		"files":   files,
+	})
+}
+
 // CancelShare 取消分享
 // @Summary 取消文件分享
 // @Description 取消指定的文件分享
