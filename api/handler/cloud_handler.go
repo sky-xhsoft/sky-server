@@ -575,33 +575,27 @@ func (h *CloudHandler) AccessShare(c *gin.Context) {
 func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	code := c.Param("code")
 
-	// 获取分享信息（不验证密码，因为已经通过AccessShare验证过了）
-	shareInfo, err := h.cloudService.GetShareInfo(c.Request.Context(), code, "")
+	// 获取分享记录（不验证密码）
+	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
 	if err != nil {
 		utils.InternalError(c, "获取分享信息失败: "+err.Error())
 		return
 	}
 
 	// 只支持文件分享下载
-	if shareInfo.ResourceType != "file" {
+	if share.ResourceType != "file" {
 		utils.BadRequest(c, "只能下载文件分享")
 		return
 	}
 
-	// 检查分享是否有效
-	if shareInfo.Share.Status != "active" {
-		utils.BadRequest(c, "分享已失效")
-		return
-	}
-
 	// 检查下载次数限制
-	if shareInfo.Share.MaxDownloads > 0 && shareInfo.Share.DownloadCount >= shareInfo.Share.MaxDownloads {
+	if share.MaxDownloads > 0 && share.DownloadCount >= share.MaxDownloads {
 		utils.BadRequest(c, "分享下载次数已达上限")
 		return
 	}
 
 	// 获取文件ID
-	fileID := shareInfo.Share.ResourceID
+	fileID := share.ResourceID
 
 	// 下载文件（不需要用户ID验证，因为是公开分享）
 	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), fileID)
@@ -612,7 +606,7 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	defer reader.Close()
 
 	// 更新下载次数
-	h.cloudService.IncrementShareDownloadCount(c.Request.Context(), shareInfo.Share.ID)
+	h.cloudService.IncrementShareDownloadCount(c.Request.Context(), share.ID)
 
 	// 设置响应头
 	c.Header("Content-Disposition", "attachment; filename="+fileInfo.Name)

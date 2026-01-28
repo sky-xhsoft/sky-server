@@ -45,6 +45,7 @@ type Service interface {
 	// 文件分享
 	CreateShare(ctx context.Context, req *CreateShareRequest, userID uint) (*entity.CloudShare, error)
 	GetShareInfo(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
+	GetShareByCode(ctx context.Context, shareCode string) (*entity.CloudShare, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*entity.CloudShare, error)
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
@@ -864,6 +865,35 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 		Update("VIEW_COUNT", gorm.Expr("VIEW_COUNT + 1"))
 
 	return info, nil
+}
+
+// GetShareByCode 获取分享记录（不验证密码）
+func (s *service) GetShareByCode(ctx context.Context, shareCode string) (*entity.CloudShare, error) {
+	var share entity.CloudShare
+	if err := s.db.WithContext(ctx).
+		Where("SHARE_CODE = ? AND IS_ACTIVE = ?", shareCode, "Y").
+		First(&share).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrResourceNotFound, "分享不存在或已失效")
+		}
+		return nil, errors.Wrap(errors.ErrDatabase, "查询分享失败", err)
+	}
+
+	// 检查状态
+	if share.Status != "active" {
+		return nil, errors.New(errors.ErrResourceNotFound, "分享已失效")
+	}
+
+	// 检查过期时间
+	if share.ExpireTime != nil && share.ExpireTime.Before(time.Now()) {
+		// 更新状态为过期
+		s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+			Where("ID = ?", share.ID).
+			Update("STATUS", "expired")
+		return nil, errors.New(errors.ErrResourceNotFound, "分享已过期")
+	}
+
+	return &share, nil
 }
 
 // AccessShare 访问分享
