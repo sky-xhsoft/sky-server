@@ -1,6 +1,7 @@
 package crud
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -103,7 +104,30 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 
 		// 普通字段处理
 		if exists {
-			processedData[col.DbName] = value
+			// 特殊处理：JSON 类型字段
+			// 如果 DisplayType 是 json 且值是 map 或 slice，需要序列化为 JSON 字符串
+			if col.DisplayType == "json" && value != nil {
+				switch v := value.(type) {
+				case map[string]interface{}, []interface{}:
+					jsonBytes, err := json.Marshal(v)
+					if err != nil {
+						return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: JSON 序列化失败", col.DisplayName), err)
+					}
+					processedData[col.DbName] = string(jsonBytes)
+				case string:
+					// 如果已经是字符串，直接使用
+					processedData[col.DbName] = v
+				default:
+					// 其他类型尝试序列化
+					jsonBytes, err := json.Marshal(v)
+					if err != nil {
+						return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: JSON 序列化失败", col.DisplayName), err)
+					}
+					processedData[col.DbName] = string(jsonBytes)
+				}
+			} else {
+				processedData[col.DbName] = value
+			}
 		}
 	}
 
@@ -145,7 +169,30 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 
 		// 普通字段处理
 		if exists {
-			processedData[col.DbName] = value
+			// 特殊处理：JSON 类型字段
+			// 如果 DisplayType 是 json 且值是 map 或 slice，需要序列化为 JSON 字符串
+			if col.DisplayType == "json" && value != nil {
+				switch v := value.(type) {
+				case map[string]interface{}, []interface{}:
+					jsonBytes, err := json.Marshal(v)
+					if err != nil {
+						return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: JSON 序列化失败", col.DisplayName), err)
+					}
+					processedData[col.DbName] = string(jsonBytes)
+				case string:
+					// 如果已经是字符串，直接使用
+					processedData[col.DbName] = v
+				default:
+					// 其他类型尝试序列化
+					jsonBytes, err := json.Marshal(v)
+					if err != nil {
+						return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: JSON 序列化失败", col.DisplayName), err)
+					}
+					processedData[col.DbName] = string(jsonBytes)
+				}
+			} else {
+				processedData[col.DbName] = value
+			}
 		}
 	}
 
