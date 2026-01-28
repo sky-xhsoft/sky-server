@@ -513,6 +513,30 @@ func (h *CloudHandler) CreateShare(c *gin.Context) {
 	utils.Created(c, share)
 }
 
+// GetMyShares 获取我的分享列表
+// @Summary 获取我的分享列表
+// @Description 获取当前用户创建的所有分享
+// @Tags Cloud
+// @Accept json
+// @Produce json
+// @Success 200 {array} entity.CloudShare
+// @Router /api/v1/cloud/shares [get]
+func (h *CloudHandler) GetMyShares(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	shares, err := h.cloudService.GetUserShares(c.Request.Context(), userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "获取分享列表失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, shares)
+}
+
 // GetShareInfo 获取分享信息
 // @Summary 获取分享信息
 // @Description 根据分享码获取分享信息

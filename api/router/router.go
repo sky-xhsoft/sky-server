@@ -512,6 +512,7 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 		// 分享管理（保留）
 		shares := cloudRg.Group("/shares")
 		{
+			shares.GET("", cloudHandler.GetMyShares)
 			shares.POST("", cloudHandler.CreateShare)
 			shares.GET("/:code", cloudHandler.GetShareInfo)
 			shares.POST("/:code/access", cloudHandler.AccessShare)

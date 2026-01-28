@@ -46,6 +46,7 @@ type Service interface {
 	CreateShare(ctx context.Context, req *CreateShareRequest, userID uint) (*entity.CloudShare, error)
 	GetShareInfo(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	GetShareByCode(ctx context.Context, shareCode string) (*entity.CloudShare, error)
+	GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*entity.CloudShare, error)
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
@@ -896,6 +897,18 @@ func (s *service) GetShareByCode(ctx context.Context, shareCode string) (*entity
 	}
 
 	return &share, nil
+}
+
+// GetUserShares 获取用户的分享列表
+func (s *service) GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error) {
+	var shares []*entity.CloudShare
+	if err := s.db.WithContext(ctx).
+		Where("SHARER_ID = ? AND IS_ACTIVE = ?", userID, "Y").
+		Order("CREATE_TIME DESC").
+		Find(&shares).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "查询分享列表失败", err)
+	}
+	return shares, nil
 }
 
 // AccessShare 访问分享
