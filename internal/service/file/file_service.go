@@ -35,6 +35,9 @@ type Service interface {
 	// GetFile 获取文件信息
 	GetFile(ctx context.Context, fileID uint) (*entity.SysFile, error)
 
+	// GetFileByStorageName 根据存储名称获取文件
+	GetFileByStorageName(ctx context.Context, storageName string) (*entity.SysFile, error)
+
 	// ListFiles 查询文件列表
 	ListFiles(ctx context.Context, req *ListFilesRequest) ([]*entity.SysFile, int64, error)
 
@@ -150,7 +153,7 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 			FileType:      fileHeader.Header.Get("Content-Type"),
 			FileExt:       ext,
 			StorageType:   "local",
-			AccessURL:     existingFile.AccessURL,
+			AccessURL:     "", // 先留空，创建后再更新
 			MD5:           md5Sum,
 			UploadIP:      uploadIP,
 			DownloadCount: 0,
@@ -159,6 +162,14 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 
 		if err := s.db.WithContext(ctx).Create(newFile).Error; err != nil {
 			return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
+		}
+
+		// 生成访问URL（使用存储名称，不需要认证）
+		newFile.AccessURL = fmt.Sprintf("/api/v1/files/access/%s", existingFile.StorageName)
+
+		// 更新访问URL
+		if err := s.db.WithContext(ctx).Model(newFile).Update("ACCESS_URL", newFile.AccessURL).Error; err != nil {
+			fmt.Printf("更新文件访问URL失败: %v\n", err)
 		}
 
 		return newFile, nil
@@ -196,9 +207,6 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 		return nil, errors.Wrap(errors.ErrInternal, "保存文件失败", err)
 	}
 
-	// 生成访问URL
-	accessURL := fmt.Sprintf("/api/v1/files/download/%s", storageName)
-
 	// 获取用户名
 	username := s.getUsernameByID(ctx, userID)
 	// 创建文件记录
@@ -215,7 +223,7 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 		FileType:      fileHeader.Header.Get("Content-Type"),
 		FileExt:       ext,
 		StorageType:   "local",
-		AccessURL:     accessURL,
+		AccessURL:     "", // 先留空，创建后再更新
 		MD5:           md5Sum,
 		UploadIP:      uploadIP,
 		DownloadCount: 0,
@@ -226,6 +234,15 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 		// 删除已上传的文件
 		os.Remove(fullPath)
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
+	}
+
+	// 生成访问URL（使用存储名称，不需要认证）
+	sysFile.AccessURL = fmt.Sprintf("/api/v1/files/access/%s", storageName)
+
+	// 更新访问URL
+	if err := s.db.WithContext(ctx).Model(sysFile).Update("ACCESS_URL", sysFile.AccessURL).Error; err != nil {
+		// 记录错误但不影响返回
+		fmt.Printf("更新文件访问URL失败: %v\n", err)
 	}
 
 	return sysFile, nil
@@ -310,6 +327,21 @@ func (s *service) GetFile(ctx context.Context, fileID uint) (*entity.SysFile, er
 	var sysFile entity.SysFile
 	if err := s.db.WithContext(ctx).
 		Where("ID = ? AND IS_ACTIVE = ?", fileID, "Y").
+		First(&sysFile).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrResourceNotFound, "文件不存在")
+		}
+		return nil, errors.Wrap(errors.ErrDatabase, "查询文件失败", err)
+	}
+
+	return &sysFile, nil
+}
+
+// GetFileByStorageName 根据存储名称获取文件
+func (s *service) GetFileByStorageName(ctx context.Context, storageName string) (*entity.SysFile, error) {
+	var sysFile entity.SysFile
+	if err := s.db.WithContext(ctx).
+		Where("STORAGE_NAME = ? AND IS_ACTIVE = ?", storageName, "Y").
 		First(&sysFile).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "文件不存在")

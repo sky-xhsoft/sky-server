@@ -373,23 +373,27 @@ func registerFileRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, fileService file.
 	fileHandler := handler.NewFileHandler(fileService)
 
 	files := rg.Group("/files")
-	files.Use(middleware.AuthRequired(jwtUtil))
 	{
-		// 上传接口
-		files.POST("/upload", fileHandler.UploadFile)
-		files.POST("/upload/multiple", fileHandler.UploadMultipleFiles)
-
-		// 下载和预览接口
-		files.GET("/download/:id", fileHandler.DownloadFile)
-		files.GET("/preview/:id", fileHandler.PreviewFile)
-
-		// 文件管理接口
-		files.GET("/:id", fileHandler.GetFile)
-		files.POST("/list", fileHandler.ListFiles)
-		files.DELETE("/:id", fileHandler.DeleteFile)
-
-		// 直接访问（通过存储名称）
+		// 公开访问接口（不需要认证）
 		files.GET("/access/:storageName", fileHandler.GetFileByPath)
+
+		// 需要认证的接口
+		authenticated := files.Group("")
+		authenticated.Use(middleware.AuthRequired(jwtUtil))
+		{
+			// 上传接口
+			authenticated.POST("/upload", fileHandler.UploadFile)
+			authenticated.POST("/upload/multiple", fileHandler.UploadMultipleFiles)
+
+			// 下载和预览接口
+			authenticated.GET("/download/:id", fileHandler.DownloadFile)
+			authenticated.GET("/preview/:id", fileHandler.PreviewFile)
+
+			// 文件管理接口
+			authenticated.GET("/:id", fileHandler.GetFile)
+			authenticated.POST("/list", fileHandler.ListFiles)
+			authenticated.DELETE("/:id", fileHandler.DeleteFile)
+		}
 	}
 }
 

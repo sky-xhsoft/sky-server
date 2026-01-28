@@ -2,12 +2,11 @@ package handler
 
 import (
 	"net/http"
-	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/service/file"
 )
 
 // FileHandler 文件处理器
@@ -38,13 +37,29 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	category := c.DefaultPostForm("category", "default")
 
 	// 获取用户ID
-	userID, _ := c.Get("userID")
+	userIDValue, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    errors.ErrUnauthorized,
+			"message": "未授权",
+		})
+		return
+	}
+
+	userID, ok := userIDValue.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    errors.ErrInternal,
+			"message": "用户ID类型错误",
+		})
+		return
+	}
 
 	// 获取上传IP
 	uploadIP := c.ClientIP()
 
 	// 上传文件
-	sysFile, err := h.fileService.UploadFile(c.Request.Context(), fileHeader, category, userID.(uint), uploadIP)
+	sysFile, err := h.fileService.UploadFile(c.Request.Context(), fileHeader, category, userID, uploadIP)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.GetCode(err),
@@ -86,13 +101,29 @@ func (h *FileHandler) UploadMultipleFiles(c *gin.Context) {
 	category := c.DefaultPostForm("category", "default")
 
 	// 获取用户ID
-	userID, _ := c.Get("userID")
+	userIDValue, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    errors.ErrUnauthorized,
+			"message": "未授权",
+		})
+		return
+	}
+
+	userID, ok := userIDValue.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    errors.ErrInternal,
+			"message": "用户ID类型错误",
+		})
+		return
+	}
 
 	// 获取上传IP
 	uploadIP := c.ClientIP()
 
 	// 批量上传
-	uploadedFiles, err := h.fileService.UploadMultipleFiles(c.Request.Context(), files, category, userID.(uint), uploadIP)
+	uploadedFiles, err := h.fileService.UploadMultipleFiles(c.Request.Context(), files, category, userID, uploadIP)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.GetCode(err),
@@ -284,12 +315,21 @@ func (h *FileHandler) GetFileByPath(c *gin.Context) {
 		return
 	}
 
-	// 简化版本：直接从uploads目录查找
-	// 注意：这是不安全的，实际应该从数据库查询验证权限
-	// TODO: 添加GetFileByStorageName方法进行验证
-	baseDir := "./uploads"
-	filePath := filepath.Join(baseDir, storageName)
+	// 从数据库查询文件信息
+	sysFile, err := h.fileService.GetFileByStorageName(c.Request.Context(), storageName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":    errors.GetCode(err),
+			"message": "文件不存在",
+		})
+		return
+	}
+
+	// 设置响应头（inline模式，浏览器尝试预览）
+	c.Header("Content-Type", sysFile.FileType)
+	c.Header("Content-Disposition", "inline; filename="+sysFile.FileName)
+	c.Header("Cache-Control", "public, max-age=31536000") // 缓存1年
 
 	// 返回文件
-	c.File(filePath)
+	c.File(sysFile.FilePath)
 }
