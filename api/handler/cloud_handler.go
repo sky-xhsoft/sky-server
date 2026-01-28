@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"io"
 	"strconv"
@@ -513,13 +514,20 @@ func (h *CloudHandler) CreateShare(c *gin.Context) {
 	utils.Created(c, share)
 }
 
+// ShareListItem 分享列表项（扩展了资源名称和链接）
+type ShareListItem struct {
+	*entity.CloudShare
+	FileName  string `json:"fileName"`  // 文件/文件夹名称
+	ShareLink string `json:"shareLink"` // 完整分享链接
+}
+
 // GetMyShares 获取我的分享列表
 // @Summary 获取我的分享列表
 // @Description 获取当前用户创建的所有分享
 // @Tags Cloud
 // @Accept json
 // @Produce json
-// @Success 200 {array} entity.CloudShare
+// @Success 200 {array} ShareListItem
 // @Router /api/v1/cloud/shares [get]
 func (h *CloudHandler) GetMyShares(c *gin.Context) {
 	userID, exists := c.Get("userID")
@@ -534,7 +542,44 @@ func (h *CloudHandler) GetMyShares(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, shares)
+	// 构建分享链接的基础URL
+	baseURL := c.Request.Host
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+
+	// 转换为扩展的分享列表项
+	shareList := make([]ShareListItem, 0, len(shares))
+	for _, share := range shares {
+		item := ShareListItem{
+			CloudShare: share,
+			ShareLink:  fmt.Sprintf("%s://%s/share/%s", scheme, baseURL, share.ShareCode),
+		}
+
+		// 根据资源类型获取资源名称
+		if share.ResourceType == "file" {
+			// 查询文件名
+			fileItem, err := h.cloudService.GetItem(c.Request.Context(), share.ResourceID, userID.(uint))
+			if err == nil && fileItem != nil {
+				item.FileName = fileItem.Name
+			} else {
+				item.FileName = "未知文件"
+			}
+		} else if share.ResourceType == "folder" {
+			// 查询文件夹名
+			folderItem, err := h.cloudService.GetItem(c.Request.Context(), share.ResourceID, userID.(uint))
+			if err == nil && folderItem != nil {
+				item.FileName = folderItem.Name
+			} else {
+				item.FileName = "未知文件夹"
+			}
+		}
+
+		shareList = append(shareList, item)
+	}
+
+	utils.Success(c, shareList)
 }
 
 // GetShareInfo 获取分享信息
