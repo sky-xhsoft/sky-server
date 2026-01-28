@@ -885,6 +885,34 @@ func (s *service) AccessShare(ctx context.Context, shareCode string, password st
 	return info.Share, nil
 }
 
+// DownloadFileByID 通过文件ID下载文件（不检查权限，用于分享下载）
+func (s *service) DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error) {
+	file, err := s.getFileByID(ctx, fileID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// StoragePath 是指针，需要解引用
+	if file.StoragePath == nil {
+		return nil, nil, errors.New(errors.ErrInvalidParam, "文件存储路径不存在")
+	}
+
+	// 从存储中下载文件
+	reader, err := s.storage.Download(ctx, *file.StoragePath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return reader, file, nil
+}
+
+// IncrementShareDownloadCount 增加分享下载次数
+func (s *service) IncrementShareDownloadCount(ctx context.Context, shareID uint) error {
+	return s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+		Where("ID = ?", shareID).
+		Update("DOWNLOAD_COUNT", gorm.Expr("DOWNLOAD_COUNT + 1")).Error
+}
+
 // CancelShare 取消分享
 func (s *service) CancelShare(ctx context.Context, shareID uint, userID uint) error {
 	var share entity.CloudShare
