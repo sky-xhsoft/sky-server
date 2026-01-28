@@ -47,6 +47,8 @@ type Service interface {
 	GetShareInfo(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*entity.CloudShare, error)
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
+	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
+	IncrementShareDownloadCount(ctx context.Context, shareID uint) error
 
 	// 配额管理
 	GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQuota, error)
