@@ -492,15 +492,17 @@ func (s *service) UpdateQuota(ctx context.Context, userID uint, sizeDelta int64,
 }
 
 // 辅助方法
-func (s *service) getFolderByID(ctx context.Context, folderID uint) (*entity.CloudFolder, error) {
-	var folder entity.CloudFolder
-	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", folderID, "Y").First(&folder).Error; err != nil {
+func (s *service) getFolderByID(ctx context.Context, folderID uint) (*entity.CloudItem, error) {
+	var item entity.CloudItem
+	if err := s.db.WithContext(ctx).
+		Where("ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", folderID, "folder", "Y").
+		First(&item).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "文件夹不存在")
 		}
 		return nil, errors.Wrap(errors.ErrDatabase, "查询文件夹失败", err)
 	}
-	return &folder, nil
+	return &item, nil
 }
 
 func (s *service) getFileByID(ctx context.Context, fileID uint) (*entity.CloudItem, error) {
