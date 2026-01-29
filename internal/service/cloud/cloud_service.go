@@ -47,7 +47,7 @@ type Service interface {
 	GetShareInfo(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	GetShareByCode(ctx context.Context, shareCode string) (*entity.CloudShare, error)
 	GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error)
-	AccessShare(ctx context.Context, shareCode string, password string) (*entity.CloudShare, error)
+	AccessShare(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
 	IncrementShareDownloadCount(ctx context.Context, shareID uint) error
@@ -142,8 +142,8 @@ func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, us
 
 	// 检查同名文件夹
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
-		Where("PARENT_ID = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?", req.ParentID, req.Name, userID, "Y").
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("PARENT_ID = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", req.ParentID, req.Name, userID, "Y", "folder").
 		Count(&count).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "检查文件夹失败", err)
 	}
@@ -153,12 +153,13 @@ func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, us
 
 	// 创建文件夹
 	username := s.getUsernameByID(ctx, userID)
-	folder := &entity.CloudFolder{
+	item := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
 			CreateBy: username,
 			UpdateBy: username,
 			IsActive: "Y",
 		},
+		ItemType:    "folder",
 		Name:        req.Name,
 		ParentID:    req.ParentID,
 		Path:        path,
@@ -168,22 +169,24 @@ func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, us
 		TotalSize:   0,
 	}
 
-	if err := s.db.WithContext(ctx).Create(folder).Error; err != nil {
+	if err := s.db.WithContext(ctx).Create(item).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件夹失败", err)
 	}
 
 	// 更新配额：文件夹数量+1
 	s.UpdateQuota(ctx, userID, 0, 0, 1)
 
-	return folder, nil
+	// 转换为 CloudFolder 格式返回（兼容旧接口）
+	return item.ToFolder(), nil
 }
 
 // ListFolders 列出文件夹
 func (s *service) ListFolders(ctx context.Context, parentID *uint, userID uint) ([]*entity.CloudFolder, error) {
-	var folders []*entity.CloudFolder
+	// 从 cloud_item 表查询文件夹
+	var items []*entity.CloudItem
 
 	query := s.db.WithContext(ctx).
-		Where("OWNER_ID = ? AND IS_ACTIVE = ?", userID, "Y")
+		Where("OWNER_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", userID, "Y", "folder")
 
 	if parentID == nil {
 		query = query.Where("PARENT_ID IS NULL")
@@ -191,8 +194,16 @@ func (s *service) ListFolders(ctx context.Context, parentID *uint, userID uint) 
 		query = query.Where("PARENT_ID = ?", *parentID)
 	}
 
-	if err := query.Order("NAME ASC").Find(&folders).Error; err != nil {
+	if err := query.Order("NAME ASC").Find(&items).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询文件夹失败", err)
+	}
+
+	// 转换为 CloudFolder 格式（兼容旧接口）
+	folders := make([]*entity.CloudFolder, 0, len(items))
+	for _, item := range items {
+		if folder := item.ToFolder(); folder != nil {
+			folders = append(folders, folder)
+		}
 	}
 
 	return folders, nil
@@ -200,13 +211,21 @@ func (s *service) ListFolders(ctx context.Context, parentID *uint, userID uint) 
 
 // GetFolderTree 获取文件夹树
 func (s *service) GetFolderTree(ctx context.Context, userID uint) ([]*FolderNode, error) {
-	// 查询所有文件夹
-	var folders []*entity.CloudFolder
+	// 从 cloud_item 表查询所有文件夹
+	var items []*entity.CloudItem
 	if err := s.db.WithContext(ctx).
-		Where("OWNER_ID = ? AND IS_ACTIVE = ?", userID, "Y").
+		Where("OWNER_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", userID, "Y", "folder").
 		Order("PATH ASC").
-		Find(&folders).Error; err != nil {
+		Find(&items).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询文件夹失败", err)
+	}
+
+	// 转换为 CloudFolder 格式
+	folders := make([]*entity.CloudFolder, 0, len(items))
+	for _, item := range items {
+		if folder := item.ToFolder(); folder != nil {
+			folders = append(folders, folder)
+		}
 	}
 
 	// 构建树
@@ -286,8 +305,8 @@ func (s *service) DeleteFolder(ctx context.Context, folderID uint, userID uint) 
 
 	// 检查是否有子文件夹
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
-		Where("PARENT_ID = ? AND IS_ACTIVE = ?", folderID, "Y").
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("PARENT_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", folderID, "Y", "folder").
 		Count(&count).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "检查子文件夹失败", err)
 	}
@@ -306,8 +325,8 @@ func (s *service) DeleteFolder(ctx context.Context, folderID uint, userID uint) 
 	}
 
 	// 软删除
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
-		Where("ID = ?", folderID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND ITEM_TYPE = ?", folderID, "folder").
 		Update("IS_ACTIVE", "N").Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "删除文件夹失败", err)
 	}
@@ -564,9 +583,9 @@ func (s *service) RenameFolder(ctx context.Context, folderID uint, newName strin
 
 	// 检查同名文件夹
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
-		Where("PARENT_ID = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ID != ?",
-			folder.ParentID, newName, userID, "Y", folderID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("PARENT_ID = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ? AND ID != ?",
+			folder.ParentID, newName, userID, "Y", "folder", folderID).
 		Count(&count).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "检查文件夹失败", err)
 	}
@@ -578,8 +597,8 @@ func (s *service) RenameFolder(ctx context.Context, folderID uint, newName strin
 	oldPath := folder.Path
 	newPath := oldPath[:len(oldPath)-len(folder.Name)] + newName
 
-	if err := s.db.WithContext(ctx).Model(&entity.CloudFolder{}).
-		Where("ID = ?", folderID).
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND ITEM_TYPE = ?", folderID, "folder").
 		Updates(map[string]interface{}{
 			"NAME":        newName,
 			"PATH":        newPath,
@@ -822,17 +841,7 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 		return nil, errors.New(errors.ErrResourceNotFound, "分享已过期")
 	}
 
-	// 检查密码
-	if share.ShareType == "password" {
-		if password == "" {
-			return nil, errors.New(errors.ErrInvalidParam, "需要访问密码")
-		}
-		if password != share.Password {
-			return nil, errors.New(errors.ErrInvalidParam, "访问密码错误")
-		}
-	}
-
-	// 获取资源详情
+	// 构建基本信息（不包含文件/文件夹详情）
 	info := &ShareInfo{
 		Share:        &share,
 		ResourceType: share.ResourceType,
@@ -844,9 +853,8 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 		info.Sharer = user.Username
 	}
 
-	// 根据资源类型加载详情
+	// 始终加载文件/文件夹的基本信息（名称等），用于显示
 	if share.ResourceType == "file" {
-		// 使用 CloudItem 表并过滤 ITEM_TYPE = "file"
 		var item entity.CloudItem
 		if err := s.db.WithContext(ctx).
 			Where("ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", share.ResourceID, "file", "Y").
@@ -854,14 +862,33 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 			info.File = &item
 		}
 	} else if share.ResourceType == "folder" {
-		var folder entity.CloudFolder
+		// 使用 CloudItem 表查询文件夹
+		var item entity.CloudItem
 		if err := s.db.WithContext(ctx).
-			Where("ID = ? AND IS_ACTIVE = ?", share.ResourceID, "Y").
-			First(&folder).Error; err == nil {
-			info.Folder = &folder
+			Where("ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", share.ResourceID, "folder", "Y").
+			First(&item).Error; err == nil {
+			// 转换为 CloudFolder 格式（兼容前端）
+			folder := item.ToFolder()
+			info.Folder = folder
 		}
 	}
 
+	// 如果需要密码验证
+	needPassword := share.ShareType == "password"
+	passwordProvided := password != ""
+	passwordCorrect := password == share.Password
+
+	// 如果需要密码但没有提供，或者密码错误，只返回基本信息
+	if needPassword && (!passwordProvided || !passwordCorrect) {
+		// 如果密码错误，返回错误
+		if passwordProvided && !passwordCorrect {
+			return nil, errors.New(errors.ErrInvalidParam, "访问密码错误")
+		}
+		// 如果没有提供密码，返回基本信息（用于显示分享页面）
+		return info, nil
+	}
+
+	// 密码验证通过或公开分享
 	// 更新查看次数
 	s.db.WithContext(ctx).Model(&entity.CloudShare{}).
 		Where("ID = ?", share.ID).
@@ -912,7 +939,7 @@ func (s *service) GetUserShares(ctx context.Context, userID uint) ([]*entity.Clo
 }
 
 // AccessShare 访问分享
-func (s *service) AccessShare(ctx context.Context, shareCode string, password string) (*entity.CloudShare, error) {
+func (s *service) AccessShare(ctx context.Context, shareCode string, password string) (*ShareInfo, error) {
 	// 获取分享信息（包含验证）
 	info, err := s.GetShareInfo(ctx, shareCode, password)
 	if err != nil {
@@ -929,7 +956,7 @@ func (s *service) AccessShare(ctx context.Context, shareCode string, password st
 		Where("ID = ?", info.Share.ID).
 		Update("DOWNLOAD_COUNT", gorm.Expr("DOWNLOAD_COUNT + 1"))
 
-	return info.Share, nil
+	return info, nil
 }
 
 // DownloadFileByID 通过文件ID下载文件（不检查权限，用于分享下载）

@@ -6,8 +6,8 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
-	"github.com/sky-xhsoft/sky-server/internal/repository"
 	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
+	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
@@ -431,6 +431,23 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 	cloudItemHandler := handler.NewCloudItemHandler(services.Cloud)
 	multipartHandler := handler.NewMultipartUploadHandler(services.MultipartUpload)
 
+	// ==================== 分享公开接口（不需要认证）====================
+	publicShares := rg.Group("/cloud/shares")
+	{
+		// 获取分享信息（不需要认证）
+		publicShares.GET("/:code", cloudHandler.GetShareInfo)
+		// 访问分享（验证密码，不需要认证）
+		publicShares.POST("/:code/access", cloudHandler.AccessShare)
+		// 下载分享文件（不需要认证）
+		publicShares.GET("/:code/download", cloudHandler.DownloadShareFile)
+		// 获取分享文件夹内容（不需要认证）
+		publicShares.GET("/:code/content", cloudHandler.GetShareFolderContent)
+		// 下载分享文件夹中的文件（不需要认证）
+		publicShares.GET("/:code/files/:fileId/download", cloudHandler.DownloadShareFolderFile)
+		// 预览分享文件夹中的文件（不需要认证）
+		publicShares.GET("/:code/files/:fileId/preview", cloudHandler.PreviewShareFolderFile)
+	}
+
 	cloudRg := rg.Group("/cloud")
 	cloudRg.Use(middleware.AuthRequired(jwtUtil))
 	{
@@ -509,15 +526,11 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 			}
 		}
 
-		// 分享管理（保留）
+		// 分享管理（需要认证的部分）
 		shares := cloudRg.Group("/shares")
 		{
 			shares.GET("", cloudHandler.GetMyShares)
 			shares.POST("", cloudHandler.CreateShare)
-			shares.GET("/:code", cloudHandler.GetShareInfo)
-			shares.POST("/:code/access", cloudHandler.AccessShare)
-			shares.GET("/:code/download", cloudHandler.DownloadShareFile)
-			shares.GET("/:code/content", cloudHandler.GetShareFolderContent)
 			shares.DELETE("/:id", cloudHandler.CancelShare)
 		}
 

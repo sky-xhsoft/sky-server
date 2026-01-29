@@ -689,6 +689,124 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	}
 }
 
+// DownloadShareFolderFile 下载分享文件夹中的文件
+// @Summary 下载分享文件夹中的文件
+// @Description 通过分享码下载文件夹中的单个文件（不需要认证）
+// @Tags Cloud
+// @Produce octet-stream
+// @Param code path string true "分享码"
+// @Param fileId path int true "文件ID"
+// @Success 200 {file} binary
+// @Router /api/v1/cloud/shares/{code}/files/{fileId}/download [get]
+func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
+	code := c.Param("code")
+	fileIDStr := c.Param("fileId")
+
+	fileID, err := strconv.ParseUint(fileIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "文件ID格式错误")
+		return
+	}
+
+	// 获取分享记录（不验证密码）
+	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
+	if err != nil {
+		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		return
+	}
+
+	// 只支持文件夹分享
+	if share.ResourceType != "folder" {
+		utils.BadRequest(c, "只能下载文件夹分享中的文件")
+		return
+	}
+
+	// 下载文件
+	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), uint(fileID))
+	if err != nil {
+		utils.InternalError(c, "下载文件失败: "+err.Error())
+		return
+	}
+	defer reader.Close()
+
+	// 设置响应头
+	c.Header("Content-Disposition", "attachment; filename="+fileInfo.Name)
+	if fileInfo.FileType != nil {
+		c.Header("Content-Type", *fileInfo.FileType)
+	} else {
+		c.Header("Content-Type", "application/octet-stream")
+	}
+	if fileInfo.FileSize != nil {
+		c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
+	}
+
+	// 流式传输文件
+	if _, err := io.Copy(c.Writer, reader); err != nil {
+		utils.InternalError(c, "传输文件失败: "+err.Error())
+		return
+	}
+}
+
+// PreviewShareFolderFile 预览分享文件夹中的文件
+// @Summary 预览分享文件夹中的文件
+// @Description 通过分享码预览文件夹中的单个文件（不需要认证）
+// @Tags Cloud
+// @Produce octet-stream
+// @Param code path string true "分享码"
+// @Param fileId path int true "文件ID"
+// @Success 200 {file} binary
+// @Router /api/v1/cloud/shares/{code}/files/{fileId}/preview [get]
+func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
+	code := c.Param("code")
+	fileIDStr := c.Param("fileId")
+
+	fileID, err := strconv.ParseUint(fileIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "文件ID格式错误")
+		return
+	}
+
+	// 获取分享记录（不验证密码）
+	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
+	if err != nil {
+		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		return
+	}
+
+	// 只支持文件夹分享
+	if share.ResourceType != "folder" {
+		utils.BadRequest(c, "只能预览文件夹分享中的文件")
+		return
+	}
+
+	// 下载文件（用于预览）
+	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), uint(fileID))
+	if err != nil {
+		utils.InternalError(c, "获取文件失败: "+err.Error())
+		return
+	}
+	defer reader.Close()
+
+	// 根据文件类型设置 Content-Type
+	contentType := "application/octet-stream"
+	if fileInfo.FileType != nil {
+		contentType = *fileInfo.FileType
+	}
+
+	// 设置响应头（inline 表示在浏览器中预览）
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", "inline; filename="+fileInfo.Name)
+	if fileInfo.FileSize != nil {
+		c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
+	}
+
+	// 流式传输文件
+	if _, err := io.Copy(c.Writer, reader); err != nil {
+		utils.InternalError(c, "传输文件失败: "+err.Error())
+		return
+	}
+}
+
 // GetShareFolderContent 获取分享文件夹的内容
 // @Summary 获取分享文件夹的内容
 // @Description 通过分享码获取文件夹内容（不需要认证，但需要先验证密码）
