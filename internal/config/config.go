@@ -20,9 +20,43 @@ type Config struct {
 	Upload          UploadConfig          `mapstructure:"upload"`
 	File            FileConfig            `mapstructure:"file"`
 	MultipartUpload MultipartUploadConfig `mapstructure:"multipartUpload"`
+	Storage         StorageConfig         `mapstructure:"storage"`
 	Swagger         SwaggerConfig         `mapstructure:"swagger"`
 	Security        SecurityConfig        `mapstructure:"security"`
 	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
+}
+
+// StorageConfig 存储配置
+type StorageConfig struct {
+	Default    string             `mapstructure:"default"`    // 默认存储类型
+	Local      LocalStorageConfig `mapstructure:"local"`      // 本地存储配置
+	AliyunOSS  AliyunOSSConfig    `mapstructure:"aliyunOSS"`  // 阿里云OSS配置
+	TencentCOS TencentCOSConfig   `mapstructure:"tencentCOS"` // 腾讯云COS配置
+}
+
+// LocalStorageConfig 本地存储配置
+type LocalStorageConfig struct {
+	BasePath string `mapstructure:"basePath"` // 基础路径
+	BaseURL  string `mapstructure:"baseURL"`  // 基础URL
+}
+
+// AliyunOSSConfig 阿里云OSS配置
+type AliyunOSSConfig struct {
+	Endpoint        string `mapstructure:"endpoint"`        // OSS endpoint
+	AccessKeyID     string `mapstructure:"accessKeyID"`     // AccessKey ID
+	AccessKeySecret string `mapstructure:"accessKeySecret"` // AccessKey Secret
+	BucketName      string `mapstructure:"bucketName"`      // Bucket名称
+	CDNDomain       string `mapstructure:"cdnDomain"`       // CDN加速域名
+}
+
+// TencentCOSConfig 腾讯云COS配置
+type TencentCOSConfig struct {
+	BucketURL  string `mapstructure:"bucketURL"`  // Bucket URL
+	SecretID   string `mapstructure:"secretID"`   // Secret ID
+	SecretKey  string `mapstructure:"secretKey"`  // Secret Key
+	BucketName string `mapstructure:"bucketName"` // Bucket名称
+	Region     string `mapstructure:"region"`     // 区域
+	CDNDomain  string `mapstructure:"cdnDomain"`  // CDN加速域名
 }
 
 // AppConfig 应用配置

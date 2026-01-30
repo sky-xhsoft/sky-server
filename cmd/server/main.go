@@ -187,13 +187,16 @@ func main() {
 	// 初始化消息服务
 	messageService := message.NewService(db, wsManager)
 
-	// 初始化云盘存储
-	cloudStorage, err := storage.NewLocalStorage(&storage.LocalStorageConfig{
-		BasePath: cfg.File.UploadDir + "/cloud", // 使用 uploads/cloud 作为云盘存储目录
-		BaseURL:  fmt.Sprintf("http://localhost:%d/files/cloud", cfg.App.Port),
-	})
+	// 初始化存储管理器
+	storageManager, err := storage.NewStorageManager(&cfg.Storage)
 	if err != nil {
-		logger.Fatal("Failed to initialize cloud storage", zap.Error(err))
+		logger.Fatal("Failed to initialize storage manager", zap.Error(err))
+	}
+
+	// 获取默认存储作为云盘存储
+	cloudStorage, err := storageManager.GetDefaultStorage()
+	if err != nil {
+		logger.Fatal("Failed to get default storage", zap.Error(err))
 	}
 
 	// 初始化云盘服务

@@ -150,3 +150,30 @@ monitoring:
   slowQueryEnabled: true
   # 慢查询阈值（毫秒）
   slowQueryThreshold: 500
+
+# 存储配置
+storage:
+  # 默认存储类型: local, aliyunOSS, tencentCOS
+  default: "local"
+  
+  # 本地存储配置
+  local:
+    basePath: "uploads"
+    baseURL: "http://localhost:9090/files"
+  
+  # 阿里云OSS配置
+  aliyunOSS:
+    endpoint: "oss-cn-hangzhou.aliyuncs.com"
+    accessKeyID: "your-access-key-id"
+    accessKeySecret: "your-access-key-secret"
+    bucketName: "your-bucket-name"
+    cdnDomain: ""
+  
+  # 腾讯云COS配置
+  tencentCOS:
+    bucketURL: "https://your-bucket-name.cos.ap-guangzhou.myqcloud.com"
+    secretID: "your-secret-id"
+    secretKey: "your-secret-key"
+    bucketName: "your-bucket-name"
+    region: "ap-guangzhou"
+    cdnDomain: ""
