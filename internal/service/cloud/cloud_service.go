@@ -56,6 +56,7 @@ type Service interface {
 	GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQuota, error)
 	CheckQuota(ctx context.Context, userID uint, fileSize int64) error
 	UpdateQuota(ctx context.Context, userID uint, sizeDelta int64, fileDelta int, folderDelta int) error
+	RecalculateQuota(ctx context.Context, userID uint) error
 }
 
 // service 云盘服务实现
@@ -511,6 +512,41 @@ func (s *service) UpdateQuota(ctx context.Context, userID uint, sizeDelta int64,
 		Updates(updates).Error
 }
 
+// RecalculateQuota 重新计算用户配额（从数据库统计）
+func (s *service) RecalculateQuota(ctx context.Context, userID uint) error {
+	// 统计文件数量和总大小
+	var fileStats struct {
+		FileCount int64
+		TotalSize int64
+	}
+
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Select("COUNT(*) as file_count, COALESCE(SUM(FILE_SIZE), 0) as total_size").
+		Where("OWNER_ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", userID, "file", "Y").
+		Scan(&fileStats).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "统计文件失败", err)
+	}
+
+	// 统计文件夹数量
+	var folderCount int64
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("OWNER_ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", userID, "folder", "Y").
+		Count(&folderCount).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "统计文件夹失败", err)
+	}
+
+	// 更新配额表
+	updates := map[string]interface{}{
+		"USED_SPACE":   fileStats.TotalSize,
+		"FILE_COUNT":   fileStats.FileCount,
+		"FOLDER_COUNT": folderCount,
+	}
+
+	return s.db.WithContext(ctx).Model(&entity.CloudQuota{}).
+		Where("USER_ID = ?", userID).
+		Updates(updates).Error
+}
+
 // 辅助方法
 func (s *service) getFolderByID(ctx context.Context, folderID uint) (*entity.CloudItem, error) {
 	var item entity.CloudItem
@@ -666,10 +702,8 @@ func (s *service) DeleteFile(ctx context.Context, fileID uint, userID uint) erro
 		return errors.Wrap(errors.ErrDatabase, "删除文件失败", err)
 	}
 
-	// 更新配额：文件数量-1
-	if file.FileSize != nil {
-		s.UpdateQuota(ctx, userID, -*file.FileSize, -1, 0)
-	}
+	// 重新计算配额（从数据库统计）
+	_ = s.RecalculateQuota(ctx, userID)
 
 	// 异步删除物理文件（可选）
 	if file.StoragePath != nil {
@@ -727,7 +761,7 @@ func (s *service) MoveFile(ctx context.Context, fileID uint, targetFolderID *uin
 	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
 		Where("ID = ? AND ITEM_TYPE = ?", fileID, "file").
 		Updates(map[string]interface{}{
-			"FOLDER_ID":   targetFolderID,
+			"PARENT_ID":   targetFolderID,
 			"PATH":        newPath,
 			"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
 			"UPDATE_TIME": time.Now(),

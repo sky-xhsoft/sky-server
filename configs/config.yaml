@@ -163,3 +163,12 @@ monitoring:
   slowQueryEnabled: true
   # 慢查询阈值（毫秒）
   slowQueryThreshold: 500
+
+# 存储配置
+storage:
+    # 默认存储类型: local, aliyunOSS, tencentCOS
+    default: "local"
+    # 本地存储配置
+    local:
+        basePath: "uploads"
+        baseURL: "http://localhost:9090/files"

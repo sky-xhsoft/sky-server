@@ -106,6 +106,9 @@ func (h *CloudItemHandler) CreateItem(c *gin.Context) {
 		return
 	}
 
+	// 重新计算配额
+	_ = h.cloudService.RecalculateQuota(c.Request.Context(), uid)
+
 	utils.Created(c, item)
 }
 
@@ -144,11 +147,8 @@ func (h *CloudItemHandler) DeleteItem(c *gin.Context) {
 		return
 	}
 
-	if item.IsFile() && item.FileSize != nil {
-		_ = h.cloudService.UpdateQuota(c.Request.Context(), uid, -*item.FileSize, -1, 0)
-	} else if item.IsFolder() {
-		_ = h.cloudService.UpdateQuota(c.Request.Context(), uid, 0, 0, -1)
-	}
+	// 重新计算配额
+	_ = h.cloudService.RecalculateQuota(c.Request.Context(), uid)
 
 	utils.Success(c, gin.H{"message": "删除成功"})
 }
@@ -247,12 +247,12 @@ func (h *CloudItemHandler) BatchDelete(c *gin.Context) {
 			failedItems = append(failedItems, strconv.FormatUint(uint64(itemID), 10))
 		} else {
 			successCount++
-			if item.IsFile() && item.FileSize != nil {
-				_ = h.cloudService.UpdateQuota(c.Request.Context(), uid, -*item.FileSize, -1, 0)
-			} else if item.IsFolder() {
-				_ = h.cloudService.UpdateQuota(c.Request.Context(), uid, 0, 0, -1)
-			}
 		}
+	}
+
+	// 批量删除完成后，重新计算配额
+	if successCount > 0 {
+		_ = h.cloudService.RecalculateQuota(c.Request.Context(), uid)
 	}
 
 	utils.Success(c, BatchDeleteResponse{
