@@ -15,6 +15,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/menu"
 	"github.com/sky-xhsoft/sky-server/internal/service/message"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
@@ -43,6 +44,7 @@ type Services struct {
 	Message         message.Service
 	Cloud           cloud.Service
 	MultipartUpload cloud.MultipartUploadService
+	Live            live.Service
 	WSManager       *ws.Manager
 }
 
@@ -118,6 +120,12 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 
 		// 注册云盘路由
 		registerCloudRoutes(v1, jwtUtil, services)
+
+		// 注册直播路由
+		registerLiveDomainRoutes(v1, jwtUtil, services.Live)
+		registerLiveStreamRoutes(v1, jwtUtil, services.Live)
+		registerPullStreamRoutes(v1, jwtUtil, services.Live)
+		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg)
 
 		// 注册WebSocket路由
 		registerWebSocketRoutes(v1, jwtUtil, services.WSManager, logger)
@@ -561,4 +569,19 @@ func registerWebSocketRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, wsManager *w
 		wsGroup.GET("/online/check", middleware.AuthRequired(jwtUtil), wsHandler.CheckUserOnline)
 		wsGroup.POST("/broadcast", middleware.AuthRequired(jwtUtil), wsHandler.BroadcastMessage)
 	}
+}
+
+// registerLiveStreamRoutes 注册直播流路由
+func registerLiveStreamRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service live.Service) {
+	SetupLiveStreamRoutes(rg.Group("/live"), service)
+}
+
+// registerLiveCallbackRoutes 注册直播回调路由
+func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB, cfg *config.Config) {
+	// 从配置中获取回调密钥
+	callbackKey := ""
+	if cfg.TencentCloud.CallbackKey != "" {
+		callbackKey = cfg.TencentCloud.CallbackKey
+	}
+	SetupLiveCallbackRoutes(rg.Group("/live"), jwtUtil, db, callbackKey)
 }
