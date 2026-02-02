@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strconv"
 	"strings"
 )
 
@@ -40,4 +41,16 @@ func ContainsAny(s string, substrs []string) bool {
 		}
 	}
 	return false
+}
+
+// ParseInt 解析字符串为整数，失败时返回默认值
+func ParseInt(s string, defaultValue int) (int, error) {
+	if s == "" {
+		return defaultValue, nil
+	}
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultValue, err
+	}
+	return val, nil
 }

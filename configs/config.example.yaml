@@ -177,3 +177,35 @@ storage:
     bucketName: "your-bucket-name"
     region: "ap-guangzhou"
     cdnDomain: ""
+
+# 腾讯云配置
+tencentCloud:
+  # 腾讯云 SecretID
+  secretID: "your-tencent-secret-id"
+  # 腾讯云 SecretKey
+  secretKey: "your-tencent-secret-key"
+  # 区域，如 ap-guangzhou, ap-shanghai, ap-beijing
+  region: "ap-guangzhou"
+  # 回调密钥，用于验证腾讯云回调签名（可选，留空则不验证签名）
+  callbackKey: ""
+
+  # 直播配置
+  live:
+    # 是否启用直播功能
+    enabled: false
+    # 推流域名
+    pushDomain: "push.yourdomain.com"
+    # 播放域名
+    playDomain: "play.yourdomain.com"
+    # 应用名称
+    appName: "live"
+    # 推流密钥
+    streamKey: "your-stream-key"
+    # 录制文件存储桶
+    recordBucket: "your-record-bucket"
+    # 录制文件存储区域
+    recordRegion: "ap-guangzhou"
+    # 回调URL（配置在腾讯云控制台）
+    callbackURL: "https://your-domain.com/api/v1/live/callback"
+
+    cdnDomain: ""
