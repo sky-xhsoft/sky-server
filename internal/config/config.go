@@ -24,6 +24,7 @@ type Config struct {
 	Swagger         SwaggerConfig         `mapstructure:"swagger"`
 	Security        SecurityConfig        `mapstructure:"security"`
 	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
+	TencentCloud    TencentCloudConfig    `mapstructure:"tencentCloud"`
 }
 
 // StorageConfig 存储配置
@@ -189,6 +190,27 @@ type SecurityConfig struct {
 type MonitoringConfig struct {
 	SlowQueryEnabled   bool `mapstructure:"slowQueryEnabled"`
 	SlowQueryThreshold int  `mapstructure:"slowQueryThreshold"`
+}
+
+// TencentCloudConfig 腾讯云配置
+type TencentCloudConfig struct {
+	SecretID    string     `mapstructure:"secretID"`    // 腾讯云 SecretID
+	SecretKey   string     `mapstructure:"secretKey"`   // 腾讯云 SecretKey
+	Region      string     `mapstructure:"region"`      // 区域，如 ap-guangzhou
+	CallbackKey string     `mapstructure:"callbackKey"` // 回调密钥，用于验证回调签名
+	Live        LiveConfig `mapstructure:"live"`        // 直播配置
+}
+
+// LiveConfig 直播配置
+type LiveConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`      // 是否启用直播功能
+	PushDomain   string `mapstructure:"pushDomain"`   // 推流域名
+	PlayDomain   string `mapstructure:"playDomain"`   // 播放域名
+	AppName      string `mapstructure:"appName"`      // 应用名称
+	StreamKey    string `mapstructure:"streamKey"`    // 推流密钥
+	RecordBucket string `mapstructure:"recordBucket"` // 录制文件存储桶
+	RecordRegion string `mapstructure:"recordRegion"` // 录制文件存储区域
+	CallbackURL  string `mapstructure:"callbackURL"`  // 回调URL
 }
 
 // Load 加载配置文件

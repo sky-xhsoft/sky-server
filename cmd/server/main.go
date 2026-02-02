@@ -27,6 +27,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
+	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/menu"
 	"github.com/sky-xhsoft/sky-server/internal/service/message"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
@@ -214,6 +215,16 @@ func main() {
 		zap.Int("defaultChunkSize", cfg.MultipartUpload.ChunkSize),
 		zap.Int("sessionExpireHours", cfg.MultipartUpload.SessionExpireHours))
 
+	// 初始化直播服务
+	liveService, err := live.NewService(&cfg.TencentCloud)
+	if err != nil {
+		logger.Warn("Failed to initialize live service", zap.Error(err))
+		// 直播服务初始化失败不影响主服务启动
+		liveService = nil
+	} else {
+		logger.Info("Live service initialized successfully")
+	}
+
 	logger.Info("Services initialized")
 
 	// 8. 初始化Gin引擎
@@ -242,6 +253,7 @@ func main() {
 		Message:         messageService,
 		Cloud:           cloudService,
 		MultipartUpload: multipartService,
+		Live:            liveService,
 		WSManager:       wsManager,
 	}
 
