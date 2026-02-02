@@ -1,0 +1,25 @@
+-- 创建直播回调事件表
+CREATE TABLE IF NOT EXISTS `live_callback_event` (
+  `ID` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `EVENT_TYPE` varchar(50) NOT NULL COMMENT '事件类型：push_stream, disconnect_stream, recording_file, recording_status',
+  `EVENT_TIME` bigint NOT NULL COMMENT '事件时间戳（秒）',
+  `DOMAIN_NAME` varchar(255) DEFAULT NULL COMMENT '推流域名',
+  `APP_NAME` varchar(255) DEFAULT NULL COMMENT '应用名称',
+  `STREAM_NAME` varchar(255) DEFAULT NULL COMMENT '流名称',
+  `STREAM_ID` varchar(255) DEFAULT NULL COMMENT '流ID',
+  `CLIENT_IP` varchar(50) DEFAULT NULL COMMENT '客户端IP',
+  `EVENT_DATA` text COMMENT '事件详细数据（JSON格式）',
+  `SIGN` varchar(255) DEFAULT NULL COMMENT '签名',
+  `T_VALUE` bigint NOT NULL COMMENT '签名过期时间',
+  `CREATE_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `SYS_COMPANY_ID` bigint NOT NULL COMMENT '公司ID',
+  `IS_ACTIVE` char(1) DEFAULT 'Y' COMMENT '是否有效',
+  PRIMARY KEY (`ID`),
+  KEY `idx_event_type` (`EVENT_TYPE`),
+  KEY `idx_domain_name` (`DOMAIN_NAME`),
+  KEY `idx_app_name` (`APP_NAME`),
+  KEY `idx_stream_name` (`STREAM_NAME`),
+  KEY `idx_stream_id` (`STREAM_ID`),
+  KEY `idx_company_id` (`SYS_COMPANY_ID`),
+  KEY `idx_create_time` (`CREATE_TIME`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='直播回调事件表';
