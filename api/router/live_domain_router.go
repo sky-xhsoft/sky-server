@@ -4,13 +4,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/api/handler"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 )
 
 // registerLiveDomainRoutes 注册直播域名路由
-func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service) {
+func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service, cfg *config.Config) {
 	domainHandler := handler.NewLiveDomainHandler(service)
+
+	// 创建推流地址生成服务和处理器
+	pushURLService := liveService.NewPushURLService()
+	pushURLHandler := handler.NewLivePushURLHandler(pushURLService)
 
 	// 直播域名路由组（需要认证）
 	domains := r.Group("/live/domains")
@@ -23,5 +28,13 @@ func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service live
 		domains.DELETE("/:domainName", domainHandler.DeleteDomain)      // 删除域名
 		domains.POST("/:domainName/enable", domainHandler.EnableDomain) // 启用域名
 		domains.POST("/:domainName/forbid", domainHandler.ForbidDomain) // 禁用域名
+	}
+
+	// 推流地址生成路由组（需要认证）
+	push := r.Group("/live")
+	push.Use(middleware.AuthRequired(jwtUtil))
+	{
+		push.POST("/push-url/generate", pushURLHandler.GeneratePushURL) // 生成推流地址
+		push.POST("/play-url/generate", pushURLHandler.GeneratePlayURL) // 生成播放地址
 	}
 }

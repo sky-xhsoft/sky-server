@@ -122,7 +122,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerCloudRoutes(v1, jwtUtil, services)
 
 		// 注册直播路由
-		registerLiveDomainRoutes(v1, jwtUtil, services.Live)
+		registerLiveDomainRoutes(v1, jwtUtil, services.Live, cfg)
 		registerLiveStreamRoutes(v1, jwtUtil, services.Live)
 		registerPullStreamRoutes(v1, jwtUtil, services.Live)
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg)
