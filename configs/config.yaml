@@ -183,3 +183,21 @@ tencentCloud:
     region: "ap-shanghai"
     # 回调密钥，用于验证腾讯云回调签名（可选，留空则不验证签名）
     callbackKey: ""
+    # 直播配置
+    live:
+        # 是否启用直播功能
+        enabled: true
+        # 推流域名（必填）- 请在腾讯云直播控制台配置推流域名后填写
+        pushDomain: "push.example.com"
+        # 播放域名（可选）- 如果配置了播放域名，可以生成播放地址
+        playDomain: "play.example.com"
+        # 应用名称（默认为 live）
+        appName: "live"
+        # 推流密钥（必填）- 在腾讯云直播控制台的推流配置中获取
+        streamKey: "d0d87c303d4df45fd648af77ea4a9516"
+        # 录制文件存储桶（可选）
+        recordBucket: ""
+        # 录制文件存储区域（可选）
+        recordRegion: ""
+        # 回调URL（可选）- 用于接收腾讯云直播回调通知
+        callbackURL: ""
