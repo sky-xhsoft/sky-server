@@ -126,7 +126,17 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 					processedData[col.DbName] = string(jsonBytes)
 				}
 			} else {
-				processedData[col.DbName] = value
+				// 特殊处理：自动转大写
+				// 如果字段配置了 IS_UPPERCASE = 'Y'，且值是字符串类型，则转换为大写
+				if col.IsUppercase == "Y" && value != nil {
+					if strValue, ok := value.(string); ok {
+						processedData[col.DbName] = strings.ToUpper(strValue)
+					} else {
+						processedData[col.DbName] = value
+					}
+				} else {
+					processedData[col.DbName] = value
+				}
 			}
 		}
 	}
@@ -191,7 +201,17 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 					processedData[col.DbName] = string(jsonBytes)
 				}
 			} else {
-				processedData[col.DbName] = value
+				// 特殊处理：自动转大写
+				// 如果字段配置了 IS_UPPERCASE = 'Y'，且值是字符串类型，则转换为大写
+				if col.IsUppercase == "Y" && value != nil {
+					if strValue, ok := value.(string); ok {
+						processedData[col.DbName] = strings.ToUpper(strValue)
+					} else {
+						processedData[col.DbName] = value
+					}
+				} else {
+					processedData[col.DbName] = value
+				}
 			}
 		}
 	}
