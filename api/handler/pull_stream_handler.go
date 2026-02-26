@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
@@ -45,17 +47,23 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 		utils.BadRequest(c, "拉流源URL不能为空")
 		return
 	}
-	if req.DomainName == "" {
-		utils.BadRequest(c, "推流域名不能为空")
-		return
-	}
-	if req.AppName == "" {
-		utils.BadRequest(c, "推流应用名称不能为空")
-		return
-	}
-	if req.StreamName == "" {
-		utils.BadRequest(c, "推流流名称不能为空")
-		return
+	// 验证目标地址相关字段：要么提供完整的 ToUrl，要么提供 DomainName、AppName、StreamName
+	if req.ToUrl == "" {
+		if req.DomainName == "" {
+			utils.BadRequest(c, "推流域名不能为空")
+			return
+		}
+		if req.AppName == "" {
+			utils.BadRequest(c, "推流应用名称不能为空")
+			return
+		}
+		if req.StreamName == "" {
+			utils.BadRequest(c, "推流流名称不能为空")
+			return
+		}
+	} else {
+		// 如果提供了 ToUrl，则 DomainName、AppName、StreamName 应该是空字符串
+		// 这里不强制要求，但建议按照腾讯云 API 文档的建议设置为空字符串
 	}
 	if req.StartTime == "" {
 		utils.BadRequest(c, "开始时间不能为空")
@@ -87,17 +95,48 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param taskId query string false "任务ID"
-// @Success 200 {object} utils.Response{data=[]live.PullStreamTaskInfo}
+// @Param pageNum query int false "取得第几页，默认值：1"
+// @Param pageSize query int false "分页大小，默认值：10，取值范围：1~20"
+// @Param specifyTaskId query string false "使用指定任务 ID 查询任务信息"
+// @Success 200 {object} utils.Response{data=live.DescribePullStreamTasksResponse}
 // @Router /api/v1/live/pull-stream/tasks [get]
 func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
-	taskID := c.Query("taskId")
+	var req live.DescribePullStreamTasksRequest
 
-	var taskIDPtr *string
-	if taskID != "" {
-		taskIDPtr = &taskID
+	// 从查询参数中获取值
+	taskId := c.Query("taskId")
+	if taskId != "" {
+		req.TaskID = &taskId
 	}
 
-	tasks, err := h.liveService.DescribePullStreamTasks(c.Request.Context(), taskIDPtr)
+	pageNumStr := c.Query("pageNum")
+	if pageNumStr != "" {
+		pageNum, err := strconv.ParseUint(pageNumStr, 10, 64)
+		if err == nil {
+			req.PageNum = &pageNum
+		}
+	}
+
+	pageSizeStr := c.Query("pageSize")
+	if pageSizeStr != "" {
+		pageSize, err := strconv.ParseUint(pageSizeStr, 10, 64)
+		if err == nil {
+			// 确保 pageSize 在 1~20 之间
+			if pageSize < 1 {
+				pageSize = 1
+			} else if pageSize > 20 {
+				pageSize = 20
+			}
+			req.PageSize = &pageSize
+		}
+	}
+
+	specifyTaskId := c.Query("specifyTaskId")
+	if specifyTaskId != "" {
+		req.SpecifyTaskId = &specifyTaskId
+	}
+
+	tasks, err := h.liveService.DescribePullStreamTasks(c.Request.Context(), &req)
 	if err != nil {
 		zap.L().Error("查询拉流任务列表失败", zap.Error(err))
 		utils.InternalError(c, "查询拉流任务列表失败: "+err.Error())
@@ -138,6 +177,7 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 		utils.BadRequest(c, "操作者不能为空")
 		return
 	}
+
 
 	err := h.liveService.UpdatePullStreamTask(c.Request.Context(), &req)
 	if err != nil {
@@ -239,4 +279,44 @@ func (h *PullStreamHandler) RestartPullStreamTask(c *gin.Context) {
 	}
 
 	utils.Success(c, nil)
+}
+
+// DescribePullTransformPushInfoList 查询拉流转推任务流数据
+// @Summary 查询拉流转推任务流数据
+// @Description 查询拉流转推任务流数据统计信息
+// @Tags Live-PullStream
+// @Accept json
+// @Produce json
+// @Param request body live.DescribePullTransformPushInfoListRequest true "查询拉流转推任务流数据请求"
+// @Success 200 {object} utils.Response{data=live.DescribePullTransformPushInfoListResponse}
+// @Router /api/v1/live/pull-stream/tasks/transform-push-info [post]
+func (h *PullStreamHandler) DescribePullTransformPushInfoList(c *gin.Context) {
+	var req live.DescribePullTransformPushInfoListRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	// 验证必填字段
+	if req.StartTime == "" {
+		utils.BadRequest(c, "开始时间不能为空")
+		return
+	}
+	if req.EndTime == "" {
+		utils.BadRequest(c, "结束时间不能为空")
+		return
+	}
+	if req.TaskId == "" {
+		utils.BadRequest(c, "任务ID不能为空")
+		return
+	}
+
+	resp, err := h.liveService.DescribePullTransformPushInfoList(c.Request.Context(), &req)
+	if err != nil {
+		zap.L().Error("查询拉流转推任务流数据失败", zap.Error(err))
+		utils.InternalError(c, "查询拉流转推任务流数据失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, resp)
 }
