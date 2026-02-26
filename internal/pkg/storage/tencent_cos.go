@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 // TencentCOS 腾讯云COS存储实现
@@ -50,6 +51,9 @@ func NewTencentCOS(cfg *TencentCOSConfig) (Storage, error) {
 		return nil, fmt.Errorf("Region不能为空")
 	}
 
+	// 增加超时时间以支持更大分片上传（50MB分片）
+	timeout := 5 * time.Minute // 5分钟超时，足够支持大文件上传
+
 	return &TencentCOS{
 		bucketURL:  cfg.BucketURL,
 		secretID:   cfg.SecretID,
@@ -58,7 +62,7 @@ func NewTencentCOS(cfg *TencentCOSConfig) (Storage, error) {
 		region:     cfg.Region,
 		cdnDomain:  cfg.CDNDomain,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: timeout,
 		},
 	}, nil
 }
@@ -331,7 +335,11 @@ func (s *TencentCOS) GetObjectInfo(ctx context.Context, path string) (*ObjectInf
 
 // signRequest 签名请求
 func (s *TencentCOS) signRequest(req *http.Request) {
-	// TODO: 实现腾讯云COS请求签名
-	// 这里需要实现腾讯云COS的请求签名算法
+	// 使用腾讯云COS官方SDK提供的签名方法
 	// 参考文档: https://cloud.tencent.com/document/product/436/7778
+	// 使用 AddAuthorizationHeader 函数进行签名
+
+	// 添加授权头
+	authTime := cos.NewAuthTime(5 * time.Minute)
+	cos.AddAuthorizationHeader(s.secretID, s.secretKey, "", req, authTime)
 }

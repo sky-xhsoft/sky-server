@@ -132,7 +132,7 @@ file:
 
 # 分片上传配置
 multipartUpload:
-  chunkSize: 20971520  # 默认分片大小：20MB（字节）
+  chunkSize: 52428800  # 默认分片大小：50MB（字节）
   sessionExpireHours: 24  # 上传会话过期时间（小时）
   cleanupInterval: 3600  # 清理任务执行间隔（秒），默认1小时
 
@@ -167,11 +167,20 @@ monitoring:
 # 存储配置
 storage:
     # 默认存储类型: local, aliyunOSS, tencentCOS
-    default: "local"
+    default: "tencentCOS"
     # 本地存储配置
     local:
         basePath: "uploads"
         baseURL: "http://localhost:9090/files"
+    # 腾讯云COS配置
+    tencentCOS:
+        bucketURL: "https://zhibo-1301212747.cos.ap-nanjing.myqcloud.com"
+        secretID: "AKIDGpIZd9YmrC3lMtDLGyTp262oOlxxoTwD"
+        secretKey: "72kGZgb3MTiqmX6ShnhOsBHB5rRp11pW"
+        bucketName: "zhibo-1301212747"
+        region: "ap-nanjing"
+        cdnDomain: ""
+
 
 # 腾讯云配置
 tencentCloud:

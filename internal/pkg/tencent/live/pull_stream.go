@@ -8,6 +8,29 @@ import (
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
 )
 
+// TurnPushInfo 拉流转推任务流信息
+type TurnPushInfo struct {
+	VideoFps  int64  `json:"videoFps,omitempty"`
+	AudioFps  int64  `json:"audioFps,omitempty"`
+	VideoRate int64  `json:"videoRate,omitempty"`
+	AudioRate int64  `json:"audioRate,omitempty"`
+	StreamFlag string `json:"streamFlag,omitempty"`
+	Time      string `json:"time,omitempty"`
+}
+
+// DescribePullTransformPushInfoListRequest 查询拉流转推任务流数据请求
+type DescribePullTransformPushInfoListRequest struct {
+	StartTime string // UTC开始时间，格式：yyyy-mm-ddTHH:MM:SSZ
+	EndTime   string // UTC结束时间，格式：yyyy-mm-ddTHH:MM:SSZ
+	TaskId    string // 拉流转推任务ID
+}
+
+// DescribePullTransformPushInfoListResponse 查询拉流转推任务流数据响应
+type DescribePullTransformPushInfoListResponse struct {
+	DataInfoList []*TurnPushInfo `json:"dataInfoList"`
+	RequestId    string         `json:"requestId,omitempty"`
+}
+
 // RegionClientProvider 地域客户端提供者接口
 type RegionClientProvider interface {
 	GetLiveClientForRegion(region string) (*live.Client, error)
@@ -38,14 +61,16 @@ func NewPullStreamManagerWithProvider(client *live.Client, provider RegionClient
 type CreatePullStreamTaskRequest struct {
 	SourceType string   // 拉流源类型：PullLivePushLive（直播），PullVodPushLive（点播）
 	SourceURLs []string // 拉流源URL列表
-	DomainName string   // 推流域名
-	AppName    string   // 推流应用名称
-	StreamName string   // 推流流名称
+	DomainName string   // 推流域名（如果使用 ToUrl，则传入空字符串）
+	AppName    string   // 推流应用名称（如果使用 ToUrl，则传入空字符串）
+	StreamName string   // 推流流名称（如果使用 ToUrl，则传入空字符串）
+	ToUrl      string   // 完整目标 URL 地址（支持 rtmp、rtmps、rtsp、rtp、srt 协议）
 	StartTime  string   // 开始时间，格式：yyyy-mm-dd HH:MM:SS
 	EndTime    string   // 结束时间，格式：yyyy-mm-dd HH:MM:SS
 	Operator   string   // 操作者
 	Comment    string   // 任务描述
 	Region     string   // 任务创建所在地域
+	PushArgs   string   // 推流参数，格式：key1=value1&key2=value2
 }
 
 // CreatePullStreamTask 创建拉流任务
@@ -69,13 +94,26 @@ func (m *PullStreamManager) CreatePullStreamTask(ctx context.Context, req *Creat
 	}
 	request.SourceUrls = sourceURLs
 
-	request.DomainName = common.StringPtr(req.DomainName)
-	request.AppName = common.StringPtr(req.AppName)
-	request.StreamName = common.StringPtr(req.StreamName)
+	// 如果提供了 ToUrl，则使用 ToUrl，否则使用 DomainName, AppName, StreamName
+	if req.ToUrl != "" {
+		request.ToUrl = common.StringPtr(req.ToUrl)
+		// 按照文档要求，使用 ToUrl 时需要传入空字符串
+		request.DomainName = common.StringPtr("")
+		request.AppName = common.StringPtr("")
+		request.StreamName = common.StringPtr("")
+	} else {
+		request.DomainName = common.StringPtr(req.DomainName)
+		request.AppName = common.StringPtr(req.AppName)
+		request.StreamName = common.StringPtr(req.StreamName)
+	}
+
 	request.StartTime = common.StringPtr(req.StartTime)
 	request.EndTime = common.StringPtr(req.EndTime)
 	request.Operator = common.StringPtr(req.Operator)
 	request.Comment = common.StringPtr(req.Comment)
+	if req.PushArgs != "" {
+		request.PushArgs = common.StringPtr(req.PushArgs)
+	}
 
 	response, err := client.CreateLivePullStreamTask(request)
 	if err != nil {
@@ -107,6 +145,7 @@ type PullStreamTaskInfo struct {
 	DomainName            string   `json:"domainName"`
 	AppName               string   `json:"appName"`
 	StreamName            string   `json:"streamName"`
+	ToUrl                 string   `json:"toUrl,omitempty"`
 	PushArgs              string   `json:"pushArgs,omitempty"`
 	StartTime             string   `json:"startTime"`
 	EndTime               string   `json:"endTime"`
@@ -131,11 +170,38 @@ type PullStreamTaskInfo struct {
 	TranscodeTemplateName string   `json:"transcodeTemplateName,omitempty"`
 }
 
+// DescribePullStreamTasksRequest 查询拉流任务列表请求
+type DescribePullStreamTasksRequest struct {
+	TaskID     *string // 任务ID（可选）
+	PageNum    *uint64 // 取得第几页，默认值：1
+	PageSize   *uint64 // 分页大小，默认值：10，取值范围：1~20
+	SpecifyTaskId *string // 使用指定任务 ID 查询任务信息（可选）
+}
+
+// DescribePullStreamTasksResponse 查询拉流任务列表响应
+type DescribePullStreamTasksResponse struct {
+	TaskInfos     []*PullStreamTaskInfo // 任务信息列表
+	PageNum       uint64                // 取得第几页
+	PageSize      uint64                // 分页大小
+	TotalNum      uint64                // 符合条件的总个数
+	TotalPage     uint64                // 总页数
+	LimitTaskNum  uint64                // 限制可创建的最大任务数
+}
+
 // DescribePullStreamTasks 查询拉流任务列表
-func (m *PullStreamManager) DescribePullStreamTasks(ctx context.Context, taskID *string) ([]*PullStreamTaskInfo, error) {
+func (m *PullStreamManager) DescribePullStreamTasks(ctx context.Context, req *DescribePullStreamTasksRequest) (*DescribePullStreamTasksResponse, error) {
 	request := live.NewDescribeLivePullStreamTasksRequest()
-	if taskID != nil {
-		request.TaskId = common.StringPtr(*taskID)
+	if req.TaskID != nil {
+		request.TaskId = common.StringPtr(*req.TaskID)
+	}
+	if req.PageNum != nil {
+		request.PageNum = common.Uint64Ptr(*req.PageNum)
+	}
+	if req.PageSize != nil {
+		request.PageSize = common.Uint64Ptr(*req.PageSize)
+	}
+	if req.SpecifyTaskId != nil {
+		request.SpecifyTaskId = common.StringPtr(*req.SpecifyTaskId)
 	}
 
 	response, err := m.client.DescribeLivePullStreamTasks(request)
@@ -226,7 +292,16 @@ func (m *PullStreamManager) DescribePullStreamTasks(ctx context.Context, taskID 
 		tasks = append(tasks, info)
 	}
 
-	return tasks, nil
+	resp := &DescribePullStreamTasksResponse{
+		TaskInfos:    tasks,
+		PageNum:      *response.Response.PageNum,
+		PageSize:     *response.Response.PageSize,
+		TotalNum:     *response.Response.TotalNum,
+		TotalPage:    *response.Response.TotalPage,
+		LimitTaskNum: *response.Response.LimitTaskNum,
+	}
+
+	return resp, nil
 }
 
 // RestartPullStreamTask 重启拉流任务
@@ -243,11 +318,45 @@ func (m *PullStreamManager) RestartPullStreamTask(ctx context.Context, taskID st
 	return nil
 }
 
+// DescribePullTransformPushInfoList 查询拉流转推任务流数据
+func (m *PullStreamManager) DescribePullTransformPushInfoList(ctx context.Context, req *DescribePullTransformPushInfoListRequest) (*DescribePullTransformPushInfoListResponse, error) {
+	request := live.NewDescribePullTransformPushInfoListRequest()
+	request.StartTime = common.StringPtr(req.StartTime)
+	request.EndTime = common.StringPtr(req.EndTime)
+	request.TaskId = common.StringPtr(req.TaskId)
+
+	response, err := m.client.DescribePullTransformPushInfoList(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe pull transform push info list: %w", err)
+	}
+
+	// 转换为内部数据结构
+	var dataInfoList []*TurnPushInfo
+	if response.Response.DataInfoList != nil {
+		dataInfoList = make([]*TurnPushInfo, 0, len(response.Response.DataInfoList))
+		for _, item := range response.Response.DataInfoList {
+			dataInfoList = append(dataInfoList, &TurnPushInfo{
+				VideoFps:  *item.VideoFps,
+				AudioFps:  *item.AudioFps,
+				VideoRate: *item.VideoRate,
+				AudioRate: *item.AudioRate,
+				StreamFlag: *item.StreamFlag,
+				Time:      *item.Time,
+			})
+		}
+	}
+
+	return &DescribePullTransformPushInfoListResponse{
+		DataInfoList: dataInfoList,
+		RequestId:    *response.Response.RequestId,
+	}, nil
+}
+
 // UpdatePullStreamTaskRequest 更新拉流任务请求
 type UpdatePullStreamTaskRequest struct {
 	TaskID     string   // 任务ID
-	SourceType string   // 拉流源类型
 	SourceURLs []string // 拉流源URL列表
+	ToUrl      string   // 完整目标 URL 地址
 	StartTime  string   // 开始时间
 	EndTime    string   // 结束时间
 	Operator   string   // 操作者
@@ -269,6 +378,11 @@ func (m *PullStreamManager) UpdatePullStreamTask(ctx context.Context, req *Updat
 		request.SourceUrls = sourceURLs
 	}
 
+	// 如果提供了 ToUrl，则使用 ToUrl
+	if req.ToUrl != "" {
+		request.ToUrl = common.StringPtr(req.ToUrl)
+	}
+
 	if req.StartTime != "" {
 		request.StartTime = common.StringPtr(req.StartTime)
 	}
@@ -279,6 +393,10 @@ func (m *PullStreamManager) UpdatePullStreamTask(ctx context.Context, req *Updat
 
 	if req.Status != "" {
 		request.Status = common.StringPtr(req.Status)
+	}
+
+	if req.Comment != "" {
+		request.Comment = common.StringPtr(req.Comment)
 	}
 
 	_, err := m.client.ModifyLivePullStreamTask(request)

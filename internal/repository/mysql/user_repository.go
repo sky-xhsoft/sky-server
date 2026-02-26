@@ -72,6 +72,11 @@ func (r *userRepository) DeleteSession(id uint) error {
 	return r.db.Model(&entity.SysUserSession{}).Where("ID = ?", id).Update("IS_ACTIVE", "N").Error
 }
 
+func (r *userRepository) DeleteSessionByDeviceID(userID uint, deviceID string) error {
+	// 物理删除该设备的所有会话记录，避免唯一索引冲突
+	return r.db.Where("USER_ID = ? AND DEVICE_ID = ?", userID, deviceID).Delete(&entity.SysUserSession{}).Error
+}
+
 func (r *userRepository) DeleteAllSessions(userID uint) error {
 	return r.db.Model(&entity.SysUserSession{}).Where("USER_ID = ?", userID).Update("IS_ACTIVE", "N").Error
 }

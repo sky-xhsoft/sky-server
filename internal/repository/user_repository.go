@@ -28,6 +28,9 @@ type UserRepository interface {
 	// 删除会话（登出）
 	DeleteSession(id uint) error
 
+	// 根据设备ID删除会话
+	DeleteSessionByDeviceID(userID uint, deviceID string) error
+
 	// 删除用户所有会话
 	DeleteAllSessions(userID uint) error
 }

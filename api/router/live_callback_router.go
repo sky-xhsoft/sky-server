@@ -50,6 +50,8 @@ func SetupLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB,
 		authenticated.Use(middleware.AuthRequired(jwtUtil))
 		{
 			authenticated.GET("/events", callbackHandler.QueryCallbackEvents)
+			authenticated.DELETE("/events/:id", callbackHandler.DeleteCallbackEvent)
+			authenticated.DELETE("/events/batch", callbackHandler.BatchDeleteCallbackEvents)
 		}
 	}
 }

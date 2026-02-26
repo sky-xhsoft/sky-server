@@ -637,6 +637,74 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 	c.JSON(200, gin.H{"code": 0})
 }
 
+// DeleteCallbackEvent 删除回调事件
+// @Summary 删除回调事件
+// @Description 删除直播回调事件记录
+// @Tags Live-Callback
+// @Accept json
+// @Produce json
+// @Param id path int true "事件ID"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/live/callback/events/{id} [delete]
+func (h *LiveCallbackHandler) DeleteCallbackEvent(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		logger.Error("事件ID不能为空")
+		utils.BadRequest(c, "事件ID不能为空")
+		return
+	}
+
+	// 转换ID为整数
+	eventID, err := utils.ParseInt(id, 0)
+	if err != nil {
+		logger.Error("事件ID格式无效", zap.Error(err))
+		utils.BadRequest(c, "事件ID格式无效")
+		return
+	}
+
+	// 软删除事件（将IsActive设置为N）
+	if err := h.db.Model(&entity.LiveCallbackEvent{}).Where("ID = ?", eventID).Update("IS_ACTIVE", "N").Error; err != nil {
+		logger.Error("删除回调事件失败", zap.Error(err))
+		utils.InternalError(c, "删除失败")
+		return
+	}
+
+	utils.Success(c, nil)
+}
+
+// BatchDeleteCallbackEvents 批量删除回调事件
+// @Summary 批量删除回调事件
+// @Description 批量删除直播回调事件记录
+// @Tags Live-Callback
+// @Accept json
+// @Produce json
+// @Param ids body []int true "事件ID列表"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/live/callback/events/batch [delete]
+func (h *LiveCallbackHandler) BatchDeleteCallbackEvents(c *gin.Context) {
+	var ids []int
+	if err := c.ShouldBindJSON(&ids); err != nil {
+		logger.Error("解析事件ID列表失败", zap.Error(err))
+		utils.BadRequest(c, "事件ID列表格式无效")
+		return
+	}
+
+	if len(ids) == 0 {
+		logger.Error("事件ID列表不能为空")
+		utils.BadRequest(c, "事件ID列表不能为空")
+		return
+	}
+
+	// 软删除事件（将IsActive设置为N）
+	if err := h.db.Model(&entity.LiveCallbackEvent{}).Where("ID IN ?", ids).Update("IS_ACTIVE", "N").Error; err != nil {
+		logger.Error("批量删除回调事件失败", zap.Error(err))
+		utils.InternalError(c, "删除失败")
+		return
+	}
+
+	utils.Success(c, nil)
+}
+
 // QueryCallbackEvents 查询回调事件列表
 // @Summary 查询回调事件列表
 // @Description 查询直播回调事件记录

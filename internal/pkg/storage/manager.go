@@ -38,7 +38,30 @@ func NewStorageManager(cfg *config.StorageConfig) (*StorageManager, error) {
 
 	// 验证默认存储类型
 	if _, ok := manager.storages[manager.defaultStorage]; !ok {
-		return nil, fmt.Errorf("默认存储类型 %s 未初始化", manager.defaultStorage)
+		// 如果默认存储类型未初始化，尝试使用已配置的存储类型
+		if len(manager.storages) > 0 {
+			// 优先使用本地存储
+			if _, exists := manager.storages["local"]; exists {
+				manager.defaultStorage = "local"
+			} else {
+				// 如果没有本地存储，使用第一个可用的存储类型
+				for storageType := range manager.storages {
+					manager.defaultStorage = storageType
+					break
+				}
+			}
+		} else {
+			// 如果没有任何存储类型配置，默认初始化本地存储（使用临时目录）
+			storage, err := NewLocalStorage(&LocalStorageConfig{
+				BasePath: "./uploads", // 默认临时目录
+				BaseURL:  "/uploads",
+			})
+			if err != nil {
+				return nil, fmt.Errorf("无法初始化任何存储类型: %w", err)
+			}
+			manager.storages["local"] = storage
+			manager.defaultStorage = "local"
+		}
 	}
 
 	return manager, nil

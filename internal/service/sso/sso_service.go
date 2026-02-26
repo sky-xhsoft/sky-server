@@ -150,7 +150,7 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 		IsActive:       "Y",
 	}
 
-	// 检查是否已存在该设备的会话
+	// 检查是否已存在该设备的会话（包括非活跃的）
 	existingSession, err := s.userRepo.GetSessionByDeviceID(user.ID, deviceID)
 	if err == nil {
 		// 更新现有会话
@@ -159,6 +159,9 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 			return nil, errors.Wrap(errors.ErrDatabase, "更新会话失败", err)
 		}
 	} else {
+		// 先删除该设备的所有旧会话（包括非活跃的），避免唯一索引冲突
+		s.userRepo.DeleteSessionByDeviceID(user.ID, deviceID)
+
 		// 创建新会话
 		if err := s.userRepo.CreateSession(session); err != nil {
 			return nil, errors.Wrap(errors.ErrDatabase, "创建会话失败", err)
