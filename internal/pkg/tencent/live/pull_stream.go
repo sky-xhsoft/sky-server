@@ -71,6 +71,8 @@ type CreatePullStreamTaskRequest struct {
 	Comment    string   // 任务描述
 	Region     string   // 任务创建所在地域
 	PushArgs   string   // 推流参数，格式：key1=value1&key2=value2
+	RoomID     string   // 直播间ID
+	RoomName   string   // 直播间名称
 }
 
 // CreatePullStreamTask 创建拉流任务
@@ -168,6 +170,8 @@ type PullStreamTaskInfo struct {
 	RecordTemplateId      string   `json:"recordTemplateId,omitempty"`
 	BackupToUrl           string   `json:"backupToUrl,omitempty"`
 	TranscodeTemplateName string   `json:"transcodeTemplateName,omitempty"`
+	RoomID                string   `json:"roomId,omitempty"`   // 直播间ID
+	RoomName              string   `json:"roomName,omitempty"` // 直播间名称
 }
 
 // DescribePullStreamTasksRequest 查询拉流任务列表请求
@@ -362,6 +366,8 @@ type UpdatePullStreamTaskRequest struct {
 	Operator   string   // 操作者
 	Comment    string   // 任务描述
 	Status     string   // 任务状态：enable-启用，pause-暂停
+	RoomID     string   // 直播间ID
+	RoomName   string   // 直播间名称
 }
 
 // UpdatePullStreamTask 更新拉流任务

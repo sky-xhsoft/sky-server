@@ -9,8 +9,8 @@ import (
 )
 
 // registerPullStreamRoutes 注册拉流任务路由
-func registerPullStreamRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service) {
-	pullStreamHandler := handler.NewPullStreamHandler(service)
+func registerPullStreamRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service, pullStreamTaskService liveService.PullStreamTaskService) {
+	pullStreamHandler := handler.NewPullStreamHandler(service, pullStreamTaskService)
 
 	// 拉流任务路由组（需要认证）
 	pullStream := r.Group("/live/pull-stream")

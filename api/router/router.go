@@ -45,6 +45,8 @@ type Services struct {
 	Cloud           cloud.Service
 	MultipartUpload cloud.MultipartUploadService
 	Live            live.Service
+	LiveRoom        live.LiveRoomService
+	PullStreamTask  live.PullStreamTaskService
 	WSManager       *ws.Manager
 }
 
@@ -124,8 +126,9 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 注册直播路由
 		registerLiveDomainRoutes(v1, jwtUtil, services.Live, cfg)
 		registerLiveStreamRoutes(v1, jwtUtil, services.Live)
-		registerPullStreamRoutes(v1, jwtUtil, services.Live)
+		registerPullStreamRoutes(v1, jwtUtil, services.Live, services.PullStreamTask)
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg)
+		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom)
 
 		// 注册WebSocket路由
 		registerWebSocketRoutes(v1, jwtUtil, services.WSManager, logger)
@@ -584,4 +587,30 @@ func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.
 		callbackKey = cfg.TencentCloud.CallbackKey
 	}
 	SetupLiveCallbackRoutes(rg.Group("/live"), jwtUtil, db, callbackKey)
+}
+
+// registerLiveRoomRoutes 注册直播间管理路由
+func registerLiveRoomRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service live.LiveRoomService) {
+	roomHandler := handler.NewLiveRoomHandler(service)
+
+	rooms := rg.Group("/live/rooms")
+	rooms.Use(middleware.AuthRequired(jwtUtil))
+	{
+		// 列表
+		rooms.GET("", roomHandler.ListRooms)
+		// 详情
+		rooms.GET("/:id", roomHandler.GetRoom)
+		// 创建
+		rooms.POST("", roomHandler.CreateRoom)
+		// 更新
+		rooms.PUT("/:id", roomHandler.UpdateRoom)
+		// 删除
+		rooms.DELETE("/:id", roomHandler.DeleteRoom)
+		// 开始直播
+		rooms.POST("/:id/start", roomHandler.StartLive)
+		// 结束直播
+		rooms.POST("/:id/end", roomHandler.EndLive)
+		// 更新观看人数
+		rooms.PUT("/:id/viewer-count", roomHandler.UpdateViewerCount)
+	}
 }

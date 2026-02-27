@@ -20,6 +20,7 @@ type LiveCallbackEvent struct {
 	CreateTime   time.Time `gorm:"column:CREATE_TIME;type:datetime;not null;autoCreateTime" json:"createTime"`
 	SysCompanyID int64     `gorm:"column:SYS_COMPANY_ID;not null;index" json:"sysCompanyId"`
 	IsActive     string    `gorm:"column:IS_ACTIVE;type:char(1);default:'Y'" json:"isActive"`
+	RoomName     string    `gorm:"column:ROOM_NAME;type:varchar(255)" json:"roomName"`                       // 直播间名称
 }
 
 // TableName 指定表名

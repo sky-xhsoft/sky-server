@@ -2,8 +2,10 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
@@ -12,13 +14,15 @@ import (
 
 // PullStreamHandler 拉流任务处理器
 type PullStreamHandler struct {
-	liveService liveService.Service
+	liveService       liveService.Service
+	pullStreamTaskService liveService.PullStreamTaskService
 }
 
 // NewPullStreamHandler 创建拉流任务处理器
-func NewPullStreamHandler(service liveService.Service) *PullStreamHandler {
+func NewPullStreamHandler(service liveService.Service, pullStreamTaskService liveService.PullStreamTaskService) *PullStreamHandler {
 	return &PullStreamHandler{
-		liveService: service,
+		liveService:       service,
+		pullStreamTaskService: pullStreamTaskService,
 	}
 }
 
@@ -78,11 +82,59 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 		return
 	}
 
+	// 创建腾讯云拉流任务
 	taskID, err := h.liveService.CreatePullStreamTask(c.Request.Context(), &req)
 	if err != nil {
 		zap.L().Error("创建拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "创建拉流任务失败: "+err.Error())
 		return
+	}
+
+	// 保存到本地数据库
+	var targetURL string
+	if req.ToUrl != "" {
+		targetURL = req.ToUrl
+	} else {
+		// 如果没有提供完整的 ToUrl，则拼接成 RTMP URL
+		targetURL = "rtmp://" + req.DomainName + "/" + req.AppName + "/" + req.StreamName
+		if req.PushArgs != "" {
+			targetURL += "?" + req.PushArgs
+		}
+	}
+
+	startTime, err := time.Parse("2006-01-02 15:04:05", req.StartTime)
+	if err != nil {
+		zap.L().Error("解析开始时间失败", zap.Error(err))
+		utils.InternalError(c, "解析开始时间失败: "+err.Error())
+		return
+	}
+
+	endTime, err := time.Parse("2006-01-02 15:04:05", req.EndTime)
+	if err != nil {
+		zap.L().Error("解析结束时间失败", zap.Error(err))
+		utils.InternalError(c, "解析结束时间失败: "+err.Error())
+		return
+	}
+
+	task := &entity.PullStreamTask{
+		TaskID:     taskID,
+		Comment:    req.Comment,
+		Region:     req.Region,
+		SourceType: req.SourceType,
+		SourceURL:  req.SourceURLs[0], // 只保存第一个源地址
+		TargetURL:  targetURL,
+		StartTime:  startTime,
+		EndTime:    endTime,
+		Status:     "enable",
+		Operator:   req.Operator,
+		IsActive:   "Y",
+		RoomID:     req.RoomID,
+		RoomName:   req.RoomName,
+	}
+
+	if err := h.pullStreamTaskService.CreatePullStreamTask(c.Request.Context(), task); err != nil {
+		zap.L().Error("保存拉流任务到数据库失败", zap.Error(err))
+		// 这里不返回错误，因为腾讯云任务已经创建成功
 	}
 
 	utils.Success(c, taskID)
@@ -136,11 +188,55 @@ func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
 		req.SpecifyTaskId = &specifyTaskId
 	}
 
+	// 首先从腾讯云查询任务
 	tasks, err := h.liveService.DescribePullStreamTasks(c.Request.Context(), &req)
 	if err != nil {
 		zap.L().Error("查询拉流任务列表失败", zap.Error(err))
 		utils.InternalError(c, "查询拉流任务列表失败: "+err.Error())
 		return
+	}
+
+	// 如果有任务ID参数，并且在数据库中没有找到该任务，则尝试从腾讯云同步
+	if specifyTaskId != "" {
+		_, err := h.pullStreamTaskService.GetPullStreamTask(c.Request.Context(), specifyTaskId)
+		if err != nil {
+			// 如果任务在数据库中不存在，则尝试同步
+			if len(tasks.TaskInfos) > 0 {
+				taskInfo := tasks.TaskInfos[0]
+				// 解析时间
+				startTime, _ := time.Parse("2006-01-02 15:04:05", taskInfo.StartTime)
+				endTime, _ := time.Parse("2006-01-02 15:04:05", taskInfo.EndTime)
+
+				// 保存到数据库
+				task := &entity.PullStreamTask{
+					TaskID:     taskInfo.TaskID,
+					Comment:    taskInfo.Comment,
+					Region:     taskInfo.Region,
+					SourceType: taskInfo.SourceType,
+					SourceURL:  taskInfo.SourceURLs[0], // 只保存第一个源地址
+					TargetURL:  taskInfo.ToUrl,
+					StartTime:  startTime,
+					EndTime:    endTime,
+					Status:     taskInfo.Status,
+					Operator:   taskInfo.CreateBy,
+					IsActive:   "Y",
+				}
+
+				if err := h.pullStreamTaskService.CreatePullStreamTask(c.Request.Context(), task); err != nil {
+					zap.L().Error("同步拉流任务到数据库失败", zap.Error(err))
+				}
+			}
+		}
+	}
+
+	// 为每个任务添加 RoomID 和 RoomName 信息
+	for _, taskInfo := range tasks.TaskInfos {
+		// 从本地数据库中获取任务信息
+		localTask, err := h.pullStreamTaskService.GetPullStreamTask(c.Request.Context(), taskInfo.TaskID)
+		if err == nil {
+			taskInfo.RoomID = localTask.RoomID
+			taskInfo.RoomName = localTask.RoomName
+		}
 	}
 
 	utils.Success(c, tasks)
@@ -178,12 +274,52 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 		return
 	}
 
-
+	// 更新腾讯云拉流任务
 	err := h.liveService.UpdatePullStreamTask(c.Request.Context(), &req)
 	if err != nil {
 		zap.L().Error("更新拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "更新拉流任务失败: "+err.Error())
 		return
+	}
+
+	// 更新本地数据库
+	task := &entity.PullStreamTask{
+		TaskID:     taskID,
+		Comment:    req.Comment,
+		Operator:   req.Operator,
+		RoomID:     req.RoomID,
+		RoomName:   req.RoomName,
+	}
+
+	if req.SourceURLs != nil && len(req.SourceURLs) > 0 {
+		task.SourceURL = req.SourceURLs[0]
+	}
+
+	if req.ToUrl != "" {
+		task.TargetURL = req.ToUrl
+	}
+
+	if req.StartTime != "" {
+		startTime, err := time.Parse("2006-01-02 15:04:05", req.StartTime)
+		if err == nil {
+			task.StartTime = startTime
+		}
+	}
+
+	if req.EndTime != "" {
+		endTime, err := time.Parse("2006-01-02 15:04:05", req.EndTime)
+		if err == nil {
+			task.EndTime = endTime
+		}
+	}
+
+	if req.Status != "" {
+		task.Status = req.Status
+	}
+
+	if err := h.pullStreamTaskService.UpdatePullStreamTask(c.Request.Context(), task); err != nil {
+		zap.L().Error("更新拉流任务到数据库失败", zap.Error(err))
+		// 这里不返回错误，因为腾讯云任务已经更新成功
 	}
 
 	utils.Success(c, nil)
@@ -212,11 +348,18 @@ func (h *PullStreamHandler) DeletePullStreamTask(c *gin.Context) {
 		return
 	}
 
+	// 删除腾讯云拉流任务
 	err := h.liveService.DeletePullStreamTask(c.Request.Context(), taskID, operator)
 	if err != nil {
 		zap.L().Error("删除拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "删除拉流任务失败: "+err.Error())
 		return
+	}
+
+	// 更新本地数据库（软删除）
+	if err := h.pullStreamTaskService.DeletePullStreamTask(c.Request.Context(), taskID); err != nil {
+		zap.L().Error("删除拉流任务到数据库失败", zap.Error(err))
+		// 这里不返回错误，因为腾讯云任务已经删除成功
 	}
 
 	utils.Success(c, nil)

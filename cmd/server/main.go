@@ -225,6 +225,9 @@ func main() {
 		logger.Info("Live service initialized successfully")
 	}
 
+	// 创建直播房间服务
+	liveRoomService := live.NewLiveRoomService(db)
+
 	logger.Info("Services initialized")
 
 	// 8. 初始化Gin引擎
@@ -238,6 +241,9 @@ func main() {
 	engine.MaxMultipartMemory = 32 << 20 // 32 MB
 
 	// 9. 注册路由
+	// 创建拉流任务服务
+	pullStreamTaskService := live.NewPullStreamTaskService(db)
+
 	services := &router.Services{
 		SSO:             ssoService,
 		Metadata:        metadataService,
@@ -254,6 +260,8 @@ func main() {
 		Cloud:           cloudService,
 		MultipartUpload: multipartService,
 		Live:            liveService,
+		LiveRoom:        liveRoomService,
+		PullStreamTask:  pullStreamTaskService,
 		WSManager:       wsManager,
 	}
 
