@@ -129,7 +129,7 @@ type FolderNode struct {
 func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, userID uint) (*entity.CloudFolder, error) {
 	// 构建路径
 	path := "/" + req.Name
-	if req.ParentID != nil {
+	if req.ParentID != nil && *req.ParentID != 0 {
 		parent, err := s.getFolderByID(ctx, *req.ParentID)
 		if err != nil {
 			return nil, err

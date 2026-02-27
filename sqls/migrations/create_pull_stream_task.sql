@@ -1,0 +1,23 @@
+-- 创建拉流任务表
+CREATE TABLE IF NOT EXISTS `pull_stream_task` (
+  `ID` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `TASK_ID` varchar(255) NOT NULL COMMENT '任务ID',
+  `COMMENT` varchar(255) DEFAULT NULL COMMENT '任务备注',
+  `REGION` varchar(255) NOT NULL COMMENT '地域',
+  `SOURCE_TYPE` varchar(255) NOT NULL COMMENT '内容类型',
+  `SOURCE_URL` varchar(255) NOT NULL COMMENT '直播源地址',
+  `TARGET_URL` varchar(255) NOT NULL COMMENT '目标地址',
+  `START_TIME` datetime NOT NULL COMMENT '开始时间',
+  `END_TIME` datetime NOT NULL COMMENT '结束时间',
+  `STATUS` varchar(255) DEFAULT 'enable' COMMENT '任务状态：enable-启用，pause-暂停',
+  `OPERATOR` varchar(255) NOT NULL COMMENT '操作者',
+  `CREATE_BY` varchar(255) DEFAULT NULL COMMENT '创建人',
+  `CREATE_TIME` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `UPDATE_BY` varchar(255) DEFAULT NULL COMMENT '修改人',
+  `UPDATE_TIME` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '修改时间',
+  `IS_ACTIVE` char(1) DEFAULT 'Y' COMMENT '是否激活：Y-激活，N-禁用',
+  `ROOM_ID` varchar(255) DEFAULT NULL COMMENT '直播间ID',
+  `ROOM_NAME` varchar(255) DEFAULT NULL COMMENT '直播间名称',
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UK_TASK_ID` (`TASK_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='拉流任务表';

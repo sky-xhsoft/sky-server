@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `live_callback_event` (
   `APP_NAME` varchar(255) DEFAULT NULL COMMENT '应用名称',
   `STREAM_NAME` varchar(255) DEFAULT NULL COMMENT '流名称',
   `STREAM_ID` varchar(255) DEFAULT NULL COMMENT '流ID',
+  `ROOM_NAME` varchar(255) DEFAULT NULL COMMENT '直播间名称',
   `CLIENT_IP` varchar(50) DEFAULT NULL COMMENT '客户端IP',
   `EVENT_DATA` text COMMENT '事件详细数据（JSON格式）',
   `SIGN` varchar(255) DEFAULT NULL COMMENT '签名',

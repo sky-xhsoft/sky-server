@@ -20,6 +20,8 @@ type LiveRoomService interface {
 	DeleteRoom(ctx context.Context, id uint) error
 	// GetRoom 获取直播间详情
 	GetRoom(ctx context.Context, id uint) (*entity.LiveRoom, error)
+	// GetRoomByStreamName 通过流名称获取直播间
+	GetRoomByStreamName(ctx context.Context, streamName string) (*entity.LiveRoom, error)
 	// ListRooms 查询直播间列表
 	ListRooms(ctx context.Context, filter *RoomFilter) ([]*entity.LiveRoom, int64, error)
 	// StartLive 开始直播
@@ -136,6 +138,18 @@ func (s *liveRoomService) DeleteRoom(ctx context.Context, id uint) error {
 func (s *liveRoomService) GetRoom(ctx context.Context, id uint) (*entity.LiveRoom, error) {
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&room).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("直播间不存在")
+		}
+		return nil, err
+	}
+	return &room, nil
+}
+
+// GetRoomByStreamName 通过流名称获取直播间
+func (s *liveRoomService) GetRoomByStreamName(ctx context.Context, streamName string) (*entity.LiveRoom, error) {
+	var room entity.LiveRoom
+	if err := s.db.WithContext(ctx).Where("STREAM_NAME = ? AND IS_ACTIVE = ?", streamName, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("直播间不存在")
 		}

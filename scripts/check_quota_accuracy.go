@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/sky-xhsoft/sky-server/internal/config"
-	"github.com/sky-xhsoft/sky-server/internal/database"
+	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"gorm.io/gorm"
 )
@@ -18,7 +18,7 @@ func main() {
 	}
 
 	// 初始化数据库
-	db, err := database.New(cfg.Database)
+	db, err := mysql.Init(&cfg.Database.MySQL, nil)
 	if err != nil {
 		log.Fatalf("连接数据库失败: %v", err)
 	}
