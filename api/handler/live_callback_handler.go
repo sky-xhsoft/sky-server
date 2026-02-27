@@ -412,6 +412,31 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 		zap.String("stream", event.StreamName),
 		zap.String("userIp", event.UserIP))
 
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+
+		// 将直播间状态设置为 live
+		if room.Status != "live" {
+			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Update("STATUS", "live").Error; err != nil {
+				logger.Error("更新直播间状态失败",
+					zap.String("streamId", event.StreamID),
+					zap.String("roomName", room.RoomName),
+					zap.Error(err))
+			} else {
+				logger.Info("直播间状态已更新为 live",
+					zap.String("streamId", event.StreamID),
+					zap.String("roomName", room.RoomName))
+			}
+		}
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -426,6 +451,7 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1, // TODO: 从上下文获取公司ID
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -472,6 +498,31 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 		zap.Int64("duration", event.Duration),
 		zap.String("reason", event.Reason))
 
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+
+		// 将直播间状态设置为 ended
+		if room.Status != "ended" {
+			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Update("STATUS", "ended").Error; err != nil {
+				logger.Error("更新直播间状态失败",
+					zap.String("streamId", event.StreamID),
+					zap.String("roomName", room.RoomName),
+					zap.Error(err))
+			} else {
+				logger.Info("直播间状态已更新为 ended",
+					zap.String("streamId", event.StreamID),
+					zap.String("roomName", room.RoomName))
+			}
+		}
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -486,6 +537,7 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1, // TODO: 从上下文获取公司ID
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -551,6 +603,17 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		}
 	}
 
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -564,6 +627,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1, // TODO: 从上下文获取公司ID
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -613,6 +677,17 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 		zap.String("stream", event.StreamName),
 		zap.String("status", statusText))
 
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -626,6 +701,7 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1, // TODO: 从上下文获取公司ID
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -716,6 +792,7 @@ func (h *LiveCallbackHandler) BatchDeleteCallbackEvents(c *gin.Context) {
 // @Param domainName query string false "域名"
 // @Param appName query string false "应用名称"
 // @Param streamName query string false "流名称"
+// @Param roomName query string false "直播间名称"
 // @Param startTime query string false "开始时间"
 // @Param endTime query string false "结束时间"
 // @Param pageNum query int false "页码" default(1)
@@ -729,6 +806,7 @@ func (h *LiveCallbackHandler) QueryCallbackEvents(c *gin.Context) {
 	domainName := c.Query("domainName")
 	appName := c.Query("appName")
 	streamName := c.Query("streamName")
+	roomName := c.Query("roomName")
 	startTime := c.Query("startTime")
 	endTime := c.Query("endTime")
 	pageNum := c.DefaultQuery("pageNum", "1")
@@ -751,6 +829,9 @@ func (h *LiveCallbackHandler) QueryCallbackEvents(c *gin.Context) {
 	}
 	if streamName != "" {
 		query = query.Where("STREAM_NAME = ?", streamName)
+	}
+	if roomName != "" {
+		query = query.Where("ROOM_NAME LIKE ?", "%"+roomName+"%")
 	}
 	if startTime != "" {
 		query = query.Where("CREATE_TIME >= ?", startTime)
@@ -817,6 +898,17 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 		zap.Int("height", event.Height))
 
 	eventData, _ := json.Marshal(event)
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "screenshot",
 		EventTime:    event.EventTime,
@@ -828,6 +920,7 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1,
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -868,6 +961,17 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 		zap.Int("confidence", event.Confidence))
 
 	eventData, _ := json.Marshal(event)
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "video_audit",
 		EventTime:    event.EventTime,
@@ -879,6 +983,7 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1,
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -919,6 +1024,17 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 		zap.String("audioText", event.AudioText))
 
 	eventData, _ := json.Marshal(event)
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "audio_audit",
 		EventTime:    event.EventTime,
@@ -930,6 +1046,7 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1,
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -970,6 +1087,17 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 		zap.String("description", event.Description))
 
 	eventData, _ := json.Marshal(event)
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "quality_inspection",
 		EventTime:    event.EventTime,
@@ -981,6 +1109,7 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1,
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -1021,6 +1150,17 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 		zap.Float64("currentValue", event.CurrentValue))
 
 	eventData, _ := json.Marshal(event)
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "quality_threshold",
 		EventTime:    event.EventTime,
@@ -1032,6 +1172,7 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1,
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
@@ -1071,6 +1212,17 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 		zap.Int64("duration", event.Duration))
 
 	eventData, _ := json.Marshal(event)
+	// 通过 stream_id 获取直播间信息
+	var room entity.LiveRoom
+	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+		logger.Info("找到对应的直播间",
+			zap.String("streamId", event.StreamID),
+			zap.String("roomName", room.RoomName))
+	} else {
+		logger.Warn("未找到对应的直播间",
+			zap.String("streamId", event.StreamID))
+	}
+
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "quality_average",
 		EventTime:    event.EventTime,
@@ -1082,6 +1234,7 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 		Sign:         event.Sign,
 		TValue:       event.T,
 		SysCompanyID: 1,
+		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
 
