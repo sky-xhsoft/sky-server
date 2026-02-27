@@ -18,8 +18,6 @@ type LiveRoom struct {
 	ViewingPrice     *float64   `gorm:"column:VIEWING_PRICE;type:decimal(10,2)" json:"viewingPrice"`                      // 观看价格（付费观看时使用）
 	PlaybackMethod   string     `gorm:"column:PLAYBACK_METHOD;type:varchar(50);not null;default:'post_end'" json:"playbackMethod"` // 回放方式：post_end(结束后回放), real_time(实时回放), no_playback(结束后不回放)
 	PlaybackValidity string     `gorm:"column:PLAYBACK_VALIDITY;type:varchar(50);default:'unlimited'" json:"playbackValidity"` // 回放有效期：unlimited(无限制), all_day(全天), partial(部分时段)
-	PlaybackStartTime *time.Time `gorm:"column:PLAYBACK_START_TIME;type:time" json:"playbackStartTime"`                   // 回放开始时间（部分时段时使用）
-	PlaybackEndTime   *time.Time `gorm:"column:PLAYBACK_END_TIME;type:time" json:"playbackEndTime"`                       // 回放结束时间（部分时段时使用）
 	StreamName       string     `gorm:"column:STREAM_NAME;type:varchar(255);index" json:"streamName"`                     // 流名称
 	PushURL          string     `gorm:"column:PUSH_URL;type:varchar(500)" json:"pushUrl"`                                 // 推流地址
 	PlayURL          string     `gorm:"column:PLAY_URL;type:varchar(500)" json:"playUrl"`                                 // 播放地址
