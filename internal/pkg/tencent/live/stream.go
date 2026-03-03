@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
+	"go.uber.org/zap"
 )
 
 // StreamManager 流管理器
@@ -66,6 +68,10 @@ func (m *StreamManager) DescribeStreamOnlineList(ctx context.Context, req *Descr
 
 	response, err := m.client.DescribeLiveStreamOnlineList(request)
 	if err != nil {
+		logger.Error("Failed to describe stream online list",
+			zap.Reflect("request", req),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe stream online list: %w", err)
 	}
 
@@ -182,6 +188,10 @@ func (m *StreamManager) DescribeStreamHistoryList(ctx context.Context, req *Desc
 
 	response, err := m.client.DescribeLiveStreamPublishedList(request)
 	if err != nil {
+		logger.Error("Failed to describe stream history list",
+			zap.Reflect("request", req),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe stream history list: %w", err)
 	}
 
@@ -260,6 +270,12 @@ func (m *StreamManager) DropLiveStream(ctx context.Context, req *DropLiveStreamR
 
 	_, err := m.client.DropLiveStream(request)
 	if err != nil {
+		logger.Error("Failed to drop live stream",
+			zap.String("streamName", req.StreamName),
+			zap.String("domainName", req.DomainName),
+			zap.String("appName", req.AppName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to drop live stream: %w", err)
 	}
 
@@ -328,6 +344,10 @@ func (m *StreamManager) DescribeStreamEventList(ctx context.Context, req *Descri
 
 	response, err := m.client.DescribeLiveStreamEventList(request)
 	if err != nil {
+		logger.Error("Failed to describe stream event list",
+			zap.Reflect("request", req),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe stream event list: %w", err)
 	}
 
@@ -409,6 +429,12 @@ func (m *StreamManager) ResumeLiveStream(ctx context.Context, req *ResumeLiveStr
 
 	_, err := m.client.ResumeLiveStream(request)
 	if err != nil {
+		logger.Error("Failed to resume live stream",
+			zap.String("streamName", req.StreamName),
+			zap.String("domainName", req.DomainName),
+			zap.String("appName", req.AppName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to resume live stream: %w", err)
 	}
 

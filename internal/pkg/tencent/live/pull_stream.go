@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
+	"go.uber.org/zap"
 )
 
 // TurnPushInfo 拉流转推任务流信息
@@ -82,6 +84,10 @@ func (m *PullStreamManager) CreatePullStreamTask(ctx context.Context, req *Creat
 	if req.Region != "" && m.clientProvider != nil {
 		regionClient, err := m.clientProvider.GetLiveClientForRegion(req.Region)
 		if err != nil {
+			logger.Error("Failed to get client for region",
+				zap.String("region", req.Region),
+				zap.Error(err),
+			)
 			return "", fmt.Errorf("failed to get client for region %s: %w", req.Region, err)
 		}
 		client = regionClient
@@ -119,6 +125,16 @@ func (m *PullStreamManager) CreatePullStreamTask(ctx context.Context, req *Creat
 
 	response, err := client.CreateLivePullStreamTask(request)
 	if err != nil {
+		logger.Error("Failed to create pull stream task",
+			zap.String("sourceType", req.SourceType),
+			zap.Strings("sourceUrls", req.SourceURLs),
+			zap.String("domainName", req.DomainName),
+			zap.String("appName", req.AppName),
+			zap.String("streamName", req.StreamName),
+			zap.String("toUrl", req.ToUrl),
+			zap.String("region", req.Region),
+			zap.Error(err),
+		)
 		return "", fmt.Errorf("failed to create pull stream task: %w", err)
 	}
 
@@ -133,6 +149,11 @@ func (m *PullStreamManager) DeletePullStreamTask(ctx context.Context, taskID str
 
 	_, err := m.client.DeleteLivePullStreamTask(request)
 	if err != nil {
+		logger.Error("Failed to delete pull stream task",
+			zap.String("taskID", taskID),
+			zap.String("operator", operator),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to delete pull stream task: %w", err)
 	}
 
@@ -210,6 +231,10 @@ func (m *PullStreamManager) DescribePullStreamTasks(ctx context.Context, req *De
 
 	response, err := m.client.DescribeLivePullStreamTasks(request)
 	if err != nil {
+		logger.Error("Failed to describe pull stream tasks",
+			zap.Reflect("request", req),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe pull stream tasks: %w", err)
 	}
 
@@ -316,6 +341,11 @@ func (m *PullStreamManager) RestartPullStreamTask(ctx context.Context, taskID st
 
 	_, err := m.client.RestartLivePullStreamTask(request)
 	if err != nil {
+		logger.Error("Failed to restart pull stream task",
+			zap.String("taskID", taskID),
+			zap.String("operator", operator),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to restart pull stream task: %w", err)
 	}
 
@@ -331,6 +361,12 @@ func (m *PullStreamManager) DescribePullTransformPushInfoList(ctx context.Contex
 
 	response, err := m.client.DescribePullTransformPushInfoList(request)
 	if err != nil {
+		logger.Error("Failed to describe pull transform push info list",
+			zap.String("taskId", req.TaskId),
+			zap.String("startTime", req.StartTime),
+			zap.String("endTime", req.EndTime),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe pull transform push info list: %w", err)
 	}
 
@@ -407,6 +443,17 @@ func (m *PullStreamManager) UpdatePullStreamTask(ctx context.Context, req *Updat
 
 	_, err := m.client.ModifyLivePullStreamTask(request)
 	if err != nil {
+		logger.Error("Failed to update pull stream task",
+			zap.String("taskId", req.TaskID),
+			zap.Strings("sourceUrls", req.SourceURLs),
+			zap.String("toUrl", req.ToUrl),
+			zap.String("startTime", req.StartTime),
+			zap.String("endTime", req.EndTime),
+			zap.String("status", req.Status),
+			zap.String("comment", req.Comment),
+			zap.String("operator", req.Operator),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to update pull stream task: %w", err)
 	}
 
@@ -430,6 +477,10 @@ func (m *PullStreamManager) DescribePullStreamTaskStatus(ctx context.Context, ta
 
 	response, err := m.client.DescribeLivePullStreamTaskStatus(request)
 	if err != nil {
+		logger.Error("Failed to describe pull stream task status",
+			zap.String("taskId", taskID),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe pull stream task status: %w", err)
 	}
 

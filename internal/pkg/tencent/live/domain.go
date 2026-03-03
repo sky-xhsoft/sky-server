@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
+	"go.uber.org/zap"
 )
 
 // DomainManager 域名管理器
@@ -34,6 +36,11 @@ func (m *DomainManager) AddDomain(ctx context.Context, req *AddDomainRequest) er
 
 	_, err := m.client.AddLiveDomain(request)
 	if err != nil {
+		logger.Error("Failed to add domain",
+			zap.String("domainName", req.DomainName),
+			zap.Int64("domainType", req.DomainType),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to add domain: %w", err)
 	}
 
@@ -45,6 +52,10 @@ func (m *DomainManager) DeleteDomain(ctx context.Context, domainName string) err
 	// 先查询域名信息获取域名类型
 	domainInfo, err := m.DescribeDomain(ctx, domainName)
 	if err != nil {
+		logger.Error("Failed to get domain info",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to get domain info: %w", err)
 	}
 
@@ -54,6 +65,10 @@ func (m *DomainManager) DeleteDomain(ctx context.Context, domainName string) err
 
 	_, err = m.client.DeleteLiveDomain(request)
 	if err != nil {
+		logger.Error("Failed to delete domain",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to delete domain: %w", err)
 	}
 
@@ -79,10 +94,17 @@ func (m *DomainManager) DescribeDomain(ctx context.Context, domainName string) (
 
 	response, err := m.client.DescribeLiveDomain(request)
 	if err != nil {
+		logger.Error("Failed to describe domain",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe domain: %w", err)
 	}
 
 	if response.Response.DomainInfo == nil {
+		logger.Error("Domain not found",
+			zap.String("domainName", domainName),
+		)
 		return nil, fmt.Errorf("domain not found")
 	}
 
@@ -116,6 +138,10 @@ func (m *DomainManager) ListDomains(ctx context.Context, domainType *int64) ([]*
 
 	response, err := m.client.DescribeLiveDomains(request)
 	if err != nil {
+		logger.Error("Failed to list domains",
+			zap.Reflect("domainType", domainType),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to list domains: %w", err)
 	}
 
@@ -152,6 +178,10 @@ func (m *DomainManager) EnableDomain(ctx context.Context, domainName string) err
 
 	_, err := m.client.EnableLiveDomain(request)
 	if err != nil {
+		logger.Error("Failed to enable domain",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to enable domain: %w", err)
 	}
 
@@ -165,6 +195,10 @@ func (m *DomainManager) ForbidDomain(ctx context.Context, domainName string) err
 
 	_, err := m.client.ForbidLiveDomain(request)
 	if err != nil {
+		logger.Error("Failed to forbid domain",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to forbid domain: %w", err)
 	}
 
@@ -186,6 +220,11 @@ func (m *DomainManager) AuthenticateDomainOwner(ctx context.Context, domainName 
 
 	response, err := m.client.AuthenticateDomainOwner(request)
 	if err != nil {
+		logger.Error("Failed to authenticate domain owner",
+			zap.String("domainName", domainName),
+			zap.String("verifyType", verifyType),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to authenticate domain owner: %w", err)
 	}
 
