@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
+	"go.uber.org/zap"
 )
 
 // RecordManager 录制管理器
@@ -69,6 +71,14 @@ func (m *RecordManager) CreateRecordTemplate(ctx context.Context, req *CreateRec
 
 	response, err := m.client.CreateLiveRecordTemplate(request)
 	if err != nil {
+		logger.Error("Failed to create record template",
+			zap.String("templateName", req.TemplateName),
+			zap.String("description", req.Description),
+			zap.Reflect("flvParam", req.FlvParam),
+			zap.Reflect("hlsParam", req.HlsParam),
+			zap.Reflect("mp4Param", req.Mp4Param),
+			zap.Error(err),
+		)
 		return 0, fmt.Errorf("failed to create record template: %w", err)
 	}
 
@@ -82,6 +92,10 @@ func (m *RecordManager) DeleteRecordTemplate(ctx context.Context, templateID int
 
 	_, err := m.client.DeleteLiveRecordTemplate(request)
 	if err != nil {
+		logger.Error("Failed to delete record template",
+			zap.Int64("templateID", templateID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to delete record template: %w", err)
 	}
 
@@ -104,6 +118,9 @@ func (m *RecordManager) DescribeRecordTemplates(ctx context.Context) ([]*RecordT
 
 	response, err := m.client.DescribeLiveRecordTemplates(request)
 	if err != nil {
+		logger.Error("Failed to describe record templates",
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to describe record templates: %w", err)
 	}
 
@@ -163,6 +180,13 @@ func (m *RecordManager) CreateRecordRule(ctx context.Context, req *CreateRecordR
 
 	_, err := m.client.CreateLiveRecordRule(request)
 	if err != nil {
+		logger.Error("Failed to create record rule",
+			zap.String("domainName", req.DomainName),
+			zap.String("appName", req.AppName),
+			zap.String("streamName", req.StreamName),
+			zap.Int64("templateID", req.TemplateID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to create record rule: %w", err)
 	}
 
@@ -178,6 +202,12 @@ func (m *RecordManager) DeleteRecordRule(ctx context.Context, domainName, appNam
 
 	_, err := m.client.DeleteLiveRecordRule(request)
 	if err != nil {
+		logger.Error("Failed to delete record rule",
+			zap.String("domainName", domainName),
+			zap.String("appName", appName),
+			zap.String("streamName", streamName),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to delete record rule: %w", err)
 	}
 
@@ -210,6 +240,16 @@ func (m *RecordManager) CreateRecordTask(ctx context.Context, req *CreateRecordT
 
 	response, err := m.client.CreateRecordTask(request)
 	if err != nil {
+		logger.Error("Failed to create record task",
+			zap.String("streamName", req.StreamName),
+			zap.String("domainName", req.DomainName),
+			zap.String("appName", req.AppName),
+			zap.Int64("startTime", req.StartTime),
+			zap.Int64("endTime", req.EndTime),
+			zap.Int64("streamType", req.StreamType),
+			zap.Int64("templateID", req.TemplateID),
+			zap.Error(err),
+		)
 		return "", fmt.Errorf("failed to create record task: %w", err)
 	}
 
@@ -223,6 +263,10 @@ func (m *RecordManager) StopRecordTask(ctx context.Context, taskID string) error
 
 	_, err := m.client.StopRecordTask(request)
 	if err != nil {
+		logger.Error("Failed to stop record task",
+			zap.String("taskID", taskID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to stop record task: %w", err)
 	}
 
@@ -236,6 +280,10 @@ func (m *RecordManager) DeleteRecordTask(ctx context.Context, taskID string) err
 
 	_, err := m.client.DeleteRecordTask(request)
 	if err != nil {
+		logger.Error("Failed to delete record task",
+			zap.String("taskID", taskID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to delete record task: %w", err)
 	}
 

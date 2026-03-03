@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/tencentyun/cos-go-sdk-v5"
+	"go.uber.org/zap"
 )
 
 // TencentCOS 腾讯云COS存储实现
@@ -75,6 +77,11 @@ func (s *TencentCOS) Upload(ctx context.Context, path string, reader io.Reader, 
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "PUT", uploadURL, reader)
 	if err != nil {
+		logger.Error("Failed to create upload request",
+			zap.String("path", path),
+			zap.String("contentType", contentType),
+			zap.Error(err),
+		)
 		return "", errors.Wrap(errors.ErrInternal, "创建上传请求失败", err)
 	}
 
@@ -85,18 +92,32 @@ func (s *TencentCOS) Upload(ctx context.Context, path string, reader io.Reader, 
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to upload file to COS",
+			zap.String("path", path),
+			zap.String("contentType", contentType),
+			zap.Error(err),
+		)
 		return "", errors.Wrap(errors.ErrInternal, "上传文件到COS失败", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("Failed to upload file",
+			zap.String("path", path),
+			zap.String("contentType", contentType),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		return "", errors.Wrap(errors.ErrInternal, fmt.Sprintf("上传文件失败，状态码: %d", resp.StatusCode), nil)
 	}
 
 	// 返回访问URL
 	url, err := s.GetURL(ctx, path, 0)
 	if err != nil {
+		logger.Error("Failed to get URL after upload",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return "", err
 	}
 
@@ -111,6 +132,10 @@ func (s *TencentCOS) Download(ctx context.Context, path string) (io.ReadCloser, 
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
 	if err != nil {
+		logger.Error("Failed to create download request",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return nil, errors.Wrap(errors.ErrInternal, "创建下载请求失败", err)
 	}
 
@@ -120,11 +145,19 @@ func (s *TencentCOS) Download(ctx context.Context, path string) (io.ReadCloser, 
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to download file",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "下载文件失败", err)
 	}
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("Failed to download file",
+			zap.String("path", path),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		resp.Body.Close()
 		return nil, errors.Wrap(errors.ErrResourceNotFound, fmt.Sprintf("下载文件失败，状态码: %d", resp.StatusCode), nil)
 	}
@@ -140,6 +173,10 @@ func (s *TencentCOS) Delete(ctx context.Context, path string) error {
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "DELETE", deleteURL, nil)
 	if err != nil {
+		logger.Error("Failed to create delete request",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return errors.Wrap(errors.ErrInternal, "创建删除请求失败", err)
 	}
 
@@ -149,12 +186,20 @@ func (s *TencentCOS) Delete(ctx context.Context, path string) error {
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to delete file",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return errors.Wrap(errors.ErrInternal, "删除文件失败", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusNoContent {
+		logger.Error("Failed to delete file",
+			zap.String("path", path),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		return errors.Wrap(errors.ErrInternal, fmt.Sprintf("删除文件失败，状态码: %d", resp.StatusCode), nil)
 	}
 
@@ -169,6 +214,10 @@ func (s *TencentCOS) Exists(ctx context.Context, path string) (bool, error) {
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "HEAD", existsURL, nil)
 	if err != nil {
+		logger.Error("Failed to create exists check request",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return false, errors.Wrap(errors.ErrInternal, "创建检查请求失败", err)
 	}
 
@@ -178,6 +227,10 @@ func (s *TencentCOS) Exists(ctx context.Context, path string) (bool, error) {
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to check if file exists",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return false, errors.Wrap(errors.ErrInternal, "检查文件是否存在失败", err)
 	}
 	defer resp.Body.Close()
@@ -188,6 +241,10 @@ func (s *TencentCOS) Exists(ctx context.Context, path string) (bool, error) {
 	} else if resp.StatusCode == http.StatusNotFound {
 		return false, nil
 	} else {
+		logger.Error("Failed to check if file exists",
+			zap.String("path", path),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		return false, errors.Wrap(errors.ErrInternal, fmt.Sprintf("检查文件是否存在失败，状态码: %d", resp.StatusCode), nil)
 	}
 }
@@ -211,6 +268,11 @@ func (s *TencentCOS) ListObjects(ctx context.Context, prefix string, maxKeys int
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
 	if err != nil {
+		logger.Error("Failed to create list objects request",
+			zap.String("prefix", prefix),
+			zap.Int("maxKeys", maxKeys),
+			zap.Error(err),
+		)
 		return nil, errors.Wrap(errors.ErrInternal, "创建列举请求失败", err)
 	}
 
@@ -220,12 +282,22 @@ func (s *TencentCOS) ListObjects(ctx context.Context, prefix string, maxKeys int
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to list objects",
+			zap.String("prefix", prefix),
+			zap.Int("maxKeys", maxKeys),
+			zap.Error(err),
+		)
 		return nil, errors.Wrap(errors.ErrInternal, "列举对象失败", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("Failed to list objects",
+			zap.String("prefix", prefix),
+			zap.Int("maxKeys", maxKeys),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("列举对象失败，状态码: %d", resp.StatusCode), nil)
 	}
 
@@ -243,6 +315,11 @@ func (s *TencentCOS) CopyObject(ctx context.Context, srcPath, dstPath string) er
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "PUT", copyURL, nil)
 	if err != nil {
+		logger.Error("Failed to create copy request",
+			zap.String("srcPath", srcPath),
+			zap.String("dstPath", dstPath),
+			zap.Error(err),
+		)
 		return errors.Wrap(errors.ErrInternal, "创建复制请求失败", err)
 	}
 
@@ -256,12 +333,22 @@ func (s *TencentCOS) CopyObject(ctx context.Context, srcPath, dstPath string) er
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to copy object",
+			zap.String("srcPath", srcPath),
+			zap.String("dstPath", dstPath),
+			zap.Error(err),
+		)
 		return errors.Wrap(errors.ErrInternal, "复制对象失败", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("Failed to copy object",
+			zap.String("srcPath", srcPath),
+			zap.String("dstPath", dstPath),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		return errors.Wrap(errors.ErrInternal, fmt.Sprintf("复制对象失败，状态码: %d", resp.StatusCode), nil)
 	}
 
@@ -276,6 +363,10 @@ func (s *TencentCOS) GetObjectInfo(ctx context.Context, path string) (*ObjectInf
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, "HEAD", infoURL, nil)
 	if err != nil {
+		logger.Error("Failed to create get object info request",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return nil, errors.Wrap(errors.ErrInternal, "创建获取对象信息请求失败", err)
 	}
 
@@ -285,12 +376,20 @@ func (s *TencentCOS) GetObjectInfo(ctx context.Context, path string) (*ObjectInf
 	// 发送请求
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
+		logger.Error("Failed to get object info",
+			zap.String("path", path),
+			zap.Error(err),
+		)
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "获取对象信息失败", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		logger.Error("Failed to get object info",
+			zap.String("path", path),
+			zap.Int("statusCode", resp.StatusCode),
+		)
 		return nil, errors.Wrap(errors.ErrResourceNotFound, fmt.Sprintf("获取对象信息失败，状态码: %d", resp.StatusCode), nil)
 	}
 
