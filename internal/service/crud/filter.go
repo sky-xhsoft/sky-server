@@ -47,11 +47,11 @@ func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, c
 		if displayType == "text" || displayType == "textarea" || displayType == "clob" {
 			// 转换为字符串并添加通配符
 			if strValue, ok := value.(string); ok && strValue != "" {
-				query = query.Where(fmt.Sprintf("%s LIKE ?", field), "%"+strValue+"%")
+				query = query.Where(fmt.Sprintf("`%s` LIKE ?", field), "%"+strValue+"%")
 			}
 		} else {
 			// 其他类型使用精确匹配（select, date, datetime, check 等）
-			query = query.Where(fmt.Sprintf("%s = ?", field), value)
+			query = query.Where(fmt.Sprintf("`%s` = ?", field), value)
 		}
 	}
 

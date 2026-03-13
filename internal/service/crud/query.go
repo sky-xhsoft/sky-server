@@ -203,7 +203,19 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 			query = query.Order(fmt.Sprintf("%s %s", field, direction))
 		}
 	} else {
-		query = query.Order("ID DESC")
+		// 检查是否有ORDERNO字段，如果有则默认按ORDERNO升序排序
+		hasOrderNo := false
+		for _, col := range columns {
+			if strings.EqualFold(col.DbName, "ORDERNO") {
+				hasOrderNo = true
+				break
+			}
+		}
+		if hasOrderNo {
+			query = query.Order("ORDERNO ASC")
+		} else {
+			query = query.Order("ID DESC")
+		}
 	}
 
 	// 添加分页

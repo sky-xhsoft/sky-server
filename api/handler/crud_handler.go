@@ -285,6 +285,35 @@ type CRUDBatchDeleteRequest struct {
 	IDs []uint `json:"ids" binding:"required"`
 }
 
+// SaveWithDetailsRequest 同时保存主表和明细请求
+type SaveWithDetailsRequest struct {
+	TableName   string                `json:"tableName" binding:"required"`   // 主表名
+	MainRecord  map[string]interface{} `json:"mainRecord" binding:"required"`  // 主表数据
+	Details     []DetailTableRequest  `json:"details" binding:"required"`     // 子表数据列表
+	Mode        string                `json:"mode"`                            // 保存模式：create/update
+	MainRecordID uint                 `json:"mainRecordId"`                    // 更新模式下的主表ID
+}
+
+// DetailTableRequest 子表请求数据
+type DetailTableRequest struct {
+	TableName string                 `json:"tableName" binding:"required"` // 子表名
+	Records   []map[string]interface{} `json:"records" binding:"required"`   // 子表数据列表
+	AssoType  string                 `json:"assoType" binding:"required"`  // 关联类型：1=1:1, n=1:n
+	RefField  string                 `json:"refField" binding:"required"`  // 子表中关联主表ID的字段名
+}
+
+// SaveWithDetailsResponse 保存响应
+type SaveWithDetailsResponse struct {
+	MainRecord map[string]interface{}   `json:"mainRecord"` // 保存后的主表数据
+	Details    []DetailTableResponse    `json:"details"`    // 保存后的子表数据
+}
+
+// DetailTableResponse 子表响应数据
+type DetailTableResponse struct {
+	TableName string                 `json:"tableName"` // 子表名
+	Records   []map[string]interface{} `json:"records"`   // 保存后的子表数据
+}
+
 // Submit 提交记录
 // @Summary 提交记录
 // @Description 提交指定记录，执行提交前后钩子
@@ -318,6 +347,85 @@ func (h *CrudHandler) Submit(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{"message": "提交成功"})
+}
+
+// SaveWithDetails 同时保存主表和明细
+// @Summary 同时保存主表和明细
+// @Description 同时保存主表记录和所有关联的子表明细记录，使用事务保证一致性
+// @Tags CRUD
+// @Accept json
+// @Produce json
+// @Param request body SaveWithDetailsRequest true "保存请求"
+// @Success 200 {object} SaveWithDetailsResponse
+// @Router /api/v1/data/save-with-details [post]
+func (h *CrudHandler) SaveWithDetails(c *gin.Context) {
+	var req SaveWithDetailsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := c.Get("userID")
+	if !exists || userID == nil {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	// 转换为service层的请求结构体
+	serviceReq := &crud.SaveWithDetailsRequest{
+		TableName:    req.TableName,
+		MainRecord:   req.MainRecord,
+		Mode:         req.Mode,
+		MainRecordID: req.MainRecordID,
+	}
+
+	// 转换子表数据
+	serviceReq.Details = make([]crud.DetailTableRequest, len(req.Details))
+	for i, d := range req.Details {
+		serviceReq.Details[i] = crud.DetailTableRequest{
+			TableName: d.TableName,
+			Records:   d.Records,
+			AssoType:  d.AssoType,
+			RefField:  d.RefField,
+		}
+	}
+
+	result, err := h.crudService.SaveWithDetails(c.Request.Context(), serviceReq, userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "保存失败: "+err.Error())
+		return
+	}
+	if result == nil {
+		utils.Success(c, map[string]interface{}{
+			"mainRecord": req.MainRecord,
+			"details":    []interface{}{},
+		})
+		return
+	}
+
+	// 转换为handler层的响应结构体
+	resp := SaveWithDetailsResponse{
+		MainRecord: result.MainRecord,
+		Details:    []DetailTableResponse{},
+	}
+	// 安全地转换子表数据
+	if result.Details != nil {
+		for _, d := range result.Details {
+			resp.Details = append(resp.Details, DetailTableResponse{
+				TableName: d.TableName,
+				Records:   d.Records,
+			})
+		}
+	}
+	for i, d := range result.Details {
+		resp.Details[i] = DetailTableResponse{
+			TableName: d.TableName,
+			Records:   d.Records,
+		}
+	}
+
+	utils.Success(c, resp)
 }
 
 // Unsubmit 反提交记录
