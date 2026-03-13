@@ -233,6 +233,8 @@ func registerCRUDRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, crudService crud.
 		data.POST("/:tableName/batch-delete", crudHandler.BatchDelete)
 		data.POST("/:tableName/:id/submit", crudHandler.Submit)
 		data.POST("/:tableName/:id/unsubmit", crudHandler.Unsubmit)
+		// 同时保存主表和明细
+		data.POST("/save-with-details", crudHandler.SaveWithDetails)
 	}
 }
 

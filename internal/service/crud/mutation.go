@@ -211,6 +211,42 @@ func (s *service) Delete(ctx context.Context, tableName string, id uint, userID 
 			return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
 		}
 
+		// 先删除所有1:1关联的子表数据
+		tableRefs, err := s.metadataService.GetTableRefs(table.ID)
+		if err == nil && len(tableRefs) > 0 {
+			for _, ref := range tableRefs {
+				// 只处理1:1关联
+				if ref.AssocType == "1" {
+					// 获取关联表信息
+					refTable, err := s.metadataService.GetTableByID(uint(ref.RefTableID))
+					if err != nil {
+						continue
+					}
+					// 获取关联字段信息
+					var refColumnName string
+					if ref.RefColumnID > 0 {
+						columns, err := s.metadataService.GetColumns(uint(ref.RefTableID))
+						if err == nil {
+							for _, col := range columns {
+								if col.ID == uint(ref.RefColumnID) {
+									refColumnName = col.DbName
+									break
+								}
+							}
+						}
+					}
+					// 如果没有找到关联字段，使用默认的主表ID字段
+					if refColumnName == "" {
+						refColumnName = table.Name + "_ID"
+					}
+					// 删除子表中关联的记录
+					if err := tx.Table(refTable.Name).Where(refColumnName+" = ?", id).Delete(nil).Error; err != nil {
+						return errors.Wrap(errors.ErrDatabase, "删除关联子表失败", err)
+					}
+				}
+			}
+		}
+
 		// 执行物理删除（在事务中）
 		result := tx.Table(table.Name).Where("ID = ?", id).Delete(nil)
 		if result.Error != nil {
@@ -258,6 +294,42 @@ func (s *service) BatchDelete(ctx context.Context, tableName string, ids []uint,
 
 	// 在事务中执行批量删除
 	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
+		// 先删除所有1:1关联的子表数据
+		tableRefs, err := s.metadataService.GetTableRefs(table.ID)
+		if err == nil && len(tableRefs) > 0 {
+			for _, ref := range tableRefs {
+				// 只处理1:1关联
+				if ref.AssocType == "1" {
+					// 获取关联表信息
+					refTable, err := s.metadataService.GetTableByID(uint(ref.RefTableID))
+					if err != nil {
+						continue
+					}
+					// 获取关联字段信息
+					var refColumnName string
+					if ref.RefColumnID > 0 {
+						columns, err := s.metadataService.GetColumns(uint(ref.RefTableID))
+						if err == nil {
+							for _, col := range columns {
+								if col.ID == uint(ref.RefColumnID) {
+									refColumnName = col.DbName
+									break
+								}
+							}
+						}
+					}
+					// 如果没有找到关联字段，使用默认的主表ID字段
+					if refColumnName == "" {
+						refColumnName = table.Name + "_ID"
+					}
+					// 批量删除子表中关联的记录
+					if err := tx.Table(refTable.Name).Where(refColumnName+" IN ?", ids).Delete(nil).Error; err != nil {
+						return errors.Wrap(errors.ErrDatabase, "删除关联子表失败", err)
+					}
+				}
+			}
+		}
+
 		// 对每个ID执行before钩子（在事务中）
 		for _, id := range ids {
 			deleteData := map[string]interface{}{"ID": id}
