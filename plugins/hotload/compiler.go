@@ -24,11 +24,11 @@ type Compiler struct {
 
 // CompileResult 编译结果
 type CompileResult struct {
-	Success      bool      // 是否成功
-	OutputPath   string    // 输出文件路径
-	SourceHash   string    // 源码哈希值
-	CompileTime  time.Time // 编译时间
-	Error        error     // 错误信息
+	Success         bool          // 是否成功
+	OutputPath      string        // 输出文件路径
+	SourceHash      string        // 源码哈希值
+	CompileTime     time.Time     // 编译时间
+	Error           error         // 错误信息
 	CompileDuration time.Duration // 编译耗时
 }
 

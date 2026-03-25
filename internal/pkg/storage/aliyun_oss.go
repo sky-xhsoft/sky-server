@@ -250,3 +250,30 @@ func (s *AliyunOSS) GetPostPolicy(ctx context.Context, dir string, expireSeconds
 		"host":           fmt.Sprintf("https://%s.%s", s.bucketName, s.endpoint),
 	}, nil
 }
+
+// PresignedUploadURL 获取预签名上传URL（用于前端直传）
+func (s *AliyunOSS) PresignedUploadURL(ctx context.Context, path string, expireSeconds int, contentType string) (string, error) {
+	signedURL, err := s.bucket.SignURL(path, oss.HTTPPut, int64(expireSeconds))
+	if err != nil {
+		return "", errors.Wrap(errors.ErrInternal, "生成预签名上传URL失败", err)
+	}
+	return signedURL, nil
+}
+
+// InitiateMultipartUpload 初始化分块上传
+// 阿里云OSS原生分块上传支持待完善
+func (s *AliyunOSS) InitiateMultipartUpload(ctx context.Context, path string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "阿里云OSS原生分块上传暂未支持，请使用传统合并方式", nil)
+}
+
+// PresignedChunkUploadURL 获取分块预签名上传URL
+// 阿里云OSS原生分块上传支持待完善
+func (s *AliyunOSS) PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "阿里云OSS原生分块上传暂未支持，请使用传统合并方式", nil)
+}
+
+// CompleteMultipartUpload 完成分块上传
+// 阿里云OSS原生分块上传支持待完善
+func (s *AliyunOSS) CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "阿里云OSS原生分块上传暂未支持，请使用传统合并方式", nil)
+}

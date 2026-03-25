@@ -8,9 +8,9 @@ import (
 func TestGeneratePushURL(t *testing.T) {
 	// 创建推流地址生成器
 	generator := NewPushURLGenerator(
-		"push.example.com",  // 推流域名
-		"your_stream_key",   // 推流密钥
-		"live",              // 应用名称
+		"push.example.com", // 推流域名
+		"your_stream_key",  // 推流密钥
+		"live",             // 应用名称
 	)
 
 	// 生成推流地址

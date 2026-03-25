@@ -10,7 +10,7 @@ type SysUser struct {
 	Email    string `gorm:"column:EMAIL;size:255" json:"email"`
 	Language string `gorm:"column:LANGUAGE;size:255" json:"language"`
 	IsAdmin  string `gorm:"column:IS_ADMIN;size:2;default:N" json:"isAdmin"` // Y/N
-	Sgrade   int    `gorm:"column:SGRADE" json:"sgrade"`                      // 字段访问级别
+	Sgrade   int    `gorm:"column:SGRADE" json:"sgrade"`                     // 字段访问级别
 }
 
 // TableName 指定表名

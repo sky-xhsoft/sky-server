@@ -2,15 +2,13 @@ package cloud
 
 import (
 	"context"
+	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"time"
-
-	"crypto/md5"
 
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
@@ -21,9 +19,11 @@ import (
 )
 
 // CompleteUpload 完成上传（合并分片）
-// 此方法会根据文件大小和分片数量自动选择最优的合并策略：
-// - 小文件或少量分片：使用临时文件合并（稳定可靠）
-// - 大文件且多分片：使用流式合并（高性能、低内存）
+// 此方法会根据是否使用原生分块上传自动选择最优策略：
+// - 原生分块上传：直接调用云存储服务端合并，几秒完成，不需要后端流式合并
+// - 传统模式：根据文件大小和分片数量自动选择合并策略
+//   - 小文件或少量分片：使用流式合并
+//   - 大文件且多分片：使用流式合并优化
 func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID uint, userID uint) (*entity.CloudItem, error) {
 	logger.Info("完成分片上传", zap.Uint("sessionID", sessionID), zap.Uint("userID", userID))
 
@@ -38,6 +38,25 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		return nil, errors.Wrap(errors.ErrDatabase, "查询上传会话失败", err)
 	}
 
+	// 幂等性优化：如果会话已经完成，直接查询返回已创建的文件，不重复合并
+	if session.Status == "completed" {
+		logger.Info("分片上传已完成，直接返回结果（幂等处理）", zap.Uint("sessionID", sessionID))
+
+		// 查询已经创建好的文件记录
+		var existingFile entity.CloudItem
+		err := s.db.WithContext(ctx).
+			Where("MD5 = ? AND OWNER_ID = ? AND IS_ACTIVE = ?", session.FileID, userID, "Y").
+			First(&existingFile).
+			Error
+		if err == nil {
+			// 找到已创建的文件，直接返回
+			return &existingFile, nil
+		}
+
+		// 如果找不到文件，继续正常合并（可能创建失败了）
+		logger.Warn("会话已完成但找不到文件记录，重新合并", zap.Uint("sessionID", sessionID))
+	}
+
 	// 2. 检查所有分片是否已上传
 	var uploadedChunks []int
 	if session.UploadedChunks != "" {
@@ -49,7 +68,191 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 			fmt.Sprintf("分片未完全上传：已上传 %d/%d", len(uploadedChunks), session.TotalChunks))
 	}
 
-	// 2.5 自动选择合并策略：大文件且多分片使用流式合并
+	// 3. 如果使用了原生分块上传（StorageUploadID 不为空），直接调用云服务端合并
+	if session.StorageUploadID != "" {
+		logger.Info("使用云存储原生分块上传合并，服务端直接合并，不需要后端流式合并",
+			zap.Uint("sessionID", sessionID),
+			zap.String("uploadID", session.StorageUploadID),
+			zap.Int("totalChunks", session.TotalChunks))
+
+		// 检查存储是否支持 CompleteMultipartUpload
+		if completeProvider, ok := s.storage.(interface{
+			CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error)
+		}); ok {
+			// 查询所有分片的 ETag
+			var chunkRecords []entity.CloudChunkRecord
+			err := s.db.WithContext(ctx).
+				Where("SESSION_ID = ? AND UPLOADED = ?", sessionID, true).
+				Order("CHUNK_INDEX asc").
+				Find(&chunkRecords).Error
+			if err != nil {
+				return nil, errors.Wrap(errors.ErrDatabase, "查询分片记录失败", err)
+			}
+
+			// 收集所有分片的 ETag，按分片编号排序
+			var partETags []string
+			for _, chunk := range chunkRecords {
+				// 确保顺序正确：按 chunkIndex 排序已经在查询时处理
+				if chunk.ETag != "" {
+					// 移除 COS 返回的 ETag 周围的引号（有些客户端会保留）
+					etag := chunk.ETag
+					if len(etag) > 0 && etag[0] == '"' && etag[len(etag)-1] == '"' {
+						etag = etag[1 : len(etag)-1]
+					}
+					partETags = append(partETags, etag)
+				}
+			}
+
+			// 检查所有分片都有 ETag
+			if len(partETags) != session.TotalChunks {
+				logger.Warn("部分分片缺少ETag，无法使用原生合并，回退到传统合并",
+					zap.Int("haveETag", len(partETags)),
+					zap.Int("total", session.TotalChunks))
+				// 继续往下走，使用传统合并
+			} else {
+				// 调用云存储服务端完成合并
+				finalPath := session.StoragePath
+				_, err = completeProvider.CompleteMultipartUpload(ctx, finalPath, session.StorageUploadID, partETags)
+				if err != nil {
+					logger.Error("原生分块上传合并失败，回退到传统合并",
+						zap.String("path", finalPath),
+						zap.String("uploadID", session.StorageUploadID),
+						zap.Error(err))
+					// 回退到传统合并
+				} else {
+					// 合并成功！服务端直接合并完成，几秒钟搞定
+					logger.Info("云存储原生分块上传合并成功，合并完成",
+						zap.String("path", finalPath),
+						zap.Int("totalChunks", session.TotalChunks))
+
+					// 检查是否已存在相同MD5的文件（秒传）
+					var existingFile entity.CloudItem
+					err := s.db.WithContext(ctx).
+						Where("MD5 = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", session.FileID, userID, "Y", "file").
+						First(&existingFile).Error
+
+					if err == nil {
+						// 文件已存在，直接创建新记录（秒传）
+						logger.Info("检测到相同文件，使用秒传", zap.String("md5", session.FileID))
+
+						storageType := session.StorageType
+						storagePath := existingFile.StoragePath
+						fileSize := session.FileSize
+						fileType := session.FileType
+						fileMD5 := session.FileID
+						accessURL := existingFile.AccessURL
+						fileExt := filepath.Ext(session.FileName)
+
+						newFile := &entity.CloudItem{
+							BaseModel: entity.BaseModel{
+								CreateBy: s.getUsernameByID(ctx, userID),
+								UpdateBy: s.getUsernameByID(ctx, userID),
+								IsActive: "Y",
+							},
+							ItemType:    "file",
+							Name:        session.FileName,
+							ParentID:    session.FolderID,
+							OwnerID:     userID,
+							StorageType: &storageType,
+							StoragePath: storagePath,
+							FileSize:    &fileSize,
+							FileType:    &fileType,
+							FileExt:     &fileExt,
+							MD5:         &fileMD5,
+							AccessURL:   accessURL,
+						}
+
+						if err := s.db.WithContext(ctx).Create(newFile).Error; err != nil {
+							return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败（秒传）", err)
+						}
+
+						// 更新会话状态
+						s.db.WithContext(ctx).Model(&entity.CloudUploadSession{}).
+							Where("ID = ?", session.ID).
+							Update("STATUS", "completed")
+
+						// 异步清理临时分片记录（原生模式没有临时文件）
+						go func() {
+							// 只删除数据库记录，不需要删除文件
+							s.db.WithContext(context.Background()).
+								Where("SESSION_ID = ?", sessionID).
+								Delete(&entity.CloudChunkRecord{})
+							logger.Info("原生分块上传：清理分片记录完成", zap.Uint("sessionID", sessionID))
+						}()
+
+						// 更新配额：文件数量+1，空间使用+文件大小
+						s.cloudService.UpdateQuota(ctx, userID, session.FileSize, 1, 0)
+
+						return newFile, nil
+					}
+
+					// 获取最终文件访问URL
+					accessURL, err := s.storage.GetURL(ctx, session.StoragePath, 0)
+					if err != nil {
+						logger.Warn("获取最终文件URL失败", zap.String("path", session.StoragePath), zap.Error(err))
+					}
+
+					// 创建文件记录
+					storageType := session.StorageType
+					fileSize := session.FileSize
+					fileType := session.FileType
+					fileMD5 := session.FileID
+					fileExt := filepath.Ext(session.FileName)
+					finalPath := session.StoragePath
+
+					file := &entity.CloudItem{
+						BaseModel: entity.BaseModel{
+							CreateBy: s.getUsernameByID(ctx, userID),
+							UpdateBy: s.getUsernameByID(ctx, userID),
+							IsActive: "Y",
+						},
+						ItemType:    "file",
+						Name:        session.FileName,
+						ParentID:    session.FolderID,
+						OwnerID:     userID,
+						StoragePath: &finalPath,
+						FileSize:    &fileSize,
+						FileType:    &fileType,
+						FileExt:     &fileExt,
+						MD5:         &fileMD5,
+						StorageType: &storageType,
+						AccessURL:   &accessURL,
+					}
+
+					if err := s.db.WithContext(ctx).Create(file).Error; err != nil {
+						return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
+					}
+
+					// 更新配额：文件数量+1，空间使用+文件大小
+					s.cloudService.UpdateQuota(ctx, userID, session.FileSize, 1, 0)
+
+					// 更新会话状态为已完成
+					s.db.WithContext(ctx).Model(&entity.CloudUploadSession{}).
+						Where("ID = ?", session.ID).
+						Update("STATUS", "completed")
+
+					// 异步清理分片记录（原生模式不需要清理文件）
+					go func() {
+						s.db.WithContext(context.Background()).
+							Where("SESSION_ID = ?", sessionID).
+							Delete(&entity.CloudChunkRecord{})
+						logger.Info("原生分块上传：清理分片记录完成", zap.Uint("sessionID", sessionID))
+					}()
+
+					logger.Info("文件上传完成（原生分块服务端合并）",
+						zap.Uint("fileID", file.ID),
+						zap.String("fileName", file.Name),
+						zap.Int64("fileSize", *file.FileSize))
+
+					return file, nil
+				}
+			}
+		}
+	}
+
+	// ========== 传统合并模式 ==========
+
+	// 自动选择合并策略：大文件且多分片使用流式合并
 	const (
 		streamingChunkThreshold    = 10               // 分片数量阈值
 		streamingFileSizeThreshold = 50 * 1024 * 1024 // 50MB 文件大小阈值
@@ -118,54 +321,80 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		return newFile, nil
 	}
 
-	// 4. 合并分片到最终文件
+	// 4. 合并分片到最终文件（流式合并优化，省去临时文件，减少一次IO）
 	finalPath := fmt.Sprintf("cloud/%d/%s/%s%s",
 		userID,
 		time.Now().Format("2006/01/02"),
 		uuid.New().String(),
 		filepath.Ext(session.FileName))
 
-	// 使用临时文件合并
-	tempMergedFile := filepath.Join(os.TempDir(), fmt.Sprintf("merge_%d.tmp", sessionID))
-	mergedFile, err := os.Create(tempMergedFile)
-	if err != nil {
-		return nil, errors.Wrap(errors.ErrInternal, "创建合并文件失败", err)
-	}
-	defer func() {
-		mergedFile.Close()
-		os.Remove(tempMergedFile)
+	logger.Info("开始合并分片（流式合并）", zap.Int("totalChunks", session.TotalChunks))
+
+	// 使用 io.Pipe 实现流式合并：一边读取分片，一边上传到存储，不需要临时文件
+	// 减少一次完整文件IO，速度翻倍
+	pipeReader, pipeWriter := io.Pipe()
+	resultChan := make(chan struct {
+		accessURL string
+		err       error
+	}, 1)
+
+	// 后端goroutine：从管道读取数据，直接上传到存储
+	go func() {
+		defer close(resultChan)
+		accessURL, err := s.storage.Upload(ctx, finalPath, pipeReader, session.FileType)
+		resultChan <- struct {
+			accessURL string
+			err       error
+		}{accessURL, err}
 	}()
 
-	// 按顺序合并所有分片
-	logger.Info("开始合并分片", zap.Int("totalChunks", session.TotalChunks))
+	// 计算MD5和统计总大小，需要定义在外层让后面可以访问
+	hash := md5.New()
+	var totalWritten int64 = 0
 
-	for i := 0; i < session.TotalChunks; i++ {
-		chunkPath := fmt.Sprintf("%s/chunk_%d", session.StoragePath, i)
+	// 前端goroutine：按顺序读取分片，写入管道
+	go func() {
+		for i := 0; i < session.TotalChunks; i++ {
+			var chunkPath string
+			if session.StorageUploadID == "" {
+				chunkPath = fmt.Sprintf("%s/chunk_%d", session.StoragePath, i)
+			} else {
+				chunkPath = fmt.Sprintf("%s/chunk_%d", session.StoragePath+"_temp", i)
+			}
 
-		// 读取分片
-		chunkReader, err := s.storage.Download(ctx, chunkPath)
-		if err != nil {
-			return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("读取分片 %d 失败", i), err)
+			// 读取分片
+			chunkReader, err := s.storage.Download(ctx, chunkPath)
+			if err != nil {
+				pipeWriter.CloseWithError(errors.Wrap(errors.ErrInternal, fmt.Sprintf("读取分片 %d 失败", i), err))
+				return
+			}
+
+			// 同时写入管道和MD5计算器
+			written, err := io.Copy(io.MultiWriter(pipeWriter, hash), chunkReader)
+			chunkReader.Close()
+
+			if err != nil {
+				pipeWriter.CloseWithError(errors.Wrap(errors.ErrInternal, fmt.Sprintf("合并分片 %d 失败", i), err))
+				return
+			}
+
+			totalWritten += written
+			logger.Debug("合并分片", zap.Int("chunkIndex", i), zap.Int64("written", written))
 		}
 
-		// 写入合并文件
-		written, err := io.Copy(mergedFile, chunkReader)
-		chunkReader.Close()
+		// 完成写入，关闭管道
+		pipeWriter.Close()
+	}()
 
-		if err != nil {
-			return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("合并分片 %d 失败", i), err)
-		}
-
-		logger.Debug("合并分片", zap.Int("chunkIndex", i), zap.Int64("written", written))
+	// 等待上传完成
+	uploadResult := <-resultChan
+	if uploadResult.err != nil {
+		return nil, errors.Wrap(errors.ErrInternal, "上传最终文件失败", uploadResult.err)
 	}
 
 	// 5. 验证文件完整性（MD5）
-	mergedFile.Seek(0, io.SeekStart)
-	actualMD5, err := calculateFileMD5(mergedFile)
-	if err != nil {
-		return nil, errors.Wrap(errors.ErrInternal, "计算文件MD5失败", err)
-	}
-
+	// 注意：hash计算已经在流式写入的时候完成了，不需要重新读取文件
+	actualMD5 := hex.EncodeToString(hash.Sum(nil))
 	if actualMD5 != session.FileID {
 		logger.Error("文件MD5校验失败",
 			zap.String("expected", session.FileID),
@@ -173,14 +402,8 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		return nil, errors.New(errors.ErrInvalidParam, "文件MD5校验失败")
 	}
 
-	logger.Info("文件MD5校验成功", zap.String("md5", actualMD5))
-
-	// 6. 上传最终文件到存储
-	mergedFile.Seek(0, io.SeekStart)
-	accessURL, err := s.storage.Upload(ctx, finalPath, mergedFile, session.FileType)
-	if err != nil {
-		return nil, errors.Wrap(errors.ErrInternal, "上传最终文件失败", err)
-	}
+	logger.Info("文件MD5校验成功", zap.String("md5", actualMD5), zap.Int64("totalSize", totalWritten))
+	accessURL := uploadResult.accessURL
 
 	storageType := session.StorageType
 	fileSize := session.FileSize
@@ -222,7 +445,13 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		Update("STATUS", "completed")
 
 	// 10. 异步清理临时文件
-	go s.cleanupChunks(context.Background(), session.ID, session.StoragePath)
+	var cleanupPath string
+	if session.StorageUploadID != "" {
+		cleanupPath = session.StoragePath + "_temp"
+	} else {
+		cleanupPath = session.StoragePath
+	}
+	go s.cleanupChunks(context.Background(), session.ID, cleanupPath)
 
 	logger.Info("文件上传完成",
 		zap.Uint("fileID", file.ID),

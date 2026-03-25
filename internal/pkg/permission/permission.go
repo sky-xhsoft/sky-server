@@ -11,18 +11,18 @@ const (
 
 // 权限组合常量
 const (
-	None            = 0                          // 0  - 无权限
-	ReadWrite       = Read | Write               // 3  - 读+写
-	ReadSubmit      = Read | Submit              // 5  - 读+提交
-	ReadAudit       = Read | Audit               // 9  - 读+审核
-	ReadWriteSubmit = Read | Write | Submit      // 7  - 读+写+提交
-	ReadWriteAudit  = Read | Write | Audit       // 11 - 读+写+审核
-	AllNoExport     = Read | Write | Submit | Audit // 15 - 全部权限（无导出）
-	ReadExport      = Read | Export              // 17 - 读+导出
-	WriteExport     = Write | Export             // 19 - 写+导出（实际应该是 Read | Write | Export = 19，但这里根据文档定义）
-	ReadSubmitExport = Read | Submit | Export    // 21 - 读+提交+导出
-	WriteSubmitExport = Read | Write | Submit | Export // 23 - 读+写+提交+导出
-	All             = Read | Write | Submit | Audit | Export // 31 - 全部权限
+	None              = 0                                      // 0  - 无权限
+	ReadWrite         = Read | Write                           // 3  - 读+写
+	ReadSubmit        = Read | Submit                          // 5  - 读+提交
+	ReadAudit         = Read | Audit                           // 9  - 读+审核
+	ReadWriteSubmit   = Read | Write | Submit                  // 7  - 读+写+提交
+	ReadWriteAudit    = Read | Write | Audit                   // 11 - 读+写+审核
+	AllNoExport       = Read | Write | Submit | Audit          // 15 - 全部权限（无导出）
+	ReadExport        = Read | Export                          // 17 - 读+导出
+	WriteExport       = Write | Export                         // 19 - 写+导出（实际应该是 Read | Write | Export = 19，但这里根据文档定义）
+	ReadSubmitExport  = Read | Submit | Export                 // 21 - 读+提交+导出
+	WriteSubmitExport = Read | Write | Submit | Export         // 23 - 读+写+提交+导出
+	All               = Read | Write | Submit | Audit | Export // 31 - 全部权限
 )
 
 // HasPermission 检查是否拥有指定权限

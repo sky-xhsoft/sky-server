@@ -77,8 +77,8 @@ type ListDirectoriesRequest struct {
 // GroupPermission 权限组权限
 type GroupPermission struct {
 	DirectoryID uint   `json:"directoryId"`
-	Permission  int    `json:"permission"`  // 位运算权限值
-	FilterObj   string `json:"filterObj"`   // JSON格式的过滤条件
+	Permission  int    `json:"permission"` // 位运算权限值
+	FilterObj   string `json:"filterObj"`  // JSON格式的过滤条件
 }
 
 // DirectoryNode 目录树节点

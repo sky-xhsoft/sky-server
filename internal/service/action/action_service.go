@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/executor"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
-	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -271,8 +271,8 @@ func (s *service) executeSP(ctx context.Context, action *entity.SysAction, param
 		Success:  spResp.Success,
 		Duration: spResp.Duration,
 		Data: map[string]interface{}{
-			"outParams":  spResp.OutParams,
-			"resultSets": spResp.ResultSets,
+			"outParams":    spResp.OutParams,
+			"resultSets":   spResp.ResultSets,
 			"rowsAffected": spResp.RowsAffected,
 		},
 	}

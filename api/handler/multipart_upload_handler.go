@@ -161,15 +161,9 @@ func (h *MultipartUploadHandler) UploadChunk(c *gin.Context) {
 // @Success 200 {object} cloud.UploadStatus
 // @Router /api/v1/cloud/files/multipart/status [get]
 func (h *MultipartUploadHandler) GetUploadStatus(c *gin.Context) {
-	sessionIDStr := c.Query("sessionId")
-	if sessionIDStr == "" {
-		utils.BadRequest(c, "缺少参数: sessionId")
-		return
-	}
-
-	sessionID, err := strconv.ParseUint(sessionIDStr, 10, 32)
+	sessionID, err := utils.ParseUintQueryParam(c, "sessionId")
 	if err != nil {
-		utils.BadRequest(c, "sessionId 格式错误")
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
@@ -179,7 +173,7 @@ func (h *MultipartUploadHandler) GetUploadStatus(c *gin.Context) {
 		return
 	}
 
-	status, err := h.multipartService.GetUploadStatus(c.Request.Context(), uint(sessionID), userID.(uint))
+	status, err := h.multipartService.GetUploadStatus(c.Request.Context(), sessionID, userID.(uint))
 	if err != nil {
 		utils.InternalError(c, "获取上传状态失败: "+err.Error())
 		return
@@ -229,10 +223,9 @@ func (h *MultipartUploadHandler) CompleteUpload(c *gin.Context) {
 // @Success 200 {object} utils.Response
 // @Router /api/v1/cloud/files/multipart/{sessionId} [delete]
 func (h *MultipartUploadHandler) AbortUpload(c *gin.Context) {
-	sessionIDStr := c.Param("sessionId")
-	sessionID, err := strconv.ParseUint(sessionIDStr, 10, 32)
+	sessionID, err := utils.ParseUintParam(c, "sessionId")
 	if err != nil {
-		utils.BadRequest(c, "sessionId 格式错误")
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
@@ -242,7 +235,7 @@ func (h *MultipartUploadHandler) AbortUpload(c *gin.Context) {
 		return
 	}
 
-	if err := h.multipartService.AbortUpload(c.Request.Context(), uint(sessionID), userID.(uint)); err != nil {
+	if err := h.multipartService.AbortUpload(c.Request.Context(), sessionID, userID.(uint)); err != nil {
 		utils.InternalError(c, "取消上传失败: "+err.Error())
 		return
 	}
@@ -279,6 +272,86 @@ func (h *MultipartUploadHandler) ResumeUpload(c *gin.Context) {
 	}
 
 	utils.Success(c, sessionInfo)
+}
+
+// GetChunkPresignedURL 获取分片预签名上传URL（前端直传模式）
+// @Summary 获取分片预签名上传URL
+// @Description 获取分片的预签名URL，前端可以直接上传到云存储，不经过后端中转
+// @Tags Cloud-Multipart
+// @Accept json
+// @Produce json
+// @Param sessionId path int true "会话ID"
+// @Param chunkIndex query int true "分片索引"
+// @Success 200 {object} cloud.ChunkPresignedURL
+// @Router /api/v1/cloud/files/multipart/{sessionId}/presigned [get]
+func (h *MultipartUploadHandler) GetChunkPresignedURL(c *gin.Context) {
+	sessionID, err := utils.ParseUintParam(c, "sessionId")
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	chunkIndex, err := utils.ParseIntQueryParam(c, "chunkIndex")
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	userID, err := utils.GetCurrentUserID(c)
+	if err != nil {
+		utils.Unauthorized(c, err.Error())
+		return
+	}
+
+	result, err := h.multipartService.GetChunkPresignedURL(c.Request.Context(), sessionID, chunkIndex, userID)
+	if err != nil {
+		utils.InternalError(c, "获取预签名URL失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, result)
+}
+
+// MarkChunkUploaded 标记分片已上传（前端直传模式，分片上传成功后调用）
+// @Summary 标记分片已上传
+// @Description 前端直传模式下，分片上传成功后调用此接口标记分片已上传
+// @Tags Cloud-Multipart
+// @Accept json
+// @Produce json
+// @Param sessionId path int true "会话ID"
+// @Param chunkIndex query int true "分片索引"
+// @Param etag query string false "分片ETag（原生分块上传需要）"
+// @Success 200
+// @Router /api/v1/cloud/files/multipart/{sessionId}/chunk [post]
+func (h *MultipartUploadHandler) MarkChunkUploaded(c *gin.Context) {
+	sessionID, err := utils.ParseUintParam(c, "sessionId")
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	chunkIndex, err := utils.ParseIntQueryParam(c, "chunkIndex")
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	// 获取ETag（可选参数，原生分块上传需要）
+	etag := c.Query("etag")
+
+	userID, err := utils.GetCurrentUserID(c)
+	if err != nil {
+		utils.Unauthorized(c, err.Error())
+		return
+	}
+
+	err = h.multipartService.MarkChunkUploaded(c.Request.Context(), sessionID, chunkIndex, etag, userID)
+	if err != nil {
+		utils.InternalError(c, "标记分片失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, nil)
 }
 
 // 请求结构体定义

@@ -12,30 +12,30 @@ import (
 
 // SaveWithDetailsRequest 同时保存主表和明细请求（service层）
 type SaveWithDetailsRequest struct {
-	TableName   string                `json:"tableName"`
-	MainRecord  map[string]interface{} `json:"mainRecord"`
-	Details     []DetailTableRequest  `json:"details"`
-	Mode        string                `json:"mode"`
-	MainRecordID uint                 `json:"mainRecordId"`
+	TableName    string                 `json:"tableName"`
+	MainRecord   map[string]interface{} `json:"mainRecord"`
+	Details      []DetailTableRequest   `json:"details"`
+	Mode         string                 `json:"mode"`
+	MainRecordID uint                   `json:"mainRecordId"`
 }
 
 // DetailTableRequest 子表请求数据
 type DetailTableRequest struct {
-	TableName string                 `json:"tableName"`
+	TableName string                   `json:"tableName"`
 	Records   []map[string]interface{} `json:"records"`
-	AssoType  string                 `json:"assoType"`
-	RefField  string                 `json:"refField"`
+	AssoType  string                   `json:"assoType"`
+	RefField  string                   `json:"refField"`
 }
 
 // SaveWithDetailsResponse 保存响应
 type SaveWithDetailsResponse struct {
-	MainRecord map[string]interface{}   `json:"mainRecord"`
-	Details    []DetailTableResponse    `json:"details"`
+	MainRecord map[string]interface{} `json:"mainRecord"`
+	Details    []DetailTableResponse  `json:"details"`
 }
 
 // DetailTableResponse 子表响应数据
 type DetailTableResponse struct {
-	TableName string                 `json:"tableName"`
+	TableName string                   `json:"tableName"`
 	Records   []map[string]interface{} `json:"records"`
 }
 

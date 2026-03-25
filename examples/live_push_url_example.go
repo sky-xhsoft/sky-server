@@ -11,10 +11,10 @@ func main() {
 	fmt.Println("=== 腾讯云直播推流地址生成示例 ===\n")
 
 	// 配置参数（请替换为您的实际配置）
-	pushDomain := "push.example.com"  // 推流域名
-	streamKey := "your_stream_key"    // 推流密钥（在腾讯云控制台获取）
-	appName := "live"                 // 应用名称
-	playDomain := "play.example.com"  // 播放域名
+	pushDomain := "push.example.com" // 推流域名
+	streamKey := "your_stream_key"   // 推流密钥（在腾讯云控制台获取）
+	appName := "live"                // 应用名称
+	playDomain := "play.example.com" // 播放域名
 
 	// 创建推流地址生成器
 	generator := live.NewPushURLGenerator(pushDomain, streamKey, appName)

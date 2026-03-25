@@ -138,15 +138,15 @@ func (m *FieldMask) CanAccess(operation string) bool {
 
 // 表单操作常量（用于 sys_table.MASK 字段）
 const (
-	ActionAdd       = 'A' // 新增
-	ActionModify    = 'M' // 修改
-	ActionDelete    = 'D' // 删除
-	ActionQuery     = 'Q' // 查询
-	ActionSubmit    = 'S' // 提交
-	ActionUnsubmit  = 'U' // 反提交
-	ActionVoid      = 'V' // 作废
-	ActionImport    = 'I' // 导入
-	ActionExport    = 'E' // 导出
+	ActionAdd      = 'A' // 新增
+	ActionModify   = 'M' // 修改
+	ActionDelete   = 'D' // 删除
+	ActionQuery    = 'Q' // 查询
+	ActionSubmit   = 'S' // 提交
+	ActionUnsubmit = 'U' // 反提交
+	ActionVoid     = 'V' // 作废
+	ActionImport   = 'I' // 导入
+	ActionExport   = 'E' // 导出
 )
 
 // HasAction 检查表单MASK是否包含指定操作

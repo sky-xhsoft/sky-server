@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sky-xhsoft/sky-server/internal/service/message"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/service/message"
 )
 
 // MessageHandler 消息处理器
@@ -111,9 +111,9 @@ func (h *MessageHandler) ListUserMessages(c *gin.Context) {
 		"code":    0,
 		"message": "查询成功",
 		"data": gin.H{
-			"items": items,
-			"total": total,
-			"page":  req.Page,
+			"items":    items,
+			"total":    total,
+			"page":     req.Page,
 			"pageSize": req.PageSize,
 		},
 	})
@@ -343,8 +343,8 @@ func (h *MessageHandler) SendTemplateMessage(c *gin.Context) {
 // SendBatchMessage 批量发送消息
 func (h *MessageHandler) SendBatchMessage(c *gin.Context) {
 	var req struct {
-		UserIDs []uint                       `json:"userIds" binding:"required"`
-		Message message.SendMessageRequest   `json:"message" binding:"required"`
+		UserIDs []uint                     `json:"userIds" binding:"required"`
+		Message message.SendMessageRequest `json:"message" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

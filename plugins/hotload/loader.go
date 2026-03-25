@@ -13,15 +13,15 @@ import (
 // Loader 插件加载器
 // 负责动态加载编译后的 .so 插件文件
 type Loader struct {
-	manager       *core.Manager        // 插件管理器
+	manager       *core.Manager             // 插件管理器
 	loadedPlugins map[string]*plugin.Plugin // 已加载的插件
-	mu            sync.RWMutex         // 互斥锁
+	mu            sync.RWMutex              // 互斥锁
 }
 
 // LoadResult 加载结果
 type LoadResult struct {
-	Success bool   // 是否成功
-	Error   error  // 错误信息
+	Success bool  // 是否成功
+	Error   error // 错误信息
 }
 
 // NewLoader 创建加载器

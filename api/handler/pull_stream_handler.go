@@ -14,14 +14,14 @@ import (
 
 // PullStreamHandler 拉流任务处理器
 type PullStreamHandler struct {
-	liveService       liveService.Service
+	liveService           liveService.Service
 	pullStreamTaskService liveService.PullStreamTaskService
 }
 
 // NewPullStreamHandler 创建拉流任务处理器
 func NewPullStreamHandler(service liveService.Service, pullStreamTaskService liveService.PullStreamTaskService) *PullStreamHandler {
 	return &PullStreamHandler{
-		liveService:       service,
+		liveService:           service,
 		pullStreamTaskService: pullStreamTaskService,
 	}
 }
@@ -284,11 +284,11 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 
 	// 更新本地数据库
 	task := &entity.PullStreamTask{
-		TaskID:     taskID,
-		Comment:    req.Comment,
-		Operator:   req.Operator,
-		RoomID:     req.RoomID,
-		RoomName:   req.RoomName,
+		TaskID:   taskID,
+		Comment:  req.Comment,
+		Operator: req.Operator,
+		RoomID:   req.RoomID,
+		RoomName: req.RoomName,
 	}
 
 	if req.SourceURLs != nil && len(req.SourceURLs) > 0 {

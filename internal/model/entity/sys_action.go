@@ -7,7 +7,7 @@ type SysAction struct {
 	Name        string `gorm:"column:NAME;size:80" json:"name"`
 	DisplayName string `gorm:"column:DISPLAY_NAME;size:255" json:"displayName"`
 	DisplayType string `gorm:"column:DISPLAY_TYPE;size:80" json:"displayType"` // list_button,list_menu_item,obj_button,obj_menu_item,tab_button
-	ActionType  string `gorm:"column:ACTION_TYPE;size:255" json:"actionType"`   // url,sp,job,js,bsh,py,go
+	ActionType  string `gorm:"column:ACTION_TYPE;size:255" json:"actionType"`  // url,sp,job,js,bsh,py,go
 	Content     string `gorm:"column:CONTENT;size:255" json:"content"`
 	Scripts     string `gorm:"column:SCRIPTS;size:2000" json:"scripts"`
 	URLTarget   string `gorm:"column:URLTARGET;size:255" json:"urlTarget"`

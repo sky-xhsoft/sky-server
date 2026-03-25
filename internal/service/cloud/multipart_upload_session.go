@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
@@ -89,6 +90,13 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 	// 6. 创建新的上传会话（使用配置的过期时间）
 	expireTime := time.Now().Add(time.Duration(s.sessionExpireHours) * time.Hour)
 
+	// 构造最终保存路径（提前生成，用于原生分块上传）
+	finalStoragePath := fmt.Sprintf("cloud/%d/%s/%s%s",
+		userID,
+		time.Now().Format("2006/01/02"),
+		fmt.Sprintf("%x-%s", req.FileSize, req.FileMD5),
+		filepath.Ext(req.FileName))
+
 	session := &entity.CloudUploadSession{
 		BaseModel: entity.BaseModel{
 			CreateBy: s.getUsernameByID(ctx, userID),
@@ -106,8 +114,32 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		UploadedChunks: "[]",
 		Status:         "uploading",
 		StorageType:    storageType,
-		StoragePath:    fmt.Sprintf("cloud/temp/%d/%s", userID, req.FileMD5),
+		StoragePath:    finalStoragePath, // 使用最终路径而不是临时路径，原生分块直接上传到最终位置
+		StorageUploadID: "",
 		ExpireTime:     &expireTime,
+	}
+
+	// 如果是腾讯云COS等支持原生分块上传的存储，尝试初始化原生分块上传
+	// 调用存储层的 InitiateMultipartUpload 接口
+	if _, ok := s.storage.(interface{
+		InitiateMultipartUpload(ctx context.Context, path string) (string, error)
+	}); ok {
+		// 存储支持原生分块上传，进行初始化
+		storageProvider := s.storage.(interface{
+			InitiateMultipartUpload(ctx context.Context, path string) (string, error)
+		})
+		uploadID, err := storageProvider.InitiateMultipartUpload(ctx, finalStoragePath)
+		if err != nil {
+			logger.Warn("初始化原生分块上传失败，回退到传统模式",
+				zap.String("path", finalStoragePath),
+				zap.Error(err))
+		} else {
+			// 初始化成功，保存uploadID
+			session.StorageUploadID = uploadID
+			logger.Info("初始化原生分块上传成功",
+				zap.String("uploadID", uploadID),
+				zap.String("path", finalStoragePath))
+		}
 	}
 
 	if err := s.db.WithContext(ctx).Create(session).Error; err != nil {
@@ -116,7 +148,8 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 
 	logger.Info("创建上传会话成功",
 		zap.Uint("sessionID", session.ID),
-		zap.Int("totalChunks", totalChunks))
+		zap.Int("totalChunks", totalChunks),
+		zap.String("storageUploadID", session.StorageUploadID))
 
 	return &UploadSessionInfo{
 		SessionID:      session.ID,

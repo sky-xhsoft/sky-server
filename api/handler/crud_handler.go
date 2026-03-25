@@ -287,30 +287,30 @@ type CRUDBatchDeleteRequest struct {
 
 // SaveWithDetailsRequest 同时保存主表和明细请求
 type SaveWithDetailsRequest struct {
-	TableName   string                `json:"tableName" binding:"required"`   // 主表名
-	MainRecord  map[string]interface{} `json:"mainRecord" binding:"required"`  // 主表数据
-	Details     []DetailTableRequest  `json:"details" binding:"required"`     // 子表数据列表
-	Mode        string                `json:"mode"`                            // 保存模式：create/update
-	MainRecordID uint                 `json:"mainRecordId"`                    // 更新模式下的主表ID
+	TableName    string                 `json:"tableName" binding:"required"`  // 主表名
+	MainRecord   map[string]interface{} `json:"mainRecord" binding:"required"` // 主表数据
+	Details      []DetailTableRequest   `json:"details" binding:"required"`    // 子表数据列表
+	Mode         string                 `json:"mode"`                          // 保存模式：create/update
+	MainRecordID uint                   `json:"mainRecordId"`                  // 更新模式下的主表ID
 }
 
 // DetailTableRequest 子表请求数据
 type DetailTableRequest struct {
-	TableName string                 `json:"tableName" binding:"required"` // 子表名
+	TableName string                   `json:"tableName" binding:"required"` // 子表名
 	Records   []map[string]interface{} `json:"records" binding:"required"`   // 子表数据列表
-	AssoType  string                 `json:"assoType" binding:"required"`  // 关联类型：1=1:1, n=1:n
-	RefField  string                 `json:"refField" binding:"required"`  // 子表中关联主表ID的字段名
+	AssoType  string                   `json:"assoType" binding:"required"`  // 关联类型：1=1:1, n=1:n
+	RefField  string                   `json:"refField" binding:"required"`  // 子表中关联主表ID的字段名
 }
 
 // SaveWithDetailsResponse 保存响应
 type SaveWithDetailsResponse struct {
-	MainRecord map[string]interface{}   `json:"mainRecord"` // 保存后的主表数据
-	Details    []DetailTableResponse    `json:"details"`    // 保存后的子表数据
+	MainRecord map[string]interface{} `json:"mainRecord"` // 保存后的主表数据
+	Details    []DetailTableResponse  `json:"details"`    // 保存后的子表数据
 }
 
 // DetailTableResponse 子表响应数据
 type DetailTableResponse struct {
-	TableName string                 `json:"tableName"` // 子表名
+	TableName string                   `json:"tableName"` // 子表名
 	Records   []map[string]interface{} `json:"records"`   // 保存后的子表数据
 }
 

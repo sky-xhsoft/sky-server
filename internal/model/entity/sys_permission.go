@@ -68,3 +68,18 @@ type SysCompany struct {
 func (SysCompany) TableName() string {
 	return "sys_company"
 }
+
+// SysCompanyConf 公司配置
+// 与 sys_company 是 1:1 关系，保存公司的各项配置
+type SysCompanyConf struct {
+	BaseModel
+	SysCompanyID       uint   `gorm:"column:SYS_COMPANY_ID;uniqueIndex" json:"sysCompanyId"` // 关联公司ID
+	SecretID           string `gorm:"column:SECRET_ID;size:255" json:"secretId"`             // 云存储SecretID
+	SecretKey           string `gorm:"column:SECRET_KEY;size:255" json:"secretKey"`             // 云存储SecretKey
+	Region             string `gorm:"column:REGION;size:255" json:"region"`                     // 云存储Region
+}
+
+// TableName 指定表名
+func (SysCompanyConf) TableName() string {
+	return "sys_company_conf"
+}

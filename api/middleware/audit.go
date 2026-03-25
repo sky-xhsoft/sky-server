@@ -18,13 +18,20 @@ func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 		startTime := time.Now()
 
 		// 读取请求体(需要保存以便后续使用)
+		// 优化：只有请求体大小超过限制时不读取，避免大文件上传占用大量内存
 		var requestBody string
 		if c.Request.Body != nil && shouldLogBody(c.Request.Method) {
-			bodyBytes, err := io.ReadAll(c.Request.Body)
-			if err == nil {
-				requestBody = string(bodyBytes)
-				// 重新设置请求体,供后续handler使用
-				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			// 先获取请求内容长度，如果太大就不读取
+			if c.Request.ContentLength > 0 && c.Request.ContentLength > 10000 {
+				// 大请求体，不读取日志，直接保持原样交给后续handler
+				requestBody = ""
+			} else {
+				bodyBytes, err := io.ReadAll(c.Request.Body)
+				if err == nil {
+					requestBody = string(bodyBytes)
+					// 重新设置请求体,供后续handler使用
+					c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				}
 			}
 		}
 

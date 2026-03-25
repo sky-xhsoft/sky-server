@@ -17,13 +17,13 @@ type SysTable struct {
 	IcoImg             string `gorm:"column:ICO_IMG;size:255" json:"ICO_IMG"`       // 表单图标
 	IsDropdown         string `gorm:"column:IS_DROPDOWN;size:1" json:"IS_DROPDOWN"` // Y/N
 	SysObjUIConfID     *int   `gorm:"column:SYS_OBJUICONF_ID" json:"SYS_OBJUICONF_ID"`
-	SysDirectoryID     *uint  `gorm:"column:SYS_DIRECTORY_ID" json:"SYS_DIRECTORY_ID"`     // 安全目录
+	SysDirectoryID     *uint  `gorm:"column:SYS_DIRECTORY_ID" json:"SYS_DIRECTORY_ID"`       // 安全目录
 	SysParentTableID   *uint  `gorm:"column:SYS_PARENT_TABLE_ID" json:"SYS_PARENT_TABLE_ID"` // 父表
-	RowCnt             *int   `gorm:"column:ROWCNT" json:"ROWCNT"`                         // 统计行数
-	IsBig              string `gorm:"column:IS_BIG;size:1" json:"IS_BIG"`                   // Y/N 是否海量
-	Props              string `gorm:"column:PROPS;size:2000" json:"PROPS"`                 // 扩展属性（JSON）
-	Description        string `gorm:"column:DESCRIPTION;size:2000" json:"DESCRIPTION"`     // 备注
-	OrderNo            int    `gorm:"column:ORDERNO" json:"ORDERNO"`                       // 排序
+	RowCnt             *int   `gorm:"column:ROWCNT" json:"ROWCNT"`                           // 统计行数
+	IsBig              string `gorm:"column:IS_BIG;size:1" json:"IS_BIG"`                    // Y/N 是否海量
+	Props              string `gorm:"column:PROPS;size:2000" json:"PROPS"`                   // 扩展属性（JSON）
+	Description        string `gorm:"column:DESCRIPTION;size:2000" json:"DESCRIPTION"`       // 备注
+	OrderNo            int    `gorm:"column:ORDERNO" json:"ORDERNO"`                         // 排序
 }
 
 // TableName 指定表名

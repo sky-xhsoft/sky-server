@@ -18,12 +18,12 @@ func registerPullStreamRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service live
 	{
 		tasks := pullStream.Group("/tasks")
 		{
-			tasks.POST("", pullStreamHandler.CreatePullStreamTask)              // 创建拉流任务
-			tasks.GET("", pullStreamHandler.GetPullStreamTasks)                 // 查询拉流任务列表
-			tasks.PUT("/:id", pullStreamHandler.UpdatePullStreamTask)           // 更新拉流任务
-			tasks.DELETE("/:id", pullStreamHandler.DeletePullStreamTask)        // 删除拉流任务
-			tasks.GET("/:id/status", pullStreamHandler.GetPullStreamTaskStatus) // 查询拉流任务状态
-			tasks.POST("/:id/restart", pullStreamHandler.RestartPullStreamTask) // 重启拉流任务
+			tasks.POST("", pullStreamHandler.CreatePullStreamTask)                                  // 创建拉流任务
+			tasks.GET("", pullStreamHandler.GetPullStreamTasks)                                     // 查询拉流任务列表
+			tasks.PUT("/:id", pullStreamHandler.UpdatePullStreamTask)                               // 更新拉流任务
+			tasks.DELETE("/:id", pullStreamHandler.DeletePullStreamTask)                            // 删除拉流任务
+			tasks.GET("/:id/status", pullStreamHandler.GetPullStreamTaskStatus)                     // 查询拉流任务状态
+			tasks.POST("/:id/restart", pullStreamHandler.RestartPullStreamTask)                     // 重启拉流任务
 			tasks.POST("/transform-push-info", pullStreamHandler.DescribePullTransformPushInfoList) // 查询拉流转推任务流数据
 		}
 	}

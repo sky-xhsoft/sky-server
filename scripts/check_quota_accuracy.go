@@ -5,8 +5,8 @@ import (
 	"log"
 
 	"github.com/sky-xhsoft/sky-server/internal/config"
-	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
 	"gorm.io/gorm"
 )
 

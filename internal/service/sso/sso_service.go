@@ -6,8 +6,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -36,7 +38,7 @@ type Service interface {
 type LoginRequest struct {
 	Username   string `json:"username" binding:"required"`
 	Password   string `json:"password" binding:"required"`
-	CompanyID  *uint  `json:"companyId"`                        // 可选，优先使用域名识别的公司ID
+	CompanyID  *uint  `json:"companyId"`                     // 可选，优先使用域名识别的公司ID
 	ClientType string `json:"clientType" binding:"required"` // web, mobile, desktop
 	DeviceID   string `json:"deviceId"`                      // 设备唯一标识
 	DeviceName string `json:"deviceName"`                    // 设备名称
@@ -46,10 +48,12 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refreshToken"`
-	ExpiresIn    int       `json:"expiresIn"`
-	User         *UserInfo `json:"user"`
+	Token         string                 `json:"token"`
+	RefreshToken  string                 `json:"refreshToken"`
+	ExpiresIn     int                  `json:"expiresIn"`
+	User          *UserInfo            `json:"user"`
+	Company       *entity.SysCompany     `json:"company"`
+	CompanyConf   *entity.SysCompanyConf `json:"companyConf"`
 }
 
 // TokenResponse Token响应
@@ -168,6 +172,32 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 		}
 	}
 
+	// 查询公司信息
+	var company *entity.SysCompany
+	var companyConf *entity.SysCompanyConf
+	if user.SysCompanyID != 0 {
+		company, err = s.userRepo.GetCompanyByID(user.SysCompanyID)
+		if err != nil {
+			logger.Warn("Failed to get company info for user",
+				zap.Uint("userId", user.ID),
+				zap.Uint("companyId", user.SysCompanyID),
+				zap.Error(err))
+			// 不阻塞登录，继续返回
+			company = nil
+		} else if company != nil {
+			// 查询公司配置
+			companyConf, err = s.userRepo.GetCompanyConfByCompanyID(user.SysCompanyID)
+			if err != nil {
+				logger.Warn("Failed to get company config for user",
+					zap.Uint("userId", user.ID),
+					zap.Uint("companyId", user.SysCompanyID),
+					zap.Error(err))
+				// 不阻塞登录
+				companyConf = nil
+			}
+		}
+	}
+
 	// 返回登录响应
 	return &LoginResponse{
 		Token:        token,
@@ -180,6 +210,8 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 			IsAdmin:   user.IsAdmin,
 			CompanyID: user.SysCompanyID,
 		},
+		Company:     company,
+		CompanyConf: companyConf,
 	}, nil
 }
 
