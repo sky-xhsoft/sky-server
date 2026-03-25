@@ -175,8 +175,8 @@ storage:
     # 腾讯云COS配置
     tencentCOS:
         bucketURL: "https://zhibo-1301212747.cos.ap-nanjing.myqcloud.com"
-        secretID: "AKIDGpIZd9YmrC3lMtDLGyTp262oOlxxoTwD"
-        secretKey: "72kGZgb3MTiqmX6ShnhOsBHB5rRp11pW"
+        secretID: "YOUR_TENCENT_SECRET_ID"
+        secretKey: "YOUR_TENCENT_SECRET_KEY"
         bucketName: "zhibo-1301212747"
         region: "ap-nanjing"
         cdnDomain: ""
@@ -185,9 +185,9 @@ storage:
 # 腾讯云配置
 tencentCloud:
     # 腾讯云 SecretID
-    secretID: "AKIDGpIZd9YmrC3lMtDLGyTp262oOlxxoTwD"
+    secretID: "YOUR_TENCENT_SECRET_ID"
     # 腾讯云 SecretKey
-    secretKey: "72kGZgb3MTiqmX6ShnhOsBHB5rRp11pW"
+    secretKey: "YOUR_TENCENT_SECRET_KEY"
     # 区域，如 ap-guangzhou, ap-shanghai, ap-beijing
     region: "ap-shanghai"
     # 回调密钥，用于验证腾讯云回调签名（可选，留空则不验证签名）
