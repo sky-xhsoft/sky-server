@@ -10,6 +10,12 @@ type UserRepository interface {
 	// 根据ID获取用户
 	GetUserByID(id uint) (*entity.SysUser, error)
 
+	// 根据ID获取公司
+	GetCompanyByID(companyID uint) (*entity.SysCompany, error)
+
+	// 根据公司ID获取公司配置
+	GetCompanyConfByCompanyID(companyID uint) (*entity.SysCompanyConf, error)
+
 	// 创建用户会话
 	CreateSession(session *entity.SysUserSession) error
 

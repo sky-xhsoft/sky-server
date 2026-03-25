@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
-	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 )
 
 // GroupsHandler 权限组处理器

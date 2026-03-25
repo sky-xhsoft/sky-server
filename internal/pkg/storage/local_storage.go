@@ -220,3 +220,27 @@ func (s *LocalStorage) GetObjectInfo(ctx context.Context, path string) (*ObjectI
 		Metadata:     make(map[string]string),
 	}, nil
 }
+
+// PresignedUploadURL 获取预签名上传URL（用于前端直传）
+// 本地存储不支持前端直传，返回错误
+func (s *LocalStorage) PresignedUploadURL(ctx context.Context, path string, expireSeconds int, contentType string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持前端直传，请使用腾讯云COS等云存储", nil)
+}
+
+// InitiateMultipartUpload 初始化分块上传
+// 本地存储不支持原生分块上传，返回错误
+func (s *LocalStorage) InitiateMultipartUpload(ctx context.Context, path string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
+}
+
+// PresignedChunkUploadURL 获取分块预签名上传URL
+// 本地存储不支持原生分块上传，返回错误
+func (s *LocalStorage) PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
+}
+
+// CompleteMultipartUpload 完成分块上传
+// 本地存储不支持原生分块上传，返回错误
+func (s *LocalStorage) CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error) {
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
+}

@@ -32,12 +32,12 @@ type SPRequest struct {
 
 // SPResponse 存储过程响应
 type SPResponse struct {
-	Success    bool                   `json:"success"`
-	OutParams  map[string]interface{} `json:"outParams"`  // 输出参数值
-	ResultSets [][]map[string]interface{} `json:"resultSets"` // 结果集
-	RowsAffected int64                `json:"rowsAffected"`
-	Duration   time.Duration          `json:"duration"`
-	Error      string                 `json:"error"`
+	Success      bool                       `json:"success"`
+	OutParams    map[string]interface{}     `json:"outParams"`  // 输出参数值
+	ResultSets   [][]map[string]interface{} `json:"resultSets"` // 结果集
+	RowsAffected int64                      `json:"rowsAffected"`
+	Duration     time.Duration              `json:"duration"`
+	Error        string                     `json:"error"`
 }
 
 // Execute 执行存储过程

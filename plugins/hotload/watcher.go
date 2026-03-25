@@ -27,13 +27,13 @@ type ChangeHandler func(event FileChangeEvent)
 type Watcher struct {
 	watcher       *fsnotify.Watcher
 	runtimeDir    string
-	debounceTime  time.Duration              // 防抖动时间
-	changeHandler ChangeHandler              // 变化处理函数
-	debounceMap   map[string]*time.Timer     // 防抖动定时器
-	debounceMu    sync.Mutex                 // 防抖动锁
-	stopCh        chan struct{}              // 停止信号
-	running       bool                       // 是否运行中
-	runningMu     sync.RWMutex               // 运行状态锁
+	debounceTime  time.Duration          // 防抖动时间
+	changeHandler ChangeHandler          // 变化处理函数
+	debounceMap   map[string]*time.Timer // 防抖动定时器
+	debounceMu    sync.Mutex             // 防抖动锁
+	stopCh        chan struct{}          // 停止信号
+	running       bool                   // 是否运行中
+	runningMu     sync.RWMutex           // 运行状态锁
 }
 
 // NewWatcher 创建文件监听器

@@ -11,8 +11,14 @@ type MultipartUploadService interface {
 	// InitUpload 初始化上传会话
 	InitUpload(ctx context.Context, req *InitUploadRequest, userID uint) (*UploadSessionInfo, error)
 
-	// UploadChunk 上传单个分片
+	// UploadChunk 上传单个分片（后端中转模式）
 	UploadChunk(ctx context.Context, req *UploadChunkRequest, userID uint) error
+
+	// GetChunkPresignedURL 获取分片预签名上传URL（前端直传模式）
+	GetChunkPresignedURL(ctx context.Context, sessionID uint, chunkIndex int, userID uint) (*ChunkPresignedURL, error)
+
+	// MarkChunkUploaded 标记分片已上传（前端直传模式，分片上传成功后调用）
+	MarkChunkUploaded(ctx context.Context, sessionID uint, chunkIndex int, etag string, userID uint) error
 
 	// GetUploadStatus 获取上传状态
 	GetUploadStatus(ctx context.Context, sessionID uint, userID uint) (*UploadStatus, error)
@@ -73,4 +79,12 @@ type UploadStatus struct {
 	Status         string  `json:"status"`
 	Progress       float64 `json:"progress"`
 	ExpireTime     string  `json:"expireTime"`
+}
+
+// ChunkPresignedURL 分片预签名上传URL
+type ChunkPresignedURL struct {
+	SessionID     uint   `json:"sessionId"`
+	ChunkIndex    int    `json:"chunkIndex"`
+	PresignedURL  string `json:"presignedUrl"`
+	ExpireSeconds int    `json:"expireSeconds"`
 }

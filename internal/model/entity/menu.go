@@ -8,7 +8,7 @@ type MenuNode struct {
 	Icon        string      `json:"icon,omitempty"`
 	URL         string      `json:"url,omitempty"`
 	OrderNo     int         `json:"orderno"`
-	Type        string      `json:"type"`        // subsystem, category, table
+	Type        string      `json:"type"` // subsystem, category, table
 	Children    []*MenuNode `json:"children,omitempty"`
 }
 

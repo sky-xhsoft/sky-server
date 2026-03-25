@@ -20,11 +20,11 @@ type Client struct {
 
 // Manager WebSocket连接管理器
 type Manager struct {
-	clients    map[uint]*Client     // userID -> Client
-	broadcast  chan *BroadcastMsg   // 广播消息通道
-	register   chan *Client         // 注册客户端通道
-	unregister chan *Client         // 注销客户端通道
-	mu         sync.RWMutex         // 读写锁
+	clients    map[uint]*Client   // userID -> Client
+	broadcast  chan *BroadcastMsg // 广播消息通道
+	register   chan *Client       // 注册客户端通道
+	unregister chan *Client       // 注销客户端通道
+	mu         sync.RWMutex       // 读写锁
 	logger     *zap.Logger
 }
 
@@ -39,13 +39,13 @@ type MessageType string
 
 const (
 	// 消息类型常量
-	TypeNewMessage      MessageType = "NEW_MESSAGE"       // 新消息
-	TypeMessageRead     MessageType = "MESSAGE_READ"      // 消息已读
-	TypeMessageDeleted  MessageType = "MESSAGE_DELETED"   // 消息删除
-	TypeUnreadCount     MessageType = "UNREAD_COUNT"      // 未读消息数更新
-	TypeSystemNotify    MessageType = "SYSTEM_NOTIFY"     // 系统通知
-	TypeHeartbeat       MessageType = "HEARTBEAT"         // 心跳
-	TypeHeartbeatReply  MessageType = "HEARTBEAT_REPLY"   // 心跳响应
+	TypeNewMessage     MessageType = "NEW_MESSAGE"     // 新消息
+	TypeMessageRead    MessageType = "MESSAGE_READ"    // 消息已读
+	TypeMessageDeleted MessageType = "MESSAGE_DELETED" // 消息删除
+	TypeUnreadCount    MessageType = "UNREAD_COUNT"    // 未读消息数更新
+	TypeSystemNotify   MessageType = "SYSTEM_NOTIFY"   // 系统通知
+	TypeHeartbeat      MessageType = "HEARTBEAT"       // 心跳
+	TypeHeartbeatReply MessageType = "HEARTBEAT_REPLY" // 心跳响应
 )
 
 // WSMessage WebSocket消息结构

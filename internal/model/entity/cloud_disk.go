@@ -103,6 +103,7 @@ type CloudUploadSession struct {
 	Status         string     `gorm:"column:STATUS;size:20;not null;default:uploading;index" json:"status"`  // 状态：uploading,paused,completed,failed
 	StorageType    string     `gorm:"column:STORAGE_TYPE;size:20;not null;default:local" json:"storageType"` // 存储类型：local,oss
 	StoragePath    string     `gorm:"column:STORAGE_PATH;size:500" json:"storagePath"`                       // 临时存储路径
+	StorageUploadID string    `gorm:"column:STORAGE_UPLOAD_ID;size:200" json:"storageUploadId"`              // 存储端原生分块上传的UploadID（用于COS/OSS原生分块上传）
 	ExpireTime     *time.Time `gorm:"column:EXPIRE_TIME;not null;index" json:"expireTime"`                   // 过期时间
 	ErrorMessage   string     `gorm:"column:ERROR_MESSAGE;type:text" json:"errorMessage"`                    // 错误信息
 }
@@ -120,6 +121,7 @@ type CloudChunkRecord struct {
 	ChunkSize  int        `gorm:"column:CHUNK_SIZE;not null" json:"chunkSize"`                             // 分片大小（字节）
 	ChunkMD5   string     `gorm:"column:CHUNK_MD5;size:32;not null" json:"chunkMd5"`                       // 分片MD5
 	ChunkPath  string     `gorm:"column:CHUNK_PATH;size:500" json:"chunkPath"`                             // 分片存储路径
+	ETag       string     `gorm:"column:ETAG;size:100" json:"etag"`                                        // 分片ETag（云存储原生分块上传返回）
 	Uploaded   bool       `gorm:"column:UPLOADED;not null;default:false;index" json:"uploaded"`            // 是否已上传
 	UploadTime *time.Time `gorm:"column:UPLOAD_TIME;type:datetime" json:"uploadTime"`                      // 上传时间
 	RetryCount int        `gorm:"column:RETRY_COUNT;not null;default:0" json:"retryCount"`                 // 重试次数

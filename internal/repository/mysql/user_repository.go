@@ -80,3 +80,21 @@ func (r *userRepository) DeleteSessionByDeviceID(userID uint, deviceID string) e
 func (r *userRepository) DeleteAllSessions(userID uint) error {
 	return r.db.Model(&entity.SysUserSession{}).Where("USER_ID = ?", userID).Update("IS_ACTIVE", "N").Error
 }
+
+func (r *userRepository) GetCompanyByID(companyID uint) (*entity.SysCompany, error) {
+	var company entity.SysCompany
+	err := r.db.Where("ID = ? AND IS_ACTIVE = ?", companyID, "Y").First(&company).Error
+	if err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+func (r *userRepository) GetCompanyConfByCompanyID(companyID uint) (*entity.SysCompanyConf, error) {
+	var conf entity.SysCompanyConf
+	err := r.db.Where("SYS_COMPANY_ID = ? AND IS_ACTIVE = ?", companyID, "Y").First(&conf).Error
+	if err != nil {
+		return nil, err
+	}
+	return &conf, nil
+}

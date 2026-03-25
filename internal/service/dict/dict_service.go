@@ -8,8 +8,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
-	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/repository"
 )
 
 // Service 数据字典服务接口

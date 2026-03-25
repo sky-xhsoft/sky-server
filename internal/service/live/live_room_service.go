@@ -34,16 +34,16 @@ type LiveRoomService interface {
 
 // RoomFilter 直播间查询过滤器
 type RoomFilter struct {
-	CompanyID      uint
-	RoomType       string
-	Status         string
-	RoomStage      string
-	ViewingMethod  string
-	Keyword        string // 搜索关键词（直播间名称）
-	StartTimeFrom  *time.Time
-	StartTimeTo    *time.Time
-	Page           int
-	PageSize       int
+	CompanyID     uint
+	RoomType      string
+	Status        string
+	RoomStage     string
+	ViewingMethod string
+	Keyword       string // 搜索关键词（直播间名称）
+	StartTimeFrom *time.Time
+	StartTimeTo   *time.Time
+	Page          int
+	PageSize      int
 }
 
 type liveRoomService struct {

@@ -29,17 +29,17 @@ type PullStreamTaskService interface {
 
 // PullStreamTaskFilter 拉流任务查询过滤器
 type PullStreamTaskFilter struct {
-	Region     string
-	SourceType string
-	Status     string
-	Operator   string
-	Keyword    string // 搜索关键词（任务备注）
-	StartTimeFrom  *time.Time
-	StartTimeTo    *time.Time
-	EndTimeFrom    *time.Time
-	EndTimeTo      *time.Time
-	Page           int
-	PageSize       int
+	Region        string
+	SourceType    string
+	Status        string
+	Operator      string
+	Keyword       string // 搜索关键词（任务备注）
+	StartTimeFrom *time.Time
+	StartTimeTo   *time.Time
+	EndTimeFrom   *time.Time
+	EndTimeTo     *time.Time
+	Page          int
+	PageSize      int
 }
 
 type pullStreamTaskService struct {

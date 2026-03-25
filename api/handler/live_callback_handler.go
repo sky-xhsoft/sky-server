@@ -17,7 +17,7 @@ import (
 
 // LiveCallbackHandler 直播回调处理器
 type LiveCallbackHandler struct {
-	db        *gorm.DB
+	db          *gorm.DB
 	callbackKey string // 回调密钥，用于验证签名
 }
 
@@ -31,38 +31,38 @@ func NewLiveCallbackHandler(db *gorm.DB, callbackKey string) *LiveCallbackHandle
 
 // PushStreamEvent 推流事件通知
 type PushStreamEvent struct {
-	EventType  int    `json:"event_type"`  // 事件类型：1-推流
-	StreamID   string `json:"stream_id"`   // 流ID
-	ChannelID  string `json:"channel_id"`  // 频道ID
-	T          int64  `json:"t"`           // 过期时间
-	Sign       string `json:"sign"`        // 签名
-	EventTime  int64  `json:"event_time"`  // 事件时间
-	Sequence   string `json:"sequence"`    // 序列号
-	Node       string `json:"node"`        // 接入点IP
-	UserIP     string `json:"user_ip"`     // 用户IP
+	EventType   int    `json:"event_type"`   // 事件类型：1-推流
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	Sequence    string `json:"sequence"`     // 序列号
+	Node        string `json:"node"`         // 接入点IP
+	UserIP      string `json:"user_ip"`      // 用户IP
 	StreamParam string `json:"stream_param"` // 推流参数
-	PushDomain string `json:"push_domain"` // 推流域名
-	AppName    string `json:"app_name"`    // 应用名称
-	StreamName string `json:"stream_name"` // 流名称
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // DisconnectStreamEvent 断流事件通知
 type DisconnectStreamEvent struct {
-	EventType  int    `json:"event_type"`  // 事件类型：0-断流
-	StreamID   string `json:"stream_id"`   // 流ID
-	ChannelID  string `json:"channel_id"`  // 频道ID
-	T          int64  `json:"t"`           // 过期时间
-	Sign       string `json:"sign"`        // 签名
-	EventTime  int64  `json:"event_time"`  // 事件时间
-	Sequence   string `json:"sequence"`    // 序列号
-	Node       string `json:"node"`        // 接入点IP
-	UserIP     string `json:"user_ip"`     // 用户IP
+	EventType   int    `json:"event_type"`   // 事件类型：0-断流
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	Sequence    string `json:"sequence"`     // 序列号
+	Node        string `json:"node"`         // 接入点IP
+	UserIP      string `json:"user_ip"`      // 用户IP
 	StreamParam string `json:"stream_param"` // 推流参数
-	Duration   int64  `json:"duration"`    // 推流时长（秒）
-	Reason     string `json:"reason"`      // 断流原因
-	PushDomain string `json:"push_domain"` // 推流域名
-	AppName    string `json:"app_name"`    // 应用名称
-	StreamName string `json:"stream_name"` // 流名称
+	Duration    int64  `json:"duration"`     // 推流时长（秒）
+	Reason      string `json:"reason"`       // 断流原因
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // RecordingFileEvent 录制文件事件通知
@@ -88,9 +88,9 @@ type RecordingFileEvent struct {
 	AppName string `json:"appname"` // 应用名称（实际字段）
 
 	// 文档中的字段（向后兼容）
-	PushDomain     string `json:"push_domain"`  // 推流域名（文档字段，向后兼容）
-	AppNameCompat  string `json:"app_name"`     // 应用名称（文档字段，向后兼容）
-	StreamName     string `json:"stream_name"`  // 流名称（文档字段，向后兼容）
+	PushDomain    string `json:"push_domain"` // 推流域名（文档字段，向后兼容）
+	AppNameCompat string `json:"app_name"`    // 应用名称（文档字段，向后兼容）
+	StreamName    string `json:"stream_name"` // 流名称（文档字段，向后兼容）
 }
 
 // RecordingStatusEvent 录制状态事件通知
@@ -110,146 +110,146 @@ type RecordingStatusEvent struct {
 
 // ScreenshotEvent 截图事件通知
 type ScreenshotEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：200-截图
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	PicURL      string   `json:"pic_url"`      // 截图URL
-	PicFullURL  string   `json:"pic_full_url"` // 完整截图URL
-	CreateTime  int64    `json:"create_time"`  // 截图生成时间
-	StreamParam string   `json:"stream_param"` // 推流参数
-	Width       int      `json:"width"`        // 图片宽度
-	Height      int      `json:"height"`       // 图片高度
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：200-截图
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	PicURL      string `json:"pic_url"`      // 截图URL
+	PicFullURL  string `json:"pic_full_url"` // 完整截图URL
+	CreateTime  int64  `json:"create_time"`  // 截图生成时间
+	StreamParam string `json:"stream_param"` // 推流参数
+	Width       int    `json:"width"`        // 图片宽度
+	Height      int    `json:"height"`       // 图片高度
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // VideoAuditEvent 画面审核事件通知
 type VideoAuditEvent struct {
-	EventType      int      `json:"event_type"`      // 事件类型：317-画面审核
-	StreamID       string   `json:"stream_id"`       // 流ID
-	ChannelID      string   `json:"channel_id"`      // 频道ID
-	T              int64    `json:"t"`               // 过期时间
-	Sign           string   `json:"sign"`            // 签名
-	EventTime      int64    `json:"event_time"`      // 事件时间
-	Confidence     int      `json:"confidence"`      // 置信度
-	Label          string   `json:"label"`           // 审核标签
-	Suggestion     string   `json:"suggestion"`      // 建议：pass, review, block
-	ScreenshotURL  string   `json:"screenshot_url"`  // 截图URL
-	ScreenshotTime int64    `json:"screenshot_time"` // 截图时间
-	SendTime       int64    `json:"send_time"`       // 发送时间
-	StreamParam    string   `json:"stream_param"`    // 推流参数
-	PushDomain     string   `json:"push_domain"`     // 推流域名
-	AppName        string   `json:"app_name"`        // 应用名称
-	StreamName     string   `json:"stream_name"`     // 流名称
+	EventType      int    `json:"event_type"`      // 事件类型：317-画面审核
+	StreamID       string `json:"stream_id"`       // 流ID
+	ChannelID      string `json:"channel_id"`      // 频道ID
+	T              int64  `json:"t"`               // 过期时间
+	Sign           string `json:"sign"`            // 签名
+	EventTime      int64  `json:"event_time"`      // 事件时间
+	Confidence     int    `json:"confidence"`      // 置信度
+	Label          string `json:"label"`           // 审核标签
+	Suggestion     string `json:"suggestion"`      // 建议：pass, review, block
+	ScreenshotURL  string `json:"screenshot_url"`  // 截图URL
+	ScreenshotTime int64  `json:"screenshot_time"` // 截图时间
+	SendTime       int64  `json:"send_time"`       // 发送时间
+	StreamParam    string `json:"stream_param"`    // 推流参数
+	PushDomain     string `json:"push_domain"`     // 推流域名
+	AppName        string `json:"app_name"`        // 应用名称
+	StreamName     string `json:"stream_name"`     // 流名称
 }
 
 // AudioAuditEvent 音频审核事件通知
 type AudioAuditEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：318-音频审核
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	Confidence  int      `json:"confidence"`   // 置信度
-	Label       string   `json:"label"`        // 审核标签
-	Suggestion  string   `json:"suggestion"`   // 建议：pass, review, block
-	AudioText   string   `json:"audio_text"`   // 音频转文字内容
-	AudioTime   int64    `json:"audio_time"`   // 音频时间
-	SendTime    int64    `json:"send_time"`    // 发送时间
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：318-音频审核
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	Confidence  int    `json:"confidence"`   // 置信度
+	Label       string `json:"label"`        // 审核标签
+	Suggestion  string `json:"suggestion"`   // 建议：pass, review, block
+	AudioText   string `json:"audio_text"`   // 音频转文字内容
+	AudioTime   int64  `json:"audio_time"`   // 音频时间
+	SendTime    int64  `json:"send_time"`    // 发送时间
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // QualityInspectionEvent 质检事件通知
 type QualityInspectionEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：319-质检
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	DiagnoseType string  `json:"diagnose_type"` // 诊断类型
-	Level       string   `json:"level"`        // 级别：warning, error
-	Description string   `json:"description"`  // 描述
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType    int    `json:"event_type"`    // 事件类型：319-质检
+	StreamID     string `json:"stream_id"`     // 流ID
+	ChannelID    string `json:"channel_id"`    // 频道ID
+	T            int64  `json:"t"`             // 过期时间
+	Sign         string `json:"sign"`          // 签名
+	EventTime    int64  `json:"event_time"`    // 事件时间
+	DiagnoseType string `json:"diagnose_type"` // 诊断类型
+	Level        string `json:"level"`         // 级别：warning, error
+	Description  string `json:"description"`   // 描述
+	StreamParam  string `json:"stream_param"`  // 推流参数
+	PushDomain   string `json:"push_domain"`   // 推流域名
+	AppName      string `json:"app_name"`      // 应用名称
+	StreamName   string `json:"stream_name"`   // 流名称
 }
 
 // QualityThresholdEvent 评测阈值事件通知
 type QualityThresholdEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：320-评测阈值
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	MetricType  string   `json:"metric_type"`  // 指标类型
-	Threshold   float64  `json:"threshold"`    // 阈值
+	EventType    int     `json:"event_type"`    // 事件类型：320-评测阈值
+	StreamID     string  `json:"stream_id"`     // 流ID
+	ChannelID    string  `json:"channel_id"`    // 频道ID
+	T            int64   `json:"t"`             // 过期时间
+	Sign         string  `json:"sign"`          // 签名
+	EventTime    int64   `json:"event_time"`    // 事件时间
+	MetricType   string  `json:"metric_type"`   // 指标类型
+	Threshold    float64 `json:"threshold"`     // 阈值
 	CurrentValue float64 `json:"current_value"` // 当前值
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	StreamParam  string  `json:"stream_param"`  // 推流参数
+	PushDomain   string  `json:"push_domain"`   // 推流域名
+	AppName      string  `json:"app_name"`      // 应用名称
+	StreamName   string  `json:"stream_name"`   // 流名称
 }
 
 // QualityAverageEvent 评测平均分事件通知
 type QualityAverageEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：321-评测平均分
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	Score       float64  `json:"score"`        // 平均分
-	Duration    int64    `json:"duration"`     // 统计时长（秒）
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int     `json:"event_type"`   // 事件类型：321-评测平均分
+	StreamID    string  `json:"stream_id"`    // 流ID
+	ChannelID   string  `json:"channel_id"`   // 频道ID
+	T           int64   `json:"t"`            // 过期时间
+	Sign        string  `json:"sign"`         // 签名
+	EventTime   int64   `json:"event_time"`   // 事件时间
+	Score       float64 `json:"score"`        // 平均分
+	Duration    int64   `json:"duration"`     // 统计时长（秒）
+	StreamParam string  `json:"stream_param"` // 推流参数
+	PushDomain  string  `json:"push_domain"`  // 推流域名
+	AppName     string  `json:"app_name"`     // 应用名称
+	StreamName  string  `json:"stream_name"`  // 流名称
 }
 
 // SmartEraseEvent 智能擦除事件通知
 type SmartEraseEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：322-智能擦除
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	TaskID      string   `json:"task_id"`      // 任务ID
-	Status      string   `json:"status"`       // 状态：success, failed
-	OutputURL   string   `json:"output_url"`   // 输出URL
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：322-智能擦除
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	TaskID      string `json:"task_id"`      // 任务ID
+	Status      string `json:"status"`       // 状态：success, failed
+	OutputURL   string `json:"output_url"`   // 输出URL
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // SubtitleEvent 直播字幕事件通知
 type SubtitleEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：323-直播字幕
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	Text        string   `json:"text"`         // 字幕文本
-	Language    string   `json:"language"`     // 语言
-	StartTime   int64    `json:"start_time"`   // 开始时间
-	EndTime     int64    `json:"end_time"`     // 结束时间
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：323-直播字幕
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	Text        string `json:"text"`         // 字幕文本
+	Language    string `json:"language"`     // 语言
+	StartTime   int64  `json:"start_time"`   // 开始时间
+	EndTime     int64  `json:"end_time"`     // 结束时间
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // SummaryEvent 直播摘要事件通知
@@ -283,80 +283,80 @@ type HighlightEvent struct {
 
 // HighlightItem 单个高光切片信息
 type HighlightItem struct {
-	BeginTime       int64    `json:"begin_time"`         // 开始时间（Unix时间戳）
-	EndTime         int64    `json:"end_time"`           // 结束时间（Unix时间戳）
-	CovImgStoreURL  string   `json:"cov_img_store_url"`  // 封面图片存储URL
-	VideoStoreURL   string   `json:"video_store_url"`    // 视频存储URL
-	Title           string   `json:"title"`              // 标题
-	Summary         string   `json:"summary"`            // 摘要
-	KeyWords        []string `json:"key_words"`          // 关键词列表
+	BeginTime      int64    `json:"begin_time"`        // 开始时间（Unix时间戳）
+	EndTime        int64    `json:"end_time"`          // 结束时间（Unix时间戳）
+	CovImgStoreURL string   `json:"cov_img_store_url"` // 封面图片存储URL
+	VideoStoreURL  string   `json:"video_store_url"`   // 视频存储URL
+	Title          string   `json:"title"`             // 标题
+	Summary        string   `json:"summary"`           // 摘要
+	KeyWords       []string `json:"key_words"`         // 关键词列表
 }
 
 // PushExceptionEvent 推流异常事件通知
 type PushExceptionEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：326-推流异常
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	ErrorCode   int      `json:"error_code"`   // 错误码
-	ErrorMsg    string   `json:"error_msg"`    // 错误信息
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：326-推流异常
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	ErrorCode   int    `json:"error_code"`   // 错误码
+	ErrorMsg    string `json:"error_msg"`    // 错误信息
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // RecordExceptionEvent 录制异常事件通知
 type RecordExceptionEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：327-录制异常
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	ErrorCode   int      `json:"error_code"`   // 错误码
-	ErrorMsg    string   `json:"error_msg"`    // 错误信息
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：327-录制异常
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	ErrorCode   int    `json:"error_code"`   // 错误码
+	ErrorMsg    string `json:"error_msg"`    // 错误信息
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // PullStreamEvent 拉流转推事件通知
 type PullStreamEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：328-拉流转推
-	TaskID      string   `json:"task_id"`      // 任务ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	Status      string   `json:"status"`       // 状态：start, stop, error
-	SourceURL   string   `json:"source_url"`   // 源URL
-	TargetURL   string   `json:"target_url"`   // 目标URL
-	ErrorCode   int      `json:"error_code"`   // 错误码
-	ErrorMsg    string   `json:"error_msg"`    // 错误信息
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：328-拉流转推
+	TaskID      string `json:"task_id"`      // 任务ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	Status      string `json:"status"`       // 状态：start, stop, error
+	SourceURL   string `json:"source_url"`   // 源URL
+	TargetURL   string `json:"target_url"`   // 目标URL
+	ErrorCode   int    `json:"error_code"`   // 错误码
+	ErrorMsg    string `json:"error_msg"`    // 错误信息
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // MonitorEvent 监播事件通知
 type MonitorEvent struct {
-	EventType   int      `json:"event_type"`   // 事件类型：329-监播
-	StreamID    string   `json:"stream_id"`    // 流ID
-	ChannelID   string   `json:"channel_id"`   // 频道ID
-	T           int64    `json:"t"`            // 过期时间
-	Sign        string   `json:"sign"`         // 签名
-	EventTime   int64    `json:"event_time"`   // 事件时间
-	AlertType   string   `json:"alert_type"`   // 告警类型
-	AlertLevel  string   `json:"alert_level"`  // 告警级别：info, warning, error
-	Description string   `json:"description"`  // 描述
-	StreamParam string   `json:"stream_param"` // 推流参数
-	PushDomain  string   `json:"push_domain"`  // 推流域名
-	AppName     string   `json:"app_name"`     // 应用名称
-	StreamName  string   `json:"stream_name"`  // 流名称
+	EventType   int    `json:"event_type"`   // 事件类型：329-监播
+	StreamID    string `json:"stream_id"`    // 流ID
+	ChannelID   string `json:"channel_id"`   // 频道ID
+	T           int64  `json:"t"`            // 过期时间
+	Sign        string `json:"sign"`         // 签名
+	EventTime   int64  `json:"event_time"`   // 事件时间
+	AlertType   string `json:"alert_type"`   // 告警类型
+	AlertLevel  string `json:"alert_level"`  // 告警级别：info, warning, error
+	Description string `json:"description"`  // 描述
+	StreamParam string `json:"stream_param"` // 推流参数
+	PushDomain  string `json:"push_domain"`  // 推流域名
+	AppName     string `json:"app_name"`     // 应用名称
+	StreamName  string `json:"stream_name"`  // 流名称
 }
 
 // verifySign 验证回调签名
@@ -619,9 +619,9 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 	callbackEvent := &entity.LiveCallbackEvent{
 		EventType:    "recording_file",
 		EventTime:    eventTime,
-		DomainName:   getDomainName(event),  // 优先使用 app 字段
-		AppName:      getAppName(event),     // 优先使用 appname 字段
-		StreamName:   getStreamName(event),  // 优先使用 stream_id 作为流名称
+		DomainName:   getDomainName(event), // 优先使用 app 字段
+		AppName:      getAppName(event),    // 优先使用 appname 字段
+		StreamName:   getStreamName(event), // 优先使用 stream_id 作为流名称
 		StreamID:     event.StreamID,
 		EventData:    string(eventData),
 		Sign:         event.Sign,
@@ -1244,7 +1244,6 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 
 	c.JSON(200, gin.H{"code": 0})
 }
-
 
 // getDomainName 获取推流域名（优先使用实际字段 app，回退到文档字段 push_domain）
 func getDomainName(event RecordingFileEvent) string {

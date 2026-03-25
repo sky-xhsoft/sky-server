@@ -27,7 +27,7 @@ func main() {
 	if err != nil {
 		// 如果字段已存在，忽略错误
 		if err.Error() == "Error 1060 (42S21): Duplicate column name 'ORDERNO'" ||
-		   contains(err.Error(), "Duplicate column name") {
+			contains(err.Error(), "Duplicate column name") {
 			fmt.Println("ORDERNO 字段已存在，跳过...")
 		} else {
 			log.Fatal("Failed to add ORDERNO column:", err)

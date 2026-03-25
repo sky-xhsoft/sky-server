@@ -30,6 +30,23 @@ type Storage interface {
 
 	// GetObjectInfo 获取对象信息
 	GetObjectInfo(ctx context.Context, path string) (*ObjectInfo, error)
+
+	// PresignedUploadURL 获取预签名上传URL（用于前端直传）
+	// expireSeconds: 过期时间（秒）
+	PresignedUploadURL(ctx context.Context, path string, expireSeconds int, contentType string) (string, error)
+
+	// ---------- 原生分块上传接口（用于大文件直传合并优化）----------
+
+	// InitiateMultipartUpload 初始化分块上传
+	// 返回 uploadID
+	InitiateMultipartUpload(ctx context.Context, path string) (string, error)
+
+	// PresignedChunkUploadURL 获取分块预签名上传URL
+	PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error)
+
+	// CompleteMultipartUpload 完成分块上传，让服务端合并所有分块
+	// partETags: 每个分块的 ETag
+	CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error)
 }
 
 // Object 存储对象

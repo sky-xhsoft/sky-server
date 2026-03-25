@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 )
 
 // DirectoryPermissionRequired 安全目录权限检查中间件

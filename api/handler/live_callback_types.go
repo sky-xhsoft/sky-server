@@ -12,9 +12,9 @@ const (
 	EventTypeRecordException = "record_exception" // 录制异常
 
 	// 截图和审核
-	EventTypeScreenshot = "screenshot"   // 截图
-	EventTypeVideoAudit = "video_audit"  // 画面审核
-	EventTypeAudioAudit = "audio_audit"  // 音频审核
+	EventTypeScreenshot = "screenshot"  // 截图
+	EventTypeVideoAudit = "video_audit" // 画面审核
+	EventTypeAudioAudit = "audio_audit" // 音频审核
 
 	// 质检和评测
 	EventTypeQualityInspection = "quality_inspection" // 质检
@@ -35,12 +35,12 @@ const (
 
 // 事件类型映射表（腾讯云event_type -> 内部事件类型）
 var EventTypeMapping = map[int]string{
-	0:   EventTypeDisconnectStream, // 断流
-	1:   EventTypePushStream,       // 推流
-	100: EventTypeRecordingFile,    // 录制文件
-	200: EventTypeRecordingStatus,  // 录制状态（也可能是截图，需要根据具体字段判断）
-	317: EventTypeVideoAudit,       // 画面审核
-	318: EventTypeAudioAudit,       // 音频审核
+	0:   EventTypeDisconnectStream,  // 断流
+	1:   EventTypePushStream,        // 推流
+	100: EventTypeRecordingFile,     // 录制文件
+	200: EventTypeRecordingStatus,   // 录制状态（也可能是截图，需要根据具体字段判断）
+	317: EventTypeVideoAudit,        // 画面审核
+	318: EventTypeAudioAudit,        // 音频审核
 	319: EventTypeQualityInspection, // 质检
 	320: EventTypeQualityThreshold,  // 评测阈值
 	321: EventTypeQualityAverage,    // 评测平均分

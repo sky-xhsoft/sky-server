@@ -9,8 +9,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
-	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/repository"
 )
 
 // Service 元数据服务接口
@@ -45,12 +45,12 @@ type Service interface {
 
 // service 元数据服务实现
 type service struct {
-	repo         repository.MetadataRepository
-	userRepo     repository.UserRepository
-	redisClient  *redis.Client
-	cacheTTL     time.Duration
-	metaVersion  string
-	ctx          context.Context
+	repo        repository.MetadataRepository
+	userRepo    repository.UserRepository
+	redisClient *redis.Client
+	cacheTTL    time.Duration
+	metaVersion string
+	ctx         context.Context
 }
 
 // NewService 创建元数据服务

@@ -12,12 +12,12 @@ import (
 
 // TurnPushInfo 拉流转推任务流信息
 type TurnPushInfo struct {
-	VideoFps  int64  `json:"videoFps,omitempty"`
-	AudioFps  int64  `json:"audioFps,omitempty"`
-	VideoRate int64  `json:"videoRate,omitempty"`
-	AudioRate int64  `json:"audioRate,omitempty"`
+	VideoFps   int64  `json:"videoFps,omitempty"`
+	AudioFps   int64  `json:"audioFps,omitempty"`
+	VideoRate  int64  `json:"videoRate,omitempty"`
+	AudioRate  int64  `json:"audioRate,omitempty"`
 	StreamFlag string `json:"streamFlag,omitempty"`
-	Time      string `json:"time,omitempty"`
+	Time       string `json:"time,omitempty"`
 }
 
 // DescribePullTransformPushInfoListRequest 查询拉流转推任务流数据请求
@@ -30,7 +30,7 @@ type DescribePullTransformPushInfoListRequest struct {
 // DescribePullTransformPushInfoListResponse 查询拉流转推任务流数据响应
 type DescribePullTransformPushInfoListResponse struct {
 	DataInfoList []*TurnPushInfo `json:"dataInfoList"`
-	RequestId    string         `json:"requestId,omitempty"`
+	RequestId    string          `json:"requestId,omitempty"`
 }
 
 // RegionClientProvider 地域客户端提供者接口
@@ -197,20 +197,20 @@ type PullStreamTaskInfo struct {
 
 // DescribePullStreamTasksRequest 查询拉流任务列表请求
 type DescribePullStreamTasksRequest struct {
-	TaskID     *string // 任务ID（可选）
-	PageNum    *uint64 // 取得第几页，默认值：1
-	PageSize   *uint64 // 分页大小，默认值：10，取值范围：1~20
+	TaskID        *string // 任务ID（可选）
+	PageNum       *uint64 // 取得第几页，默认值：1
+	PageSize      *uint64 // 分页大小，默认值：10，取值范围：1~20
 	SpecifyTaskId *string // 使用指定任务 ID 查询任务信息（可选）
 }
 
 // DescribePullStreamTasksResponse 查询拉流任务列表响应
 type DescribePullStreamTasksResponse struct {
-	TaskInfos     []*PullStreamTaskInfo // 任务信息列表
-	PageNum       uint64                // 取得第几页
-	PageSize      uint64                // 分页大小
-	TotalNum      uint64                // 符合条件的总个数
-	TotalPage     uint64                // 总页数
-	LimitTaskNum  uint64                // 限制可创建的最大任务数
+	TaskInfos    []*PullStreamTaskInfo // 任务信息列表
+	PageNum      uint64                // 取得第几页
+	PageSize     uint64                // 分页大小
+	TotalNum     uint64                // 符合条件的总个数
+	TotalPage    uint64                // 总页数
+	LimitTaskNum uint64                // 限制可创建的最大任务数
 }
 
 // DescribePullStreamTasks 查询拉流任务列表
@@ -376,12 +376,12 @@ func (m *PullStreamManager) DescribePullTransformPushInfoList(ctx context.Contex
 		dataInfoList = make([]*TurnPushInfo, 0, len(response.Response.DataInfoList))
 		for _, item := range response.Response.DataInfoList {
 			dataInfoList = append(dataInfoList, &TurnPushInfo{
-				VideoFps:  *item.VideoFps,
-				AudioFps:  *item.AudioFps,
-				VideoRate: *item.VideoRate,
-				AudioRate: *item.AudioRate,
+				VideoFps:   *item.VideoFps,
+				AudioFps:   *item.AudioFps,
+				VideoRate:  *item.VideoRate,
+				AudioRate:  *item.AudioRate,
 				StreamFlag: *item.StreamFlag,
-				Time:      *item.Time,
+				Time:       *item.Time,
 			})
 		}
 	}

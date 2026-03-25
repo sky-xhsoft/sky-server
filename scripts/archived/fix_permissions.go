@@ -11,16 +11,16 @@ import (
 )
 
 type Directory struct {
-	ID          uint
-	Name        string
-	Code        string
-	SysTableID  uint
-	ParentID    *uint
-	IsActive    string
-	CreateBy    string
-	CreateTime  time.Time
-	UpdateBy    string
-	UpdateTime  time.Time
+	ID           uint
+	Name         string
+	Code         string
+	SysTableID   uint
+	ParentID     *uint
+	IsActive     string
+	CreateBy     string
+	CreateTime   time.Time
+	UpdateBy     string
+	UpdateTime   time.Time
 	SysCompanyID uint
 }
 

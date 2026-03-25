@@ -221,10 +221,10 @@ func (m *HotloadManager) loadPlugin(pluginPath string) error {
 	// 注意：HookPoint 和 Priority 由插件在 Register() 中指定
 	// 这里我们只需要加载，不需要知道钩子点
 	loadResult := m.loader.Load(
-		pluginPath,    // 插件名称
+		pluginPath, // 插件名称
 		result.OutputPath,
-		"",  // hookPoint 由插件自己注册时指定
-		0)   // priority 由插件自己注册时指定
+		"", // hookPoint 由插件自己注册时指定
+		0)  // priority 由插件自己注册时指定
 
 	if !loadResult.Success {
 		return loadResult.Error

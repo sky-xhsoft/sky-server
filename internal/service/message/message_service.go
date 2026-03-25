@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
-	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"gorm.io/gorm"
 )
 
@@ -83,9 +83,9 @@ type ListMessagesRequest struct {
 	Page        int    `json:"page"`
 	PageSize    int    `json:"pageSize"`
 	MessageType string `json:"messageType"`
-	IsRead      string `json:"isRead"`      // Y/N/all
-	IsStarred   string `json:"isStarred"`   // Y/N/all
-	IsArchived  string `json:"isArchived"`  // Y/N/all
+	IsRead      string `json:"isRead"`     // Y/N/all
+	IsStarred   string `json:"isStarred"`  // Y/N/all
+	IsArchived  string `json:"isArchived"` // Y/N/all
 	Priority    *int   `json:"priority"`
 	Category    string `json:"category"`
 	Keyword     string `json:"keyword"`

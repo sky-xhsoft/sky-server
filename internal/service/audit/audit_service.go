@@ -39,19 +39,19 @@ type Service interface {
 
 // QueryRequest 查询请求
 type QueryRequest struct {
-	UserID       uint      `json:"userId"`       // 用户ID
-	Username     string    `json:"username"`     // 用户名
-	Action       string    `json:"action"`       // 操作类型
-	Resource     string    `json:"resource"`     // 资源类型
-	ResourceID   string    `json:"resourceId"`   // 资源ID
-	Status       string    `json:"status"`       // 状态
-	IP           string    `json:"ip"`           // IP地址
-	StartTime    time.Time `json:"startTime"`    // 开始时间
-	EndTime      time.Time `json:"endTime"`      // 结束时间
-	Page         int       `json:"page"`         // 页码
-	PageSize     int       `json:"pageSize"`     // 每页大小
-	SortBy       string    `json:"sortBy"`       // 排序字段
-	SortOrder    string    `json:"sortOrder"`    // 排序方向
+	UserID     uint      `json:"userId"`     // 用户ID
+	Username   string    `json:"username"`   // 用户名
+	Action     string    `json:"action"`     // 操作类型
+	Resource   string    `json:"resource"`   // 资源类型
+	ResourceID string    `json:"resourceId"` // 资源ID
+	Status     string    `json:"status"`     // 状态
+	IP         string    `json:"ip"`         // IP地址
+	StartTime  time.Time `json:"startTime"`  // 开始时间
+	EndTime    time.Time `json:"endTime"`    // 结束时间
+	Page       int       `json:"page"`       // 页码
+	PageSize   int       `json:"pageSize"`   // 每页大小
+	SortBy     string    `json:"sortBy"`     // 排序字段
+	SortOrder  string    `json:"sortOrder"`  // 排序方向
 }
 
 // StatisticsRequest 统计请求
@@ -63,15 +63,15 @@ type StatisticsRequest struct {
 
 // Statistics 统计结果
 type Statistics struct {
-	TotalCount    int64                    `json:"totalCount"`    // 总数
-	SuccessCount  int64                    `json:"successCount"`  // 成功数
-	FailureCount  int64                    `json:"failureCount"`  // 失败数
-	ByAction      map[string]int64         `json:"byAction"`      // 按操作类型统计
-	ByResource    map[string]int64         `json:"byResource"`    // 按资源类型统计
-	ByUser        map[string]int64         `json:"byUser"`        // 按用户统计
-	ByDate        map[string]int64         `json:"byDate"`        // 按日期统计
-	TopUsers      []UserStat               `json:"topUsers"`      // 活跃用户TOP10
-	TopActions    []ActionStat             `json:"topActions"`    // 热门操作TOP10
+	TotalCount   int64            `json:"totalCount"`   // 总数
+	SuccessCount int64            `json:"successCount"` // 成功数
+	FailureCount int64            `json:"failureCount"` // 失败数
+	ByAction     map[string]int64 `json:"byAction"`     // 按操作类型统计
+	ByResource   map[string]int64 `json:"byResource"`   // 按资源类型统计
+	ByUser       map[string]int64 `json:"byUser"`       // 按用户统计
+	ByDate       map[string]int64 `json:"byDate"`       // 按日期统计
+	TopUsers     []UserStat       `json:"topUsers"`     // 活跃用户TOP10
+	TopActions   []ActionStat     `json:"topActions"`   // 热门操作TOP10
 }
 
 // UserStat 用户统计

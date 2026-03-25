@@ -43,7 +43,7 @@ func Register() {
 			Version:     "1.0.0",
 			Author:      "Your Name",
 			Enabled:     true,
-			Priority:    50, // 优先级（数字越小越先执行）
+			Priority:    50,                      // 优先级（数字越小越先执行）
 			HookPoint:   "sys_user.after.create", // 钩子点（必须与数据库配置一致）
 		},
 	)

@@ -725,13 +725,13 @@ func initDirectoriesFromTables(ctx context.Context, db *gorm.DB) error {
 		err = db.Transaction(func(tx *gorm.DB) error {
 			// 创建 sys_directory 记录
 			directoryData := map[string]interface{}{
-				"NAME":         table.Name,
-				"DISPLAY_NAME": table.DisplayName,
-				"URL":          table.URL,
-				"SYS_TABLE_ID": table.ID,
-				"IS_ACTIVE":    "Y",
-				"CREATE_BY":    "system",
-				"CREATE_TIME":  time.Now(),
+				"NAME":           table.Name,
+				"DISPLAY_NAME":   table.DisplayName,
+				"URL":            table.URL,
+				"SYS_TABLE_ID":   table.ID,
+				"IS_ACTIVE":      "Y",
+				"CREATE_BY":      "system",
+				"CREATE_TIME":    time.Now(),
 				"SYS_COMPANY_ID": 1,
 			}
 

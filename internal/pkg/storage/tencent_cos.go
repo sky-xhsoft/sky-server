@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -53,8 +54,9 @@ func NewTencentCOS(cfg *TencentCOSConfig) (Storage, error) {
 		return nil, fmt.Errorf("Region不能为空")
 	}
 
-	// 增加超时时间以支持更大分片上传（50MB分片）
-	timeout := 5 * time.Minute // 5分钟超时，足够支持大文件上传
+	// 增加超时时间以支持大文件上传
+	// 对于7GB+文件，需要更长超时时间，按10MB/s估算需要12分钟，留15分钟余量
+	timeout := 15 * time.Minute // 15分钟超时，足够支持10GB+大文件上传
 
 	return &TencentCOS{
 		bucketURL:  cfg.BucketURL,
@@ -432,6 +434,36 @@ func (s *TencentCOS) GetObjectInfo(ctx context.Context, path string) (*ObjectInf
 	}, nil
 }
 
+// PresignedUploadURL 获取预签名上传URL（用于前端直传）
+func (s *TencentCOS) PresignedUploadURL(ctx context.Context, path string, expireSeconds int, contentType string) (string, error) {
+	// 构建请求URL
+	uploadURL := fmt.Sprintf("%s/%s", s.bucketURL, path)
+
+	// 创建请求
+	req, err := http.NewRequestWithContext(ctx, "PUT", uploadURL, nil)
+	if err != nil {
+		logger.Error("Failed to create presigned upload request",
+			zap.String("path", path),
+			zap.Int("expireSeconds", expireSeconds),
+			zap.Error(err),
+		)
+		return "", errors.Wrap(errors.ErrInternal, "创建预签名请求失败", err)
+	}
+
+	// 设置Content-Type
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	// 使用COS SDK生成预签名URL
+	expire := time.Duration(expireSeconds) * time.Second
+	authTime := cos.NewAuthTime(expire)
+	cos.AddAuthorizationHeader(s.secretID, s.secretKey, "", req, authTime)
+
+	// 返回带签名的URL
+	return req.URL.String(), nil
+}
+
 // signRequest 签名请求
 func (s *TencentCOS) signRequest(req *http.Request) {
 	// 使用腾讯云COS官方SDK提供的签名方法
@@ -441,4 +473,113 @@ func (s *TencentCOS) signRequest(req *http.Request) {
 	// 添加授权头
 	authTime := cos.NewAuthTime(5 * time.Minute)
 	cos.AddAuthorizationHeader(s.secretID, s.secretKey, "", req, authTime)
+}
+
+// InitiateMultipartUpload 初始化分块上传
+// 返回 uploadID
+func (s *TencentCOS) InitiateMultipartUpload(ctx context.Context, path string) (string, error) {
+	// 解析 bucket URL
+	bucketURL, err := url.Parse(s.bucketURL)
+	if err != nil {
+		logger.Error("Failed to parse bucket URL", zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
+	}
+
+	// 创建 cos baseURL
+	base := &cos.BaseURL{
+		BucketURL: bucketURL,
+	}
+
+	// 创建 cos client
+	client := cos.NewClient(base, s.httpClient)
+
+	// 初始化分块上传
+	result, _, err := client.Object.InitiateMultipartUpload(ctx, path, nil)
+	if err != nil {
+		logger.Error("Failed to initiate multipart upload",
+			zap.String("path", path),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "初始化分块上传失败", err)
+	}
+
+	return result.UploadID, nil
+}
+
+// PresignedChunkUploadURL 获取分块预签名上传URL
+func (s *TencentCOS) PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error) {
+	// chunkNumber 从 1 开始，COS要求分片编号从1开始
+	// 我们这里前端从0开始，需要加1
+	cosChunkNumber := chunkNumber + 1
+
+	// 构建请求URL
+	chunkURL := fmt.Sprintf("%s/%s?uploadId=%s&partNumber=%d", s.bucketURL, path, uploadID, cosChunkNumber)
+
+	// 创建请求
+	req, err := http.NewRequestWithContext(ctx, "PUT", chunkURL, nil)
+	if err != nil {
+		logger.Error("Failed to create presigned chunk upload request",
+			zap.String("path", path),
+			zap.String("uploadID", uploadID),
+			zap.Int("chunkNumber", chunkNumber),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "创建分块预签名请求失败", err)
+	}
+
+	// 设置Content-Type
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	// 使用COS SDK生成预签名URL
+	expire := time.Duration(expireSeconds) * time.Second
+	authTime := cos.NewAuthTime(expire)
+	cos.AddAuthorizationHeader(s.secretID, s.secretKey, "", req, authTime)
+
+	// 返回带签名的URL
+	return req.URL.String(), nil
+}
+
+// CompleteMultipartUpload 完成分块上传，让服务端合并所有分块
+func (s *TencentCOS) CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error) {
+	// 解析 bucket URL
+	bucketURL, err := url.Parse(s.bucketURL)
+	if err != nil {
+		logger.Error("Failed to parse bucket URL", zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
+	}
+
+	// 创建 cos baseURL
+	base := &cos.BaseURL{
+		BucketURL: bucketURL,
+	}
+
+	// 创建 cos client
+	client := cos.NewClient(base, s.httpClient)
+
+	// 构造 parts
+	var parts []cos.Object
+	for i, etag := range partETags {
+		parts = append(parts, cos.Object{
+			PartNumber: i + 1, // COS 分片编号从 1 开始
+			ETag:       etag,
+		})
+	}
+
+	// 构造 options
+	opt := &cos.CompleteMultipartUploadOptions{
+		Parts: parts,
+	}
+
+	// 完成分块上传
+	result, _, err := client.Object.CompleteMultipartUpload(ctx, path, uploadID, opt)
+	if err != nil {
+		logger.Error("Failed to complete multipart upload",
+			zap.String("path", path),
+			zap.String("uploadID", uploadID),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "完成分块上传失败", err)
+	}
+
+	// 返回最终文件的ETag
+	return result.ETag, nil
 }
