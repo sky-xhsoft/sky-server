@@ -275,11 +275,15 @@ func main() {
 
 	// 10. 启动定时清理任务
 	go func() {
-		ticker := time.NewTicker(time.Duration(cfg.MultipartUpload.CleanupInterval) * time.Second)
+		interval := cfg.MultipartUpload.CleanupInterval
+		if interval <= 0 {
+			interval = 3600 // default 1 hour
+		}
+		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
 
 		logger.Info("分片上传清理任务已启动",
-			zap.Int("intervalSeconds", cfg.MultipartUpload.CleanupInterval))
+			zap.Int("intervalSeconds", interval))
 
 		for range ticker.C {
 			ctx := context.Background()
