@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/validator"
 )
 
 // Response 统一响应结构
@@ -71,6 +72,14 @@ func Error(c *gin.Context, httpStatus int, err error) {
 	if appErr, ok := err.(*errors.AppError); ok {
 		resp.Code = appErr.Code
 		resp.Message = appErr.Message
+	}
+
+	// 如果是验证错误，格式化错误响应
+	if valErr, ok := err.(*validator.ValidationError); ok {
+		resp.Code = 400
+		resp.Message = "参数验证失败"
+		resp.Error = valErr.Errors
+		httpStatus = 400
 	}
 
 	c.JSON(httpStatus, resp)
