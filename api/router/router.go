@@ -59,6 +59,8 @@ type Repositories struct {
 func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, repos *Repositories, logger *zap.Logger, db *gorm.DB) {
 	// 全局中间件
 	engine.Use(middleware.Logger())
+	engine.Use(middleware.RequestTiming())
+	engine.Use(middleware.Metrics())
 	engine.Use(middleware.PanicRecovery())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS(cfg.CORS))
@@ -68,12 +70,11 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	engine.Use(middleware.DomainTenant(db))
 
 	// 健康检查
-	engine.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":    "UP",
-			"timestamp": "2026-01-11T00:00:00Z",
-		})
-	})
+	engine.GET("/health", middleware.HealthCheck())
+
+	// 指标接口
+	engine.GET("/metrics", middleware.MetricsStats())
+	engine.POST("/metrics/reset", middleware.ResetMetrics)
 
 	// Swagger文档
 	if cfg.Swagger.Enabled {
