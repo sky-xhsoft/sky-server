@@ -59,8 +59,11 @@ type Repositories struct {
 func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, repos *Repositories, logger *zap.Logger, db *gorm.DB) {
 	// 全局中间件
 	engine.Use(middleware.Logger())
+	engine.Use(middleware.PanicRecovery())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS(cfg.CORS))
+	// 统一错误处理中间件
+	engine.Use(middleware.ErrorHandler())
 	// 域名多租户识别中间件（根据请求域名自动识别公司）
 	engine.Use(middleware.DomainTenant(db))
 
