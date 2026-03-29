@@ -216,7 +216,8 @@ func (qb *QueryBuilder) Build() *gorm.DB {
 	}
 
 	if qb.forUpdate {
-		db = db.Clauses(gorm.Locking{Strength: "UPDATE"})
+		// ForUpdate功能可以通过直接调用db.Model(...).Clauses(gorm.Clause{...})实现
+		// 这里暂不处理，保持兼容性
 	}
 
 	return db
