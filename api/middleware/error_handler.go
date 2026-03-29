@@ -22,8 +22,8 @@ func ErrorHandler() gin.HandlerFunc {
 		err := c.Errors.Last().Err
 
 		// 根据错误类型返回不同的响应
-		var appErr *errors.AppError
-		if errors.As(err, &appErr) {
+		appErr, isAppErr := err.(*errors.AppError)
+		if isAppErr {
 			// 业务错误
 			logger.Warn("Business error",
 				zap.Int("code", appErr.Code),
@@ -55,20 +55,18 @@ func ErrorHandler() gin.HandlerFunc {
 // getHTTPStatus 根据错误码获取HTTP状态码
 func getHTTPStatus(errCode int) int {
 	switch errCode {
-	case errors.ErrValidation.Code:
+	case errors.ErrValidation:
 		return http.StatusBadRequest
-	case errors.ErrInvalidParameter.Code:
+	case errors.ErrInvalidParam, errors.ErrMissingParam, errors.ErrInvalidParamType:
 		return http.StatusBadRequest
-	case errors.ErrResourceNotFound.Code:
+	case errors.ErrResourceNotFound:
 		return http.StatusNotFound
-	case errors.ErrUnauthorized.Code:
+	case errors.ErrUnauthorized:
 		return http.StatusUnauthorized
-	case errors.ErrForbidden.Code:
+	case errors.ErrForbidden:
 		return http.StatusForbidden
-	case errors.ErrConflict.Code:
+	case errors.ErrResourceConflict:
 		return http.StatusConflict
-	case errors.ErrTooManyRequests.Code:
-		return http.StatusTooManyRequests
 	default:
 		return http.StatusInternalServerError
 	}

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sky-xhsoft/sky-server/internal/pkg/cache"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -24,14 +23,14 @@ type CacheableRepository interface {
 // CacheRepository 缓存装饰器
 type CacheRepository struct {
 	repository CacheableRepository
-	cache      cache.Cache
+	cache      Cache
 	ttl        time.Duration
 }
 
 // NewCacheRepository 创建缓存装饰器
 func NewCacheRepository(
 	repository CacheableRepository,
-	cache cache.Cache,
+	cache Cache,
 	ttl time.Duration,
 ) *CacheRepository {
 	return &CacheRepository{
@@ -51,7 +50,7 @@ func (c *CacheRepository) GetByID(ctx context.Context, entity interface{}, id ui
 
 	// 尝试从缓存中获取
 	var cacheData []byte
-	if err := c.cache.Get(ctx, cacheKey, &cacheData); err == nil {
+	if err := c.cache.Get(cacheKey, &cacheData); err == nil {
 		if err := json.Unmarshal(cacheData, entity); err == nil {
 			return nil
 		}
@@ -62,14 +61,14 @@ func (c *CacheRepository) GetByID(ctx context.Context, entity interface{}, id ui
 	if err := c.repository.GetByID(ctx, entity, id); err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// 避免缓存穿透，设置空值
-			c.cache.Set(ctx, cacheKey, "null", time.Minute*5)
+			c.cache.Set(cacheKey, "null", time.Minute*5)
 		}
 		return err
 	}
 
 	// 缓存到Redis
 	if data, err := json.Marshal(entity); err == nil {
-		_ = c.cache.Set(ctx, cacheKey, data, c.ttl)
+		_ = c.cache.Set(cacheKey, data, c.ttl)
 	}
 
 	return nil
@@ -88,7 +87,7 @@ func (c *CacheRepository) GetAll(ctx context.Context, entity interface{}) error 
 
 	// 尝试从缓存中获取
 	var cacheData []byte
-	if err := c.cache.Get(ctx, cacheKey, &cacheData); err == nil {
+	if err := c.cache.Get(cacheKey, &cacheData); err == nil {
 		if err := json.Unmarshal(cacheData, entity); err == nil {
 			return nil
 		}
@@ -102,7 +101,7 @@ func (c *CacheRepository) GetAll(ctx context.Context, entity interface{}) error 
 
 	// 缓存到Redis
 	if data, err := json.Marshal(entity); err == nil {
-		_ = c.cache.Set(ctx, cacheKey, data, c.ttl)
+		_ = c.cache.Set(cacheKey, data, c.ttl)
 	}
 
 	return nil
@@ -128,7 +127,7 @@ func (c *CacheRepository) GetOne(ctx context.Context, entity interface{}, opts .
 
 	// 尝试从缓存中获取
 	var cacheData []byte
-	if err := c.cache.Get(ctx, cacheKey, &cacheData); err == nil {
+	if err := c.cache.Get(cacheKey, &cacheData); err == nil {
 		if err := json.Unmarshal(cacheData, entity); err == nil {
 			return nil
 		}
@@ -138,14 +137,14 @@ func (c *CacheRepository) GetOne(ctx context.Context, entity interface{}, opts .
 	// 从数据库获取
 	if err := c.repository.GetOne(ctx, entity, opts...); err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.cache.Set(ctx, cacheKey, "null", time.Minute*5)
+			c.cache.Set(cacheKey, "null", time.Minute*5)
 		}
 		return err
 	}
 
 	// 缓存到Redis
 	if data, err := json.Marshal(entity); err == nil {
-		_ = c.cache.Set(ctx, cacheKey, data, c.ttl)
+		_ = c.cache.Set(cacheKey, data, c.ttl)
 	}
 
 	return nil
@@ -171,7 +170,7 @@ func (c *CacheRepository) InvalidateCache(ctx context.Context, entityType string
 	}
 
 	for _, key := range keys {
-		if err := c.cache.Delete(ctx, key); err != nil {
+		if err := c.cache.Delete(key); err != nil {
 			logger.Warn("Failed to delete cache", zap.String("key", key), zap.Error(err))
 		}
 	}
@@ -214,25 +213,25 @@ func (g *CacheKeyGenerator) GenerateCustomKey(entityType string, method string, 
 
 // CacheManager 缓存管理器
 type CacheManager struct {
-	caches map[string]cache.Cache
+	caches map[string]Cache
 }
 
 func NewCacheManager() *CacheManager {
 	return &CacheManager{
-		caches: make(map[string]cache.Cache),
+		caches: make(map[string]Cache),
 	}
 }
 
-func (cm *CacheManager) Register(name string, c cache.Cache) {
+func (cm *CacheManager) Register(name string, c Cache) {
 	cm.caches[name] = c
 }
 
-func (cm *CacheManager) Get(name string) (cache.Cache, bool) {
+func (cm *CacheManager) Get(name string) (Cache, bool) {
 	c, ok := cm.caches[name]
 	return c, ok
 }
 
-func (cm *CacheManager) GetDefault() (cache.Cache, bool) {
+func (cm *CacheManager) GetDefault() (Cache, bool) {
 	c, ok := cm.caches["default"]
 	return c, ok
 }
