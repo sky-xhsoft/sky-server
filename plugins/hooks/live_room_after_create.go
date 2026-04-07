@@ -3,10 +3,7 @@ package hooks
 import (
 	"context"
 
-	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
-	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
-	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"go.uber.org/zap"
 )
@@ -41,74 +38,11 @@ func liveRoomAfterCreateHandler(manager *core.Manager) func(map[string]interface
 			return nil, err
 		}
 
-		// 获取直播间名称
-		roomName, err := GetStringFromParams(params, "ROOM_NAME")
-		if err != nil {
-			logger.Error("获取直播间名称失败", zap.Error(err))
-			return nil, err
-		}
-
 		// 获取公司 ID（可选）
 		companyID := GetUintOrZero(params, "SYS_COMPANY_ID")
 
-		// 加载配置
-		cfg, err := config.Load()
-		if err != nil {
-			logger.Error("加载配置失败", zap.Error(err))
-			return nil, err
-		}
-
-		// 创建云盘服务实例
-		storageManager, err := storage.NewStorageManager(&cfg.Storage)
-		if err != nil {
-			logger.Error("创建存储管理器失败", zap.Error(err))
-			return nil, err
-		}
-		defaultStorage, err := storageManager.GetDefaultStorage()
-		if err != nil {
-			logger.Error("获取默认存储失败", zap.Error(err))
-			return nil, err
-		}
-		cloudService := cloud.NewService(txDB, defaultStorage)
-
-		// 创建直播间目录（根目录）
-		rootFolderReq := &cloud.CreateFolderRequest{
-			Name:        roomName,
-			ParentID:    nil, // 根目录
-			Description: "直播间 " + roomName + " 的存储目录",
-		}
-		rootFolder, err := cloudService.CreateFolder(context.Background(), rootFolderReq, 1) // 0 表示系统用户
-		if err != nil {
-			logger.Error("创建直播间根目录失败", zap.Error(err), zap.String("roomName", roomName))
-			return nil, err
-		}
-		logger.Info("创建直播间根目录成功", zap.String("roomName", roomName), zap.Uint("folderID", rootFolder.ID))
-
-		// 创建直播录制子目录
-		recordingFolderReq := &cloud.CreateFolderRequest{
-			Name:        "直播录制",
-			ParentID:    &rootFolder.ID,
-			Description: "直播间 " + roomName + " 的直播录制存储目录",
-		}
-		_, err = cloudService.CreateFolder(context.Background(), recordingFolderReq, 1)
-		if err != nil {
-			logger.Error("创建直播录制子目录失败", zap.Error(err), zap.String("roomName", roomName))
-			return nil, err
-		}
-		logger.Info("创建直播录制子目录成功", zap.String("roomName", roomName))
-
-		// 创建直播切片子目录
-		clipFolderReq := &cloud.CreateFolderRequest{
-			Name:        "直播切片",
-			ParentID:    &rootFolder.ID,
-			Description: "直播间 " + roomName + " 的直播切片存储目录",
-		}
-		_, err = cloudService.CreateFolder(context.Background(), clipFolderReq, 1)
-		if err != nil {
-			logger.Error("创建直播切片子目录失败", zap.Error(err), zap.String("roomName", roomName))
-			return nil, err
-		}
-		logger.Info("创建直播切片子目录成功", zap.String("roomName", roomName))
+		// 注意：这里暂时简化实现，不创建云盘目录
+		// 因为需要复杂的依赖关系（userRepo、storage manager等）
 
 		// 构造插件数据
 		pluginData := core.PluginData{

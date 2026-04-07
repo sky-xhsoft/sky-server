@@ -103,42 +103,45 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 			UpdateBy: s.getUsernameByID(ctx, userID),
 			IsActive: "Y",
 		},
-		FileID:         req.FileMD5,
-		UserID:         userID,
-		FileName:       req.FileName,
-		FileSize:       req.FileSize,
-		FileType:       req.FileType,
-		FolderID:       req.FolderID,
-		ChunkSize:      chunkSize,
-		TotalChunks:    totalChunks,
-		UploadedChunks: "[]",
-		Status:         "uploading",
-		StorageType:    storageType,
-		StoragePath:    finalStoragePath, // 使用最终路径而不是临时路径，原生分块直接上传到最终位置
+		FileID:          req.FileMD5,
+		UserID:          userID,
+		FileName:        req.FileName,
+		FileSize:        req.FileSize,
+		FileType:        req.FileType,
+		FolderID:        req.FolderID,
+		ChunkSize:       chunkSize,
+		TotalChunks:     totalChunks,
+		UploadedChunks:  "[]",
+		Status:          "uploading",
+		StorageType:     storageType,
+		StoragePath:     finalStoragePath, // 使用最终路径而不是临时路径，原生分块直接上传到最终位置
 		StorageUploadID: "",
-		ExpireTime:     &expireTime,
+		ExpireTime:      &expireTime,
 	}
 
 	// 如果是腾讯云COS等支持原生分块上传的存储，尝试初始化原生分块上传
 	// 调用存储层的 InitiateMultipartUpload 接口
-	if _, ok := s.storage.(interface{
-		InitiateMultipartUpload(ctx context.Context, path string) (string, error)
-	}); ok {
-		// 存储支持原生分块上传，进行初始化
-		storageProvider := s.storage.(interface{
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	if err == nil {
+		if _, ok := storageInstance.(interface {
 			InitiateMultipartUpload(ctx context.Context, path string) (string, error)
-		})
-		uploadID, err := storageProvider.InitiateMultipartUpload(ctx, finalStoragePath)
-		if err != nil {
-			logger.Warn("初始化原生分块上传失败，回退到传统模式",
-				zap.String("path", finalStoragePath),
-				zap.Error(err))
-		} else {
-			// 初始化成功，保存uploadID
-			session.StorageUploadID = uploadID
-			logger.Info("初始化原生分块上传成功",
-				zap.String("uploadID", uploadID),
-				zap.String("path", finalStoragePath))
+		}); ok {
+			// 存储支持原生分块上传，进行初始化
+			storageProvider := storageInstance.(interface {
+				InitiateMultipartUpload(ctx context.Context, path string) (string, error)
+			})
+			uploadID, err := storageProvider.InitiateMultipartUpload(ctx, finalStoragePath)
+			if err != nil {
+				logger.Warn("初始化原生分块上传失败，回退到传统模式",
+					zap.String("path", finalStoragePath),
+					zap.Error(err))
+			} else {
+				// 初始化成功，保存uploadID
+				session.StorageUploadID = uploadID
+				logger.Info("初始化原生分块上传成功",
+					zap.String("uploadID", uploadID),
+					zap.String("path", finalStoragePath))
+			}
 		}
 	}
 

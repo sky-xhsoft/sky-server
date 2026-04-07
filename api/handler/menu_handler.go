@@ -24,6 +24,7 @@ func NewMenuHandler(menuService menu.Service) *MenuHandler {
 // @Tags 菜单管理
 // @Accept json
 // @Produce json
+// @Param type query string false "系统类型：live/cloud，用于过滤子系统"
 // @Security BearerAuth
 // @Success 200 {object} map[string]interface{} "{"code":200,"data":[...],"message":"success"}"
 // @Failure 401 {object} map[string]interface{} "{"code":401,"message":"未授权"}"
@@ -37,8 +38,11 @@ func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 		return
 	}
 
+	// 获取系统类型参数
+	systemType := c.Query("type")
+
 	// 获取菜单树
-	menuTree, err := h.menuService.GetMenuTree(c.Request.Context(), companyID.(uint))
+	menuTree, err := h.menuService.GetMenuTree(c.Request.Context(), companyID.(uint), systemType)
 	if err != nil {
 		utils.InternalError(c, "获取菜单树失败: "+err.Error())
 		return
@@ -53,6 +57,7 @@ func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 // @Tags 菜单管理
 // @Accept json
 // @Produce json
+// @Param type query string false "系统类型：live/cloud，用于过滤子系统"
 // @Security BearerAuth
 // @Success 200 {object} map[string]interface{} "{"code":200,"data":[...],"message":"success"}"
 // @Failure 401 {object} map[string]interface{} "{"code":401,"message":"未授权"}"
@@ -72,11 +77,15 @@ func (h *MenuHandler) GetUserMenuTree(c *gin.Context) {
 		return
 	}
 
+	// 获取系统类型参数
+	systemType := c.Query("type")
+
 	// 获取用户菜单树
 	menuTree, err := h.menuService.GetUserMenuTree(
 		c.Request.Context(),
 		userID.(uint),
 		companyID.(uint),
+		systemType,
 	)
 	if err != nil {
 		utils.InternalError(c, "获取用户菜单树失败: "+err.Error())

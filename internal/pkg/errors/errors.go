@@ -35,6 +35,23 @@ func Is(err, target error) bool {
 	return appErr.Code == targetErr.Code
 }
 
+// As 将错误转换为 AppError 类型
+func As(err error, target **AppError) bool {
+	if err == nil {
+		return false
+	}
+	appErr, ok := err.(*AppError)
+	if ok && target != nil {
+		*target = appErr
+	}
+	return ok
+}
+
+// Unwrap 返回包装的内部错误
+func (e *AppError) Unwrap() error {
+	return e.Err
+}
+
 // New 创建新的应用错误
 func New(code int, message string) *AppError {
 	return &AppError{
@@ -93,6 +110,7 @@ const (
 	ErrInternal      = 50001
 	ErrExternalAPI   = 50002
 	ErrActionExecute = 50003
+	ErrStorage       = 50004 // 存储错误
 )
 
 // 预定义错误
@@ -125,4 +143,5 @@ var (
 	InternalError      = New(ErrInternal, "服务器内部错误")
 	ExternalAPIError   = New(ErrExternalAPI, "第三方服务错误")
 	ActionExecuteError = New(ErrActionExecute, "动作执行失败")
+	StorageError       = New(ErrStorage, "存储服务错误")
 )

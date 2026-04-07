@@ -44,6 +44,7 @@ type Services struct {
 	Message         message.Service
 	Cloud           cloud.Service
 	MultipartUpload cloud.MultipartUploadService
+	StorageConfig   cloud.StorageConfigService
 	Live            live.Service
 	LiveRoom        live.LiveRoomService
 	PullStreamTask  live.PullStreamTaskService
@@ -137,12 +138,31 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 注册WebSocket路由
 		registerWebSocketRoutes(v1, jwtUtil, services.WSManager, logger)
 
+		// 存储配置管理
+		registerCloudStorageConfigRoutes(v1, jwtUtil, services.StorageConfig)
+
 		// 临时测试路由
 		v1.GET("/ping", func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"message": "pong",
 			})
 		})
+	}
+}
+
+// registerCloudStorageConfigRoutes 注册存储配置管理路由
+func registerCloudStorageConfigRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, storageConfigService cloud.StorageConfigService) {
+	storageConfigHandler := handler.NewCloudStorageConfigHandler(storageConfigService)
+
+	configs := rg.Group("/cloud/storage/config")
+	configs.Use(middleware.AuthRequired(jwtUtil))
+	{
+		configs.POST("", storageConfigHandler.CreateConfig)
+		configs.PUT("/:id", storageConfigHandler.UpdateConfig)
+		configs.GET("/company/:companyId", storageConfigHandler.GetCompanyConfig)
+		configs.GET("", storageConfigHandler.GetAllConfigs)
+		configs.DELETE("/:id", storageConfigHandler.DeleteConfig)
+		configs.POST("/:companyId/refresh", storageConfigHandler.RefreshCache)
 	}
 }
 

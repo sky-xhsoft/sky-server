@@ -12,10 +12,10 @@ import (
 // Service 菜单服务接口
 type Service interface {
 	// GetMenuTree 获取完整菜单树（三级结构）
-	GetMenuTree(ctx context.Context, companyID uint) ([]*entity.MenuNode, error)
+	GetMenuTree(ctx context.Context, companyID uint, systemType string) ([]*entity.MenuNode, error)
 
 	// GetUserMenuTree 获取用户权限过滤后的菜单树
-	GetUserMenuTree(ctx context.Context, userID, companyID uint) ([]*entity.MenuNode, error)
+	GetUserMenuTree(ctx context.Context, userID, companyID uint, systemType string) ([]*entity.MenuNode, error)
 }
 
 type service struct {
@@ -30,11 +30,18 @@ func NewService(db *gorm.DB) Service {
 }
 
 // GetMenuTree 获取完整菜单树
-func (s *service) GetMenuTree(ctx context.Context, companyID uint) ([]*entity.MenuNode, error) {
+func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType string) ([]*entity.MenuNode, error) {
 	// 1. 查询所有子系统（一级菜单）
 	var subsystems []entity.SysSubsystem
-	if err := s.db.WithContext(ctx).
-		Where("IS_ACTIVE = ?", "Y").
+	query := s.db.WithContext(ctx).
+		Where("IS_ACTIVE = ?", "Y")
+
+	// 如果指定了系统类型，则过滤子系统
+	if systemType != "" {
+		query = query.Where("`KEY` = ?", systemType)
+	}
+
+	if err := query.
 		Order("ORDERNO ASC, ID ASC").
 		Find(&subsystems).Error; err != nil {
 		return nil, fmt.Errorf("查询子系统失败: %w", err)
@@ -63,7 +70,7 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint) ([]*entity.Me
 }
 
 // GetUserMenuTree 获取用户权限过滤后的菜单树
-func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint) ([]*entity.MenuNode, error) {
+func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint, systemType string) ([]*entity.MenuNode, error) {
 	// 1. 检查用户是否是管理员
 	var isAdmin string
 	if err := s.db.WithContext(ctx).
@@ -76,7 +83,7 @@ func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint) (
 
 	// 如果是管理员，直接返回完整菜单树
 	if isAdmin == "Y" {
-		return s.GetMenuTree(ctx, companyID)
+		return s.GetMenuTree(ctx, companyID, systemType)
 	}
 
 	// 2. 查询用户所属的权限组

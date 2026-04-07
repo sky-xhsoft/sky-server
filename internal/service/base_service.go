@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
-	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 

@@ -62,7 +62,14 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 	// 创建 Reader
 	chunkReader := &chunkReader{data: req.ChunkData}
 
-	if _, err := s.storage.Upload(ctx, chunkPath, chunkReader, "application/octet-stream"); err != nil {
+	// 获取公司存储实例
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	if err != nil {
+		logger.Error("获取存储实例失败", zap.Error(err))
+		return errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
+	}
+
+	if _, err := storageInstance.Upload(ctx, chunkPath, chunkReader, "application/octet-stream"); err != nil {
 		logger.Error("保存分片失败",
 			zap.Int("chunkIndex", req.ChunkIndex),
 			zap.Error(err))
@@ -74,14 +81,14 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 	if err == gorm.ErrRecordNotFound {
 		// 创建新记录
 		chunkRecord = entity.CloudChunkRecord{
-			SessionID:   session.ID,
-			ChunkIndex:  req.ChunkIndex,
-			ChunkSize:   len(req.ChunkData),
-			ChunkMD5:    req.ChunkMD5,
-			ChunkPath:   chunkPath,
-			Uploaded:    true,
-			UploadTime:  &now,
-			RetryCount:  0,
+			SessionID:  session.ID,
+			ChunkIndex: req.ChunkIndex,
+			ChunkSize:  len(req.ChunkData),
+			ChunkMD5:   req.ChunkMD5,
+			ChunkPath:  chunkPath,
+			Uploaded:   true,
+			UploadTime: &now,
+			RetryCount: 0,
 		}
 
 		if err := s.db.WithContext(ctx).Create(&chunkRecord).Error; err != nil {
@@ -193,10 +200,17 @@ func (s *multipartUploadService) GetChunkPresignedURL(ctx context.Context, sessi
 	expireSeconds := 3600 // 1小时
 	var presignedURL string
 
+	// 获取公司存储实例
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	if err != nil {
+		logger.Error("获取存储实例失败", zap.Error(err))
+		return nil, errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
+	}
+
 	// 如果会话已经初始化了存储端原生分块上传，使用原生分块预签名URL
 	if session.StorageUploadID != "" {
 		// 使用原生分块上传接口
-		presignedURL, err = s.storage.PresignedChunkUploadURL(ctx, session.StoragePath, session.StorageUploadID, chunkIndex, expireSeconds, "application/octet-stream")
+		presignedURL, err = storageInstance.PresignedChunkUploadURL(ctx, session.StoragePath, session.StorageUploadID, chunkIndex, expireSeconds, "application/octet-stream")
 		if err != nil {
 			logger.Error("获取分块预签名URL失败",
 				zap.Uint("sessionID", sessionID),
@@ -207,7 +221,7 @@ func (s *multipartUploadService) GetChunkPresignedURL(ctx context.Context, sessi
 	} else {
 		// 传统模式：每个分片单独上传到临时路径
 		chunkPath := fmt.Sprintf("%s/chunk_%d", session.StoragePath, chunkIndex)
-		presignedURL, err = s.storage.PresignedUploadURL(ctx, chunkPath, expireSeconds, "application/octet-stream")
+		presignedURL, err = storageInstance.PresignedUploadURL(ctx, chunkPath, expireSeconds, "application/octet-stream")
 		if err != nil {
 			logger.Error("获取预签名URL失败",
 				zap.Uint("sessionID", sessionID),
@@ -267,15 +281,15 @@ func (s *multipartUploadService) MarkChunkUploaded(ctx context.Context, sessionI
 			// 不存在，创建新记录
 			now := time.Now()
 			chunkRecord = entity.CloudChunkRecord{
-				SessionID:   sessionID,
-				ChunkIndex:  chunkIndex,
-				ChunkSize:   int(lockedSession.ChunkSize),
-				ChunkMD5:    "", // 直传模式下，MD5由前端计算，但我们不需要存储
-				ETag:        etag,
-				ChunkPath:   chunkPath,
-				Uploaded:    true,
-				UploadTime:  &now,
-				RetryCount:  0,
+				SessionID:  sessionID,
+				ChunkIndex: chunkIndex,
+				ChunkSize:  int(lockedSession.ChunkSize),
+				ChunkMD5:   "", // 直传模式下，MD5由前端计算，但我们不需要存储
+				ETag:       etag,
+				ChunkPath:  chunkPath,
+				Uploaded:   true,
+				UploadTime: &now,
+				RetryCount: 0,
 			}
 
 			if err := tx.WithContext(ctx).Create(&chunkRecord).Error; err != nil {
@@ -325,7 +339,7 @@ func (s *multipartUploadService) MarkChunkUploaded(ctx context.Context, sessionI
 			}
 		}
 
-		if (!exists) {
+		if !exists {
 			// 追加分片
 			uploadedChunks = append(uploadedChunks, chunkIndex)
 			sort.Ints(uploadedChunks)
@@ -354,8 +368,22 @@ func (s *multipartUploadService) MarkChunkUploaded(ctx context.Context, sessionI
 func (s *multipartUploadService) cleanupChunks(ctx context.Context, sessionID uint, storagePath string) {
 	logger.Info("清理临时分片文件", zap.Uint("sessionID", sessionID), zap.String("path", storagePath))
 
+	// 获取会话的用户ID
+	var session entity.CloudUploadSession
+	if err := s.db.WithContext(ctx).Select("USER_ID").Where("ID = ?", sessionID).First(&session).Error; err != nil {
+		logger.Error("查询会话失败", zap.Uint("sessionID", sessionID), zap.Error(err))
+		return
+	}
+
+	// 获取公司存储实例
+	storageInstance, err := s.getCompanyStorage(ctx, session.UserID)
+	if err != nil {
+		logger.Error("获取存储实例失败", zap.Uint("sessionID", sessionID), zap.Error(err))
+		return
+	}
+
 	// 1. 列出所有分片文件
-	objects, err := s.storage.ListObjects(ctx, storagePath, 0)
+	objects, err := storageInstance.ListObjects(ctx, storagePath, 0)
 	if err != nil {
 		logger.Error("列举分片文件失败", zap.Error(err))
 		return
@@ -363,7 +391,7 @@ func (s *multipartUploadService) cleanupChunks(ctx context.Context, sessionID ui
 
 	// 2. 删除所有分片文件
 	for _, obj := range objects {
-		if err := s.storage.Delete(ctx, obj.Key); err != nil {
+		if err := storageInstance.Delete(ctx, obj.Key); err != nil {
 			logger.Error("删除分片文件失败", zap.String("key", obj.Key), zap.Error(err))
 		}
 	}

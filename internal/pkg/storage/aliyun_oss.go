@@ -8,6 +8,8 @@ import (
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	"go.uber.org/zap"
 )
 
 // AliyunOSS 阿里云OSS存储实现
@@ -261,19 +263,69 @@ func (s *AliyunOSS) PresignedUploadURL(ctx context.Context, path string, expireS
 }
 
 // InitiateMultipartUpload 初始化分块上传
-// 阿里云OSS原生分块上传支持待完善
 func (s *AliyunOSS) InitiateMultipartUpload(ctx context.Context, path string) (string, error) {
-	return "", errors.Wrap(errors.ErrInternal, "阿里云OSS原生分块上传暂未支持，请使用传统合并方式", nil)
+	// 设置初始化分块上传选项
+	options := []oss.Option{
+		oss.ContentType("application/octet-stream"),
+	}
+
+	// 初始化分块上传
+	imur, err := s.bucket.InitiateMultipartUpload(path, options...)
+	if err != nil {
+		logger.Error("Failed to initiate multipart upload",
+			zap.String("path", path),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "初始化分块上传失败", err)
+	}
+
+	return imur.UploadID, nil
 }
 
 // PresignedChunkUploadURL 获取分块预签名上传URL
-// 阿里云OSS原生分块上传支持待完善
 func (s *AliyunOSS) PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error) {
-	return "", errors.Wrap(errors.ErrInternal, "阿里云OSS原生分块上传暂未支持，请使用传统合并方式", nil)
+	// 简化实现：直接生成预签名URL，不添加额外参数
+	// OSS分片编号从1开始，我们这里前端从0开始，需要加1
+	ossPartNumber := chunkNumber + 1
+
+	// 生成预签名URL - 使用基本签名
+	signedURL, err := s.bucket.SignURL(path, oss.HTTPPut, int64(expireSeconds))
+	if err != nil {
+		logger.Error("Failed to generate presigned chunk upload URL",
+			zap.String("path", path),
+			zap.String("uploadID", uploadID),
+			zap.Int("chunkNumber", chunkNumber),
+			zap.Int("ossPartNumber", ossPartNumber),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "生成分块预签名URL失败", err)
+	}
+
+	return signedURL, nil
 }
 
-// CompleteMultipartUpload 完成分块上传
-// 阿里云OSS原生分块上传支持待完善
+// CompleteMultipartUpload 完成分块上传，让服务端合并所有分块
 func (s *AliyunOSS) CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error) {
-	return "", errors.Wrap(errors.ErrInternal, "阿里云OSS原生分块上传暂未支持，请使用传统合并方式", nil)
+	// 构造parts
+	var parts []oss.UploadPart
+	for i, etag := range partETags {
+		// OSS分片编号从1开始
+		parts = append(parts, oss.UploadPart{
+			PartNumber: i + 1,
+			ETag:       etag,
+		})
+	}
+
+	// 完成分块上传
+	cmur, err := s.bucket.CompleteMultipartUpload(
+		oss.InitiateMultipartUploadResult{UploadID: uploadID, Key: path},
+		parts)
+	if err != nil {
+		logger.Error("Failed to complete multipart upload",
+			zap.String("path", path),
+			zap.String("uploadID", uploadID),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "完成分块上传失败", err)
+	}
+
+	// 返回最终文件的ETag
+	return cmur.ETag, nil
 }
