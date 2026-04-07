@@ -68,7 +68,8 @@ func (h *LiveStreamHandler) GetOnlineStreams(c *gin.Context) {
 	}
 
 	// 调用服务
-	result, err := h.liveService.DescribeStreamOnlineList(c.Request.Context(), req)
+	ctx := withCompanyID(c)
+	result, err := h.liveService.DescribeStreamOnlineList(ctx, req)
 	if err != nil {
 		zap.L().Error("查询在线流列表失败",
 			zap.String("domainName", domainName),
@@ -150,7 +151,8 @@ func (h *LiveStreamHandler) GetHistoryStreams(c *gin.Context) {
 	}
 
 	// 调用服务
-	result, err := h.liveService.DescribeStreamHistoryList(c.Request.Context(), req)
+	ctx := withCompanyID(c)
+	result, err := h.liveService.DescribeStreamHistoryList(ctx, req)
 	if err != nil {
 		zap.L().Error("查询历史流列表失败",
 			zap.String("domainName", domainName),
@@ -195,7 +197,8 @@ func (h *LiveStreamHandler) DropStream(c *gin.Context) {
 	}
 
 	// 调用服务
-	err := h.liveService.DropLiveStream(c.Request.Context(), dropReq)
+	ctx := withCompanyID(c)
+	err := h.liveService.DropLiveStream(ctx, dropReq)
 	if err != nil {
 		zap.L().Error("断开推流失败",
 			zap.String("domainName", req.DomainName),
@@ -282,7 +285,8 @@ func (h *LiveStreamHandler) GetStreamEvents(c *gin.Context) {
 	}
 
 	// 调用服务
-	result, err := h.liveService.DescribeStreamEventList(c.Request.Context(), req)
+	ctx := withCompanyID(c)
+	result, err := h.liveService.DescribeStreamEventList(ctx, req)
 	if err != nil {
 		zap.L().Error("查询推断流事件失败",
 			zap.String("startTime", startTime),
@@ -327,7 +331,8 @@ func (h *LiveStreamHandler) ResumeStream(c *gin.Context) {
 	}
 
 	// 调用服务
-	err := h.liveService.ResumeLiveStream(c.Request.Context(), resumeReq)
+	ctx := withCompanyID(c)
+	err := h.liveService.ResumeLiveStream(ctx, resumeReq)
 	if err != nil {
 		zap.L().Error("恢复推流失败",
 			zap.String("domainName", req.DomainName),

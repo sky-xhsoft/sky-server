@@ -132,7 +132,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerLiveDomainRoutes(v1, jwtUtil, services.Live, cfg)
 		registerLiveStreamRoutes(v1, jwtUtil, services.Live)
 		registerPullStreamRoutes(v1, jwtUtil, services.Live, services.PullStreamTask)
-		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg)
+		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg, services)
 		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom)
 
 		// 注册WebSocket路由
@@ -608,13 +608,13 @@ func registerLiveStreamRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service liv
 }
 
 // registerLiveCallbackRoutes 注册直播回调路由
-func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB, cfg *config.Config) {
+func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB, cfg *config.Config, services *Services) {
 	// 从配置中获取回调密钥
 	callbackKey := ""
 	if cfg.TencentCloud.CallbackKey != "" {
 		callbackKey = cfg.TencentCloud.CallbackKey
 	}
-	SetupLiveCallbackRoutes(rg.Group("/live"), jwtUtil, db, callbackKey)
+	SetupLiveCallbackRoutes(rg.Group("/live"), jwtUtil, db, callbackKey, services.Cloud)
 }
 
 // registerLiveRoomRoutes 注册直播间管理路由

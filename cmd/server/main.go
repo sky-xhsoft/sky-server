@@ -16,6 +16,8 @@ import (
 	jwtPkg "github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/volcengine"
 	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
 	"github.com/sky-xhsoft/sky-server/internal/repository/redis"
@@ -224,8 +226,39 @@ func main() {
 		zap.Int("defaultChunkSize", cfg.MultipartUpload.ChunkSize),
 		zap.Int("sessionExpireHours", cfg.MultipartUpload.SessionExpireHours))
 
+	// 初始化SysCompanyConfRepository
+	sysCompanyConfRepo := mysql.NewSysCompanyConfRepository(db)
+
+	// 初始化公司级腾讯云客户端管理器
+	companyTencentManager, err := tencent.NewCompanyTencentManager(
+		&cfg.TencentCloud,
+		sysCompanyConfRepo,
+		0, // 默认公司ID
+	)
+	if err != nil {
+		logger.Warn("Failed to initialize company tencent manager", zap.Error(err))
+		// 初始化失败不影响主服务启动，将使用全局配置
+	}
+
+	// 初始化公司级火山引擎客户端管理器
+	companyVolcengineManager, err := volcengine.NewCompanyVolcengineManager(
+		&cfg.Volcengine,
+		sysCompanyConfRepo,
+		0, // 默认公司ID
+	)
+	if err != nil {
+		logger.Warn("Failed to initialize company volcengine manager", zap.Error(err))
+		// 初始化失败不影响主服务启动，将使用全局配置
+	}
+
 	// 初始化直播服务
-	liveService, err := live.NewService(&cfg.TencentCloud)
+	var liveService live.Service
+	if companyTencentManager != nil {
+		liveService, err = live.NewServiceWithCompanyManager(companyTencentManager)
+	} else {
+		liveService, err = live.NewService(&cfg.TencentCloud)
+	}
+
 	if err != nil {
 		logger.Warn("Failed to initialize live service", zap.Error(err))
 		// 直播服务初始化失败不影响主服务启动
@@ -235,7 +268,7 @@ func main() {
 	}
 
 	// 创建直播房间服务
-	liveRoomService := live.NewLiveRoomService(db)
+	liveRoomService := live.NewLiveRoomService(db, cloudService)
 
 	logger.Info("Services initialized")
 

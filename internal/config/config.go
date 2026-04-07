@@ -34,6 +34,7 @@ type Config struct {
 	Security        SecurityConfig        `mapstructure:"security"`
 	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
 	TencentCloud    TencentCloudConfig    `mapstructure:"tencentCloud"`
+	Volcengine      VolcengineConfig      `mapstructure:"volcengine"` // 火山引擎配置
 }
 
 // StorageConfig 存储配置
@@ -220,6 +221,14 @@ type LiveConfig struct {
 	RecordBucket string `mapstructure:"recordBucket"` // 录制文件存储桶
 	RecordRegion string `mapstructure:"recordRegion"` // 录制文件存储区域
 	CallbackURL  string `mapstructure:"callbackURL"`  // 回调URL
+}
+
+// VolcengineConfig 火山引擎配置
+type VolcengineConfig struct {
+	AccessKeyId     string `mapstructure:"accessKeyId"`     // 火山引擎访问密钥ID
+	AccessKeySecret string `mapstructure:"accessKeySecret"` // 火山引擎访问密钥Secret
+	Region          string `mapstructure:"region"`          // 区域，如 cn-north-1
+	Service         string `mapstructure:"service"`         // 服务名称，如 live
 }
 
 // Load 加载配置文件

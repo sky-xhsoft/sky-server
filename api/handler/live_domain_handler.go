@@ -44,7 +44,9 @@ func (h *LiveDomainHandler) AddDomain(c *gin.Context) {
 		return
 	}
 
-	err := h.liveService.AddDomain(c.Request.Context(), &live.AddDomainRequest{
+	ctx := withCompanyID(c)
+
+	err := h.liveService.AddDomain(ctx, &live.AddDomainRequest{
 		DomainName: req.DomainName,
 		DomainType: req.DomainType,
 	})
@@ -78,7 +80,9 @@ func (h *LiveDomainHandler) ListDomains(c *gin.Context) {
 		}
 	}
 
-	domains, err := h.liveService.ListDomains(c.Request.Context(), domainType)
+	ctx := withCompanyID(c)
+
+	domains, err := h.liveService.ListDomains(ctx, domainType)
 	if err != nil {
 		utils.InternalError(c, "查询域名列表失败")
 		return
@@ -106,7 +110,9 @@ func (h *LiveDomainHandler) GetDomain(c *gin.Context) {
 		return
 	}
 
-	domain, err := h.liveService.DescribeDomain(c.Request.Context(), domainName)
+	ctx := withCompanyID(c)
+
+	domain, err := h.liveService.DescribeDomain(ctx, domainName)
 	if err != nil {
 		utils.InternalError(c, "查询域名信息失败")
 		return
@@ -131,7 +137,9 @@ func (h *LiveDomainHandler) DeleteDomain(c *gin.Context) {
 		return
 	}
 
-	err := h.liveService.DeleteDomain(c.Request.Context(), domainName)
+	ctx := withCompanyID(c)
+
+	err := h.liveService.DeleteDomain(ctx, domainName)
 	if err != nil {
 		// 记录详细错误日志
 		zap.L().Error("删除域名失败",
@@ -163,7 +171,9 @@ func (h *LiveDomainHandler) EnableDomain(c *gin.Context) {
 		return
 	}
 
-	err := h.liveService.EnableDomain(c.Request.Context(), domainName)
+	ctx := withCompanyID(c)
+
+	err := h.liveService.EnableDomain(ctx, domainName)
 	if err != nil {
 		utils.InternalError(c, "启用域名失败")
 		return
@@ -191,7 +201,9 @@ func (h *LiveDomainHandler) ForbidDomain(c *gin.Context) {
 		return
 	}
 
-	err := h.liveService.ForbidDomain(c.Request.Context(), domainName)
+	ctx := withCompanyID(c)
+
+	err := h.liveService.ForbidDomain(ctx, domainName)
 	if err != nil {
 		utils.InternalError(c, "禁用域名失败")
 		return
@@ -222,7 +234,8 @@ func (h *LiveDomainHandler) VerifyDomainOwner(c *gin.Context) {
 
 	verifyType := c.DefaultQuery("verifyType", "dnsCheck")
 
-	result, err := h.liveService.AuthenticateDomainOwner(c.Request.Context(), domainName, verifyType)
+	ctx := withCompanyID(c)
+	result, err := h.liveService.AuthenticateDomainOwner(ctx, domainName, verifyType)
 	if err != nil {
 		utils.InternalError(c, "验证域名归属失败")
 		return

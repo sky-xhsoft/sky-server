@@ -2,8 +2,11 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
@@ -294,6 +297,119 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				zap.Int("itemIndex", i),
 				zap.String("title", item.Title),
 				zap.String("videoUrl", item.VideoStoreURL))
+		}
+
+		// 将高光切片保存到云盘（如果找到了对应的直播间）
+		if room.RoomName != "" {
+			// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
+			var creatorUser entity.SysUser
+			if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
+				// 创建文件夹："直播间名称/直播切片"
+				var roomFolder, highlightFolder entity.CloudItem
+
+				// 检查直播间文件夹是否存在
+				if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID IS NULL AND IS_ACTIVE = ?",
+					"folder", room.RoomName, creatorUser.ID, "Y").First(&roomFolder).Error; err != nil {
+					// 直播间文件夹不存在，创建
+					roomFolder = entity.CloudItem{
+						BaseModel: entity.BaseModel{
+							CreateBy: room.CreateBy,
+							UpdateBy: room.CreateBy,
+							IsActive: "Y",
+						},
+						ItemType: "folder",
+						Name:     room.RoomName,
+						ParentID: nil,
+						Path:     "/" + room.RoomName,
+						OwnerID:  creatorUser.ID,
+					}
+					if err := h.db.Create(&roomFolder).Error; err != nil {
+						logger.Error("创建直播间文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
+					}
+				}
+
+				// 检查"直播切片"文件夹是否存在
+				if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+					"folder", "直播切片", creatorUser.ID, roomFolder.ID, "Y").First(&highlightFolder).Error; err != nil {
+					// 直播切片文件夹不存在，创建
+					highlightFolder = entity.CloudItem{
+						BaseModel: entity.BaseModel{
+							CreateBy: room.CreateBy,
+							UpdateBy: room.CreateBy,
+							IsActive: "Y",
+						},
+						ItemType: "folder",
+						Name:     "直播切片",
+						ParentID: &roomFolder.ID,
+						Path:     roomFolder.Path + "/直播切片",
+						OwnerID:  creatorUser.ID,
+					}
+					if err := h.db.Create(&highlightFolder).Error; err != nil {
+						logger.Error("创建直播切片文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
+					}
+				}
+
+				// 创建高光切片文件记录
+				fileName := fmt.Sprintf("高光_%d_%s.mp4", item.BeginTime, strings.TrimSpace(item.Title))
+				// 清理文件名中的无效字符
+				fileName = strings.ReplaceAll(fileName, "\\", "")
+				fileName = strings.ReplaceAll(fileName, "/", "")
+				fileName = strings.ReplaceAll(fileName, ":", "_")
+				fileName = strings.ReplaceAll(fileName, "*", "")
+				fileName = strings.ReplaceAll(fileName, "?", "")
+				fileName = strings.ReplaceAll(fileName, "\"", "")
+				fileName = strings.ReplaceAll(fileName, "<", "")
+				fileName = strings.ReplaceAll(fileName, ">", "")
+				fileName = strings.ReplaceAll(fileName, "|", "")
+
+				ext := ".mp4"
+				fileType := "video/mp4"
+
+				// 检查文件是否已存在（防止重复创建）
+				var existingFile entity.CloudItem
+				fileExists := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+					"file", fileName, creatorUser.ID, highlightFolder.ID, "Y").First(&existingFile).Error == nil
+
+				if !fileExists {
+					fileItem := entity.CloudItem{
+						BaseModel: entity.BaseModel{
+							CreateBy: room.CreateBy,
+							UpdateBy: room.CreateBy,
+							IsActive: "Y",
+						},
+						ItemType:    "file",
+						Name:        fileName,
+						ParentID:    &highlightFolder.ID,
+						Path:        highlightFolder.Path + "/" + fileName,
+						OwnerID:     creatorUser.ID,
+						FileSize:    func() *int64 { size := int64(0); return &size }(), // 高光切片大小通常在回调中不提供，设置为0
+						FileType:    &fileType,
+						FileExt:     &ext,
+						AccessURL:   &item.VideoStoreURL,                            // 使用回调中的 VideoStoreURL 作为访问地址
+						StorageType: func() *string { str := "oss"; return &str }(), // 标记为腾讯云存储
+						StoragePath: &item.VideoStoreURL,                            // 将 VideoStoreURL 作为存储路径
+					}
+
+					if err := h.cloudService.CreateItem(context.Background(), &fileItem); err != nil {
+						logger.Error("保存高光切片到云盘失败",
+							zap.String("roomName", room.RoomName),
+							zap.String("fileName", fileName),
+							zap.Error(err))
+					} else {
+						logger.Info("高光切片已保存到云盘",
+							zap.String("roomName", room.RoomName),
+							zap.String("fileName", fileName),
+							zap.String("path", fileItem.Path),
+							zap.String("accessURL", *fileItem.AccessURL))
+					}
+				} else {
+					logger.Warn("高光切片已存在，跳过创建",
+						zap.String("roomName", room.RoomName),
+						zap.String("fileName", fileName))
+				}
+			} else {
+				logger.Warn("未找到直播间创建者信息，无法保存到云盘", zap.String("roomName", room.RoomName))
+			}
 		}
 	}
 
