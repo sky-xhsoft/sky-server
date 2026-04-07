@@ -12,6 +12,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
+	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"gorm.io/gorm"
 )
 
@@ -61,16 +62,35 @@ type Service interface {
 
 // service 云盘服务实现
 type service struct {
-	db      *gorm.DB
-	storage storage.Storage
+	db                    *gorm.DB
+	companyStorageManager *storage.CompanyStorageManager
+	userRepo              repository.UserRepository
 }
 
 // NewService 创建云盘服务
-func NewService(db *gorm.DB, storage storage.Storage) Service {
+func NewService(db *gorm.DB, companyStorageManager *storage.CompanyStorageManager, userRepo repository.UserRepository) Service {
 	return &service{
-		db:      db,
-		storage: storage,
+		db:                    db,
+		companyStorageManager: companyStorageManager,
+		userRepo:              userRepo,
 	}
+}
+
+// getCompanyStorage 根据用户ID获取公司存储实例
+func (s *service) getCompanyStorage(ctx context.Context, userID uint) (storage.Storage, error) {
+	// 从用户ID获取用户信息
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "获取用户信息失败", err)
+	}
+
+	// 获取公司存储实例
+	companyStorage, err := s.companyStorageManager.GetStorage(ctx, user.SysCompanyID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrStorage, "获取公司存储实例失败", err)
+	}
+
+	return companyStorage, nil
 }
 
 // getUsernameByID 根据用户ID获取用户名
@@ -345,6 +365,12 @@ func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID
 		return nil, err
 	}
 
+	// 获取公司存储实例
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	// 构建存储路径
 	ext := filepath.Ext(req.FileName)
 	storageName := fmt.Sprintf("%s%s", uuid.New().String(), ext)
@@ -352,7 +378,7 @@ func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID
 	storagePath := fmt.Sprintf("cloud/%d/%s/%s", userID, dateDir, storageName)
 
 	// 上传到存储
-	accessURL, err := s.storage.Upload(ctx, storagePath, req.Reader, req.FileType)
+	accessURL, err := storageInstance.Upload(ctx, storagePath, req.Reader, req.FileType)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +423,7 @@ func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID
 
 	if err := s.db.WithContext(ctx).Create(item).Error; err != nil {
 		// 删除已上传的文件
-		s.storage.Delete(ctx, storagePath)
+		storageInstance.Delete(ctx, storagePath)
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
 	}
 
@@ -669,8 +695,14 @@ func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (i
 		return nil, nil, errors.New(errors.ErrInvalidParam, "文件存储路径不存在")
 	}
 
+	// 获取公司存储实例
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// 从存储中下载文件
-	reader, err := s.storage.Download(ctx, *file.StoragePath)
+	reader, err := storageInstance.Download(ctx, *file.StoragePath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -707,9 +739,13 @@ func (s *service) DeleteFile(ctx context.Context, fileID uint, userID uint) erro
 
 	// 异步删除物理文件（可选）
 	if file.StoragePath != nil {
-		go func() {
-			_ = s.storage.Delete(context.Background(), *file.StoragePath)
-		}()
+		// 获取公司存储实例
+		storageInstance, err := s.getCompanyStorage(ctx, userID)
+		if err == nil {
+			go func() {
+				_ = storageInstance.Delete(context.Background(), *file.StoragePath)
+			}()
+		}
 	}
 
 	return nil
@@ -1005,8 +1041,14 @@ func (s *service) DownloadFileByID(ctx context.Context, fileID uint) (io.ReadClo
 		return nil, nil, errors.New(errors.ErrInvalidParam, "文件存储路径不存在")
 	}
 
+	// 获取公司存储实例（通过文件所有者ID获取）
+	storageInstance, err := s.getCompanyStorage(ctx, file.OwnerID)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// 从存储中下载文件
-	reader, err := s.storage.Download(ctx, *file.StoragePath)
+	reader, err := storageInstance.Download(ctx, *file.StoragePath)
 	if err != nil {
 		return nil, nil, err
 	}

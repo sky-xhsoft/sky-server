@@ -63,7 +63,11 @@ func (s *service) DeleteItem(ctx context.Context, itemID uint, userID uint) erro
 
 	// 如果是文件，删除物理存储
 	if item.IsFile() && item.StoragePath != nil {
-		_ = s.storage.Delete(ctx, *item.StoragePath)
+		// 获取公司存储实例
+		storageInstance, err := s.getCompanyStorage(ctx, userID)
+		if err == nil {
+			_ = storageInstance.Delete(ctx, *item.StoragePath)
+		}
 	}
 
 	// 软删除数据库记录
@@ -94,7 +98,11 @@ func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, user
 		} else if child.IsFile() {
 			// 如果是文件，删除存储
 			if child.StoragePath != nil {
-				_ = s.storage.Delete(ctx, *child.StoragePath)
+				// 获取公司存储实例
+				storageInstance, err := s.getCompanyStorage(ctx, userID)
+				if err == nil {
+					_ = storageInstance.Delete(ctx, *child.StoragePath)
+				}
 			}
 		}
 
@@ -196,7 +204,10 @@ func (s *service) RenameItem(ctx context.Context, itemID uint, newName string, u
 	return s.UpdateItem(ctx, item)
 }
 
-// GetStorage 获取存储引擎（供 handler 使用）
+// GetStorage 获取存储引擎（供 handler 使用，已废弃）
+// 注意：建议使用 getCompanyStorage 方法获取用户对应的存储实例
 func (s *service) GetStorage() storage.Storage {
-	return s.storage
+	// 由于不再直接存储 storage 字段，这里返回 nil 或默认存储
+	// 但为了兼容性，我们可以尝试返回一个默认存储
+	return nil
 }

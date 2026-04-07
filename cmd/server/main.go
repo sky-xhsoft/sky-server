@@ -188,25 +188,34 @@ func main() {
 	// 初始化消息服务
 	messageService := message.NewService(db, wsManager)
 
-	// 初始化存储管理器
-	storageManager, err := storage.NewStorageManager(&cfg.Storage)
+	// 初始化CloudStorageConfigRepository
+	cloudStorageConfigRepo := mysql.NewCloudStorageConfigRepository(db)
+
+	// 初始化公司存储管理器
+	companyStorageManager, err := storage.NewCompanyStorageManager(
+		&cfg.Storage,
+		cloudStorageConfigRepo,
+		0, // 默认公司ID
+	)
 	if err != nil {
-		logger.Fatal("Failed to initialize storage manager", zap.Error(err))
+		logger.Fatal("Failed to initialize company storage manager", zap.Error(err))
 	}
 
-	// 获取默认存储作为云盘存储
-	cloudStorage, err := storageManager.GetDefaultStorage()
-	if err != nil {
-		logger.Fatal("Failed to get default storage", zap.Error(err))
-	}
+	// 初始化StorageConfigService
+	storageConfigService := cloud.NewStorageConfigService(
+		db,
+		cloudStorageConfigRepo,
+		companyStorageManager,
+	)
 
 	// 初始化云盘服务
-	cloudService := cloud.NewService(db, cloudStorage)
+	cloudService := cloud.NewService(db, companyStorageManager, userRepo)
 
 	// 初始化分片上传服务
 	multipartService := cloud.NewMultipartUploadService(
 		db,
-		cloudStorage,
+		companyStorageManager,
+		userRepo,
 		cloudService,
 		cfg.MultipartUpload.ChunkSize,
 		cfg.MultipartUpload.SessionExpireHours,
@@ -259,6 +268,7 @@ func main() {
 		Message:         messageService,
 		Cloud:           cloudService,
 		MultipartUpload: multipartService,
+		StorageConfig:   storageConfigService,
 		Live:            liveService,
 		LiveRoom:        liveRoomService,
 		PullStreamTask:  pullStreamTaskService,

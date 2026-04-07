@@ -68,6 +68,12 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 			fmt.Sprintf("分片未完全上传：已上传 %d/%d", len(uploadedChunks), session.TotalChunks))
 	}
 
+	// 获取公司存储实例
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
+	}
+
 	// 3. 如果使用了原生分块上传（StorageUploadID 不为空），直接调用云服务端合并
 	if session.StorageUploadID != "" {
 		logger.Info("使用云存储原生分块上传合并，服务端直接合并，不需要后端流式合并",
@@ -76,7 +82,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 			zap.Int("totalChunks", session.TotalChunks))
 
 		// 检查存储是否支持 CompleteMultipartUpload
-		if completeProvider, ok := s.storage.(interface{
+		if completeProvider, ok := storageInstance.(interface {
 			CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error)
 		}); ok {
 			// 查询所有分片的 ETag
@@ -187,7 +193,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 					}
 
 					// 获取最终文件访问URL
-					accessURL, err := s.storage.GetURL(ctx, session.StoragePath, 0)
+					accessURL, err := storageInstance.GetURL(ctx, session.StoragePath, 0)
 					if err != nil {
 						logger.Warn("获取最终文件URL失败", zap.String("path", session.StoragePath), zap.Error(err))
 					}
@@ -268,7 +274,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 
 	// 3. 检查是否已存在相同MD5的文件（秒传）
 	var existingFile entity.CloudItem
-	err := s.db.WithContext(ctx).
+	err = s.db.WithContext(ctx).
 		Where("MD5 = ? AND OWNER_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", session.FileID, userID, "Y", "file").
 		First(&existingFile).Error
 
@@ -341,7 +347,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 	// 后端goroutine：从管道读取数据，直接上传到存储
 	go func() {
 		defer close(resultChan)
-		accessURL, err := s.storage.Upload(ctx, finalPath, pipeReader, session.FileType)
+		accessURL, err := storageInstance.Upload(ctx, finalPath, pipeReader, session.FileType)
 		resultChan <- struct {
 			accessURL string
 			err       error
@@ -363,7 +369,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 			}
 
 			// 读取分片
-			chunkReader, err := s.storage.Download(ctx, chunkPath)
+			chunkReader, err := storageInstance.Download(ctx, chunkPath)
 			if err != nil {
 				pipeWriter.CloseWithError(errors.Wrap(errors.ErrInternal, fmt.Sprintf("读取分片 %d 失败", i), err))
 				return
@@ -432,7 +438,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 
 	if err := s.db.WithContext(ctx).Create(file).Error; err != nil {
 		// 删除已上传的文件
-		s.storage.Delete(ctx, finalPath)
+		storageInstance.Delete(ctx, finalPath)
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
 	}
 
@@ -472,6 +478,12 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 		zap.Uint("sessionID", session.ID),
 		zap.Int("totalChunks", session.TotalChunks),
 		zap.Int64("fileSize", session.FileSize))
+
+	// 获取公司存储实例
+	storageInstance, getStorageErr := s.getCompanyStorage(ctx, userID)
+	if getStorageErr != nil {
+		return nil, errors.Wrap(errors.ErrStorage, "获取存储实例失败", getStorageErr)
+	}
 
 	// 1. 检查是否已存在相同MD5的文件（秒传）
 	var existingFile entity.CloudItem
@@ -557,7 +569,7 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 		defer pipeReader.Close()
 
 		// 直接从管道读取并上传，无需临时文件
-		accessURL, err := s.storage.Upload(ctx, finalPath, pipeReader, session.FileType)
+		accessURL, err := storageInstance.Upload(ctx, finalPath, pipeReader, session.FileType)
 		uploadResultChan <- uploadResult{accessURL: accessURL, err: err}
 	}()
 
@@ -575,7 +587,7 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 			chunkPath := fmt.Sprintf("%s/chunk_%d", session.StoragePath, i)
 
 			// 读取分片
-			chunkReader, err := s.storage.Download(ctx, chunkPath)
+			chunkReader, err := storageInstance.Download(ctx, chunkPath)
 			if err != nil {
 				pipeWriter.CloseWithError(errors.Wrap(errors.ErrInternal, fmt.Sprintf("读取分片 %d 失败", i), err))
 				mergeResultChan <- mergeResult{err: err}
@@ -610,7 +622,7 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 	if mergeRes.err != nil {
 		logger.Error("流式合并失败", zap.Error(mergeRes.err))
 		// 尝试删除可能已部分上传的文件
-		s.storage.Delete(ctx, finalPath)
+		storageInstance.Delete(ctx, finalPath)
 		return nil, mergeRes.err
 	}
 
@@ -626,7 +638,7 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 			zap.String("expected", session.FileID),
 			zap.String("actual", mergeRes.actualMD5))
 		// 删除已上传的错误文件
-		s.storage.Delete(ctx, finalPath)
+		storageInstance.Delete(ctx, finalPath)
 		return nil, errors.New(errors.ErrInvalidParam, "文件MD5校验失败")
 	}
 
@@ -660,7 +672,7 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 
 	if err := s.db.WithContext(ctx).Create(file).Error; err != nil {
 		// 删除已上传的文件
-		s.storage.Delete(ctx, finalPath)
+		storageInstance.Delete(ctx, finalPath)
 		return nil, errors.Wrap(errors.ErrDatabase, "创建文件记录失败", err)
 	}
 

@@ -7,6 +7,14 @@ import (
 )
 
 // Config 应用配置结构
+// CloudConfig 云盘配置
+type CloudConfig struct {
+	Enabled        bool          `mapstructure:"enabled"`        // 是否启用云盘功能
+	AuthStrategy   string        `mapstructure:"authStrategy"`   // 用户认证策略: sso, standalone, both
+	DefaultStorage string        `mapstructure:"defaultStorage"` // 默认存储类型
+	Storage        StorageConfig `mapstructure:"storage"`        // 存储配置（作为全局默认配置）
+}
+
 type Config struct {
 	App             AppConfig             `mapstructure:"app"`
 	Database        DatabaseConfig        `mapstructure:"database"`
@@ -20,7 +28,8 @@ type Config struct {
 	Upload          UploadConfig          `mapstructure:"upload"`
 	File            FileConfig            `mapstructure:"file"`
 	MultipartUpload MultipartUploadConfig `mapstructure:"multipartUpload"`
-	Storage         StorageConfig         `mapstructure:"storage"`
+	Cloud           CloudConfig           `mapstructure:"cloud"`   // 云盘配置
+	Storage         StorageConfig         `mapstructure:"storage"` // 存储配置（兼容旧版本）
 	Swagger         SwaggerConfig         `mapstructure:"swagger"`
 	Security        SecurityConfig        `mapstructure:"security"`
 	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`

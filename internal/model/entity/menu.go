@@ -20,6 +20,7 @@ type SysSubsystem struct {
 	URL         string `gorm:"column:URL;size:255" json:"url"`
 	Icon        string `gorm:"column:ICON;size:255" json:"icon"`
 	Description string `gorm:"column:DESCRIPTION;size:255" json:"description"`
+	Key         string `gorm:"column:KEY;size:50" json:"key"` // 用于区分系统类型：live/cloud
 }
 
 // TableName 指定表名
