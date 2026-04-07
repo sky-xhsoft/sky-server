@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -11,21 +12,24 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
+	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // LiveCallbackHandler 直播回调处理器
 type LiveCallbackHandler struct {
-	db          *gorm.DB
-	callbackKey string // 回调密钥，用于验证签名
+	db           *gorm.DB
+	callbackKey  string        // 回调密钥，用于验证签名
+	cloudService cloud.Service // 云盘服务
 }
 
 // NewLiveCallbackHandler 创建直播回调处理器
-func NewLiveCallbackHandler(db *gorm.DB, callbackKey string) *LiveCallbackHandler {
+func NewLiveCallbackHandler(db *gorm.DB, callbackKey string, cloudService cloud.Service) *LiveCallbackHandler {
 	return &LiveCallbackHandler{
-		db:          db,
-		callbackKey: callbackKey,
+		db:           db,
+		callbackKey:  callbackKey,
+		cloudService: cloudService,
 	}
 }
 
@@ -633,6 +637,120 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
 		logger.Error("保存录制文件事件失败", zap.Error(err))
+	}
+
+	// 如果找到了对应的直播间，将录制文件保存到云盘
+	if room.RoomName != "" {
+		// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
+		var creatorUser entity.SysUser
+		if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
+			// 创建文件夹："直播间名称/直播录制"
+			var roomFolder, recordingFolder entity.CloudItem
+
+			// 检查直播间文件夹是否存在
+			if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID IS NULL AND IS_ACTIVE = ?",
+				"folder", room.RoomName, creatorUser.ID, "Y").First(&roomFolder).Error; err != nil {
+				// 直播间文件夹不存在，创建
+				roomFolder = entity.CloudItem{
+					BaseModel: entity.BaseModel{
+						CreateBy: room.CreateBy,
+						UpdateBy: room.CreateBy,
+						IsActive: "Y",
+					},
+					ItemType: "folder",
+					Name:     room.RoomName,
+					ParentID: nil,
+					Path:     "/" + room.RoomName,
+					OwnerID:  creatorUser.ID,
+				}
+				if err := h.db.Create(&roomFolder).Error; err != nil {
+					logger.Error("创建直播间文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
+				}
+			}
+
+			// 检查"直播录制"文件夹是否存在
+			if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+				"folder", "直播录制", creatorUser.ID, roomFolder.ID, "Y").First(&recordingFolder).Error; err != nil {
+				// 直播录制文件夹不存在，创建
+				recordingFolder = entity.CloudItem{
+					BaseModel: entity.BaseModel{
+						CreateBy: room.CreateBy,
+						UpdateBy: room.CreateBy,
+						IsActive: "Y",
+					},
+					ItemType: "folder",
+					Name:     "直播录制",
+					ParentID: &roomFolder.ID,
+					Path:     roomFolder.Path + "/直播录制",
+					OwnerID:  creatorUser.ID,
+				}
+				if err := h.db.Create(&recordingFolder).Error; err != nil {
+					logger.Error("创建直播录制文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
+				}
+			}
+
+			// 创建录制文件记录
+			fileName := fmt.Sprintf("录制_%d.%s", eventTime, event.FileFormat)
+			ext := "." + event.FileFormat
+			var fileType string
+			switch event.FileFormat {
+			case "flv":
+				fileType = "video/flv"
+			case "mp4":
+				fileType = "video/mp4"
+			case "hls":
+				fileType = "application/x-mpegURL"
+			case "aac":
+				fileType = "audio/aac"
+			default:
+				fileType = "application/octet-stream"
+			}
+
+			// 检查文件是否已存在（防止重复创建）
+			var existingFile entity.CloudItem
+			fileExists := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+				"file", fileName, creatorUser.ID, recordingFolder.ID, "Y").First(&existingFile).Error == nil
+
+			if !fileExists {
+				fileItem := entity.CloudItem{
+					BaseModel: entity.BaseModel{
+						CreateBy: room.CreateBy,
+						UpdateBy: room.CreateBy,
+						IsActive: "Y",
+					},
+					ItemType:    "file",
+					Name:        fileName,
+					ParentID:    &recordingFolder.ID,
+					Path:        recordingFolder.Path + "/" + fileName,
+					OwnerID:     creatorUser.ID,
+					FileSize:    &event.FileSize,
+					FileType:    &fileType,
+					FileExt:     &ext,
+					AccessURL:   &event.VideoURL,                                // 使用回调中的 VideoURL 作为访问地址
+					StorageType: func() *string { str := "oss"; return &str }(), // 标记为腾讯云存储
+					StoragePath: &event.VideoURL,                                // 将 VideoURL 作为存储路径
+				}
+
+				if err := h.cloudService.CreateItem(context.Background(), &fileItem); err != nil {
+					logger.Error("保存录制文件到云盘失败",
+						zap.String("roomName", room.RoomName),
+						zap.String("fileName", fileName),
+						zap.Error(err))
+				} else {
+					logger.Info("录制文件已保存到云盘",
+						zap.String("roomName", room.RoomName),
+						zap.String("fileName", fileName),
+						zap.String("path", fileItem.Path),
+						zap.String("accessURL", *fileItem.AccessURL))
+				}
+			} else {
+				logger.Warn("录制文件已存在，跳过创建",
+					zap.String("roomName", room.RoomName),
+					zap.String("fileName", fileName))
+			}
+		} else {
+			logger.Warn("未找到直播间创建者信息，无法保存到云盘", zap.String("roomName", room.RoomName))
+		}
 	}
 
 	// 返回成功响应

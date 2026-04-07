@@ -15,7 +15,7 @@ type PullStreamTaskService interface {
 	CreatePullStreamTask(ctx context.Context, task *entity.PullStreamTask) error
 	// UpdatePullStreamTask 更新拉流任务
 	UpdatePullStreamTask(ctx context.Context, task *entity.PullStreamTask) error
-	// DeletePullStreamTask 删除拉流任务（软删除）
+	// DeletePullStreamTask 删除拉流任务
 	DeletePullStreamTask(ctx context.Context, taskID string) error
 	// GetPullStreamTask 获取拉流任务详情
 	GetPullStreamTask(ctx context.Context, taskID string) (*entity.PullStreamTask, error)
@@ -109,23 +109,14 @@ func (s *pullStreamTaskService) UpdatePullStreamTask(ctx context.Context, task *
 	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ?", task.TaskID).Updates(task).Error
 }
 
-// DeletePullStreamTask 删除拉流任务（软删除）
+// DeletePullStreamTask 删除拉流任务
 func (s *pullStreamTaskService) DeletePullStreamTask(ctx context.Context, taskID string) error {
 	if taskID == "" {
 		return errors.New("任务ID不能为空")
 	}
 
-	// 检查任务是否存在
-	var task entity.PullStreamTask
-	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND IS_ACTIVE = ?", taskID, "Y").First(&task).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("拉流任务不存在")
-		}
-		return err
-	}
-
-	// 软删除
-	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ?", taskID).Update("IS_ACTIVE", "N").Error
+	// 直接删除
+	return s.db.WithContext(ctx).Where("TASK_ID = ?", taskID).Delete(&entity.PullStreamTask{}).Error
 }
 
 // GetPullStreamTask 获取拉流任务详情

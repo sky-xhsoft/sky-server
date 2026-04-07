@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"gorm.io/gorm"
 )
 
@@ -47,13 +48,15 @@ type RoomFilter struct {
 }
 
 type liveRoomService struct {
-	db *gorm.DB
+	db           *gorm.DB
+	cloudService cloud.Service
 }
 
 // NewLiveRoomService 创建直播间服务实例
-func NewLiveRoomService(db *gorm.DB) LiveRoomService {
+func NewLiveRoomService(db *gorm.DB, cloudService cloud.Service) LiveRoomService {
 	return &liveRoomService{
-		db: db,
+		db:           db,
+		cloudService: cloudService,
 	}
 }
 
@@ -62,17 +65,17 @@ func (s *liveRoomService) CreateRoom(ctx context.Context, room *entity.LiveRoom)
 	if room.RoomName == "" {
 		return errors.New("直播间名称不能为空")
 	}
-	if room.RoomType == "" {
-		return errors.New("直播间类型不能为空")
-	}
 	if room.BroadcastFormat == "" {
 		return errors.New("播出形式不能为空")
 	}
-	if room.RoomStage == "" {
-		return errors.New("直播间阶段不能为空")
-	}
 
 	// 设置默认值
+	if room.RoomType == "" {
+		room.RoomType = "video"
+	}
+	if room.RoomStage == "" {
+		room.RoomStage = "formal"
+	}
 	if room.Status == "" {
 		room.Status = "draft"
 	}
@@ -86,7 +89,12 @@ func (s *liveRoomService) CreateRoom(ctx context.Context, room *entity.LiveRoom)
 		room.PlaybackValidity = "unlimited"
 	}
 
-	return s.db.WithContext(ctx).Create(room).Error
+	// 创建直播间记录
+	if err := s.db.WithContext(ctx).Create(room).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UpdateRoom 更新直播间

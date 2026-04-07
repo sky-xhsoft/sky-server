@@ -25,12 +25,12 @@ func NewLiveRoomHandler(roomService live.LiveRoomService) *LiveRoomHandler {
 // CreateRoomRequest 创建直播间请求
 type CreateRoomRequest struct {
 	RoomName          string     `json:"roomName" binding:"required"`
-	RoomType          string     `json:"roomType" binding:"required"`
 	BroadcastFormat   string     `json:"broadcastFormat" binding:"required"`
-	RoomStage         string     `json:"roomStage" binding:"required"`
-	DisplayMode       string     `json:"displayMode"`
 	StartTime         *time.Time `json:"startTime"`
 	CoverImage        string     `json:"coverImage"`
+	RoomType          string     `json:"roomType"`  // 可选字段
+	RoomStage         string     `json:"roomStage"` // 可选字段
+	DisplayMode       string     `json:"displayMode"`
 	ViewingMethod     string     `json:"viewingMethod"`
 	ViewingPassword   string     `json:"viewingPassword"`
 	ViewingPrice      *float64   `json:"viewingPrice"`

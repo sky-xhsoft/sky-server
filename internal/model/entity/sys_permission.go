@@ -73,10 +73,36 @@ func (SysCompany) TableName() string {
 // 与 sys_company 是 1:1 关系，保存公司的各项配置
 type SysCompanyConf struct {
 	BaseModel
-	SysCompanyID       uint   `gorm:"column:SYS_COMPANY_ID;uniqueIndex" json:"sysCompanyId"` // 关联公司ID
-	SecretID           string `gorm:"column:SECRET_ID;size:255" json:"secretId"`             // 云存储SecretID
-	SecretKey           string `gorm:"column:SECRET_KEY;size:255" json:"secretKey"`             // 云存储SecretKey
-	Region             string `gorm:"column:REGION;size:255" json:"region"`                     // 云存储Region
+	SysCompanyID  uint   `gorm:"column:SYS_COMPANY_ID;uniqueIndex" json:"sysCompanyId"` // 关联公司ID
+	SecretID      string `gorm:"column:SECRET_ID;size:255" json:"secretId"`             // secretID
+	SecretKey     string `gorm:"column:SECRET_KEY;size:255" json:"secretKey"`           // secretKey
+	Region        string `gorm:"column:REGION;size:255" json:"region"`                  // region
+	StorageType   string `gorm:"column:STORAGE_TYPE;size:20" json:"storageType"`        // 存储类型: local, aliyunOSS, tencentCOS
+	LocalBasePath string `gorm:"column:LOCAL_BASE_PATH;size:500" json:"localBasePath"`  // 本地存储基础路径
+	LocalBaseURL  string `gorm:"column:LOCAL_BASE_URL;size:500" json:"localBaseUrl"`    // 本地存储基础URL
+	// 阿里云OSS配置
+	AliyunOSSEndpoint        string `gorm:"column:ALIYUN_OSS_ENDPOINT;size:255" json:"aliyunOssEndpoint"`                 // 阿里云OSS Endpoint
+	AliyunOSSAccessKeyID     string `gorm:"column:ALIYUN_OSS_ACCESS_KEY_ID;size:255" json:"aliyunOssAccessKeyId"`         // 阿里云OSS AccessKeyID
+	AliyunOSSAccessKeySecret string `gorm:"column:ALIYUN_OSS_ACCESS_KEY_SECRET;size:255" json:"aliyunOssAccessKeySecret"` // 阿里云OSS AccessKeySecret
+	AliyunOSSBucketName      string `gorm:"column:ALIYUN_OSS_BUCKET_NAME;size:255" json:"aliyunOssBucketName"`            // 阿里云OSS Bucket名称
+	AliyunOSSCdnDomain       string `gorm:"column:ALIYUN_OSS_CDN_DOMAIN;size:500" json:"aliyunOssCdnDomain"`              // 阿里云OSS CDN域名
+	// 腾讯云COS配置
+	TencentCOSBucketURL  string `gorm:"column:TENCENT_COS_BUCKET_URL;size:500" json:"tencentCosBucketUrl"`   // 腾讯云COS Bucket URL
+	TencentCOSSecretID   string `gorm:"column:TENCENT_COS_SECRET_ID;size:255" json:"tencentCosSecretId"`     // 腾讯云COS SecretID
+	TencentCOSSecretKey  string `gorm:"column:TENCENT_COS_SECRET_KEY;size:255" json:"tencentCosSecretKey"`   // 腾讯云COS SecretKey
+	TencentCOSBucketName string `gorm:"column:TENCENT_COS_BUCKET_NAME;size:255" json:"tencentCosBucketName"` // 腾讯云COS Bucket名称
+	TencentCOSRegion     string `gorm:"column:TENCENT_COS_REGION;size:50" json:"tencentCosRegion"`           // 腾讯云COS 区域
+	TencentCOSCdnDomain  string `gorm:"column:TENCENT_COS_CDN_DOMAIN;size:500" json:"tencentCosCdnDomain"`   // 腾讯云COS CDN域名
+	// 腾讯云直播配置
+	TencentCloudSecretID    string `gorm:"column:TENCENT_CLOUD_SECRET_ID;size:255" json:"tencentCloudSecretId"`       // 腾讯云SecretID
+	TencentCloudSecretKey   string `gorm:"column:TENCENT_CLOUD_SECRET_KEY;size:255" json:"tencentCloudSecretKey"`     // 腾讯云SecretKey
+	TencentCloudRegion      string `gorm:"column:TENCENT_CLOUD_REGION;size:255" json:"tencentCloudRegion"`            // 腾讯云区域
+	TencentCloudCallbackKey string `gorm:"column:TENCENT_CLOUD_CALLBACK_KEY;size:255" json:"tencentCloudCallbackKey"` // 腾讯云回调密钥
+	// 火山引擎配置
+	VolcengineAccessKeyId     string `gorm:"column:VOLCENGINE_ACCESS_KEY_ID;size:255" json:"volcengineAccessKeyId"`         // 火山引擎访问密钥ID
+	VolcengineAccessKeySecret string `gorm:"column:VOLCENGINE_ACCESS_KEY_SECRET;size:255" json:"volcengineAccessKeySecret"` // 火山引擎访问密钥Secret
+	VolcengineRegion          string `gorm:"column:VOLCENGINE_REGION;size:50" json:"volcengineRegion"`                      // 火山引擎区域
+	VolcengineService         string `gorm:"column:VOLCENGINE_SERVICE;size:50" json:"volcengineService"`                    // 火山引擎服务名称
 }
 
 // TableName 指定表名

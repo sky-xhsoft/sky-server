@@ -83,7 +83,7 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 	}
 
 	// 创建腾讯云拉流任务
-	taskID, err := h.liveService.CreatePullStreamTask(c.Request.Context(), &req)
+	taskID, err := h.liveService.CreatePullStreamTask(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("创建拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "创建拉流任务失败: "+err.Error())
@@ -132,7 +132,7 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 		RoomName:   req.RoomName,
 	}
 
-	if err := h.pullStreamTaskService.CreatePullStreamTask(c.Request.Context(), task); err != nil {
+	if err := h.pullStreamTaskService.CreatePullStreamTask(withCompanyID(c), task); err != nil {
 		zap.L().Error("保存拉流任务到数据库失败", zap.Error(err))
 		// 这里不返回错误，因为腾讯云任务已经创建成功
 	}
@@ -189,7 +189,7 @@ func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
 	}
 
 	// 首先从腾讯云查询任务
-	tasks, err := h.liveService.DescribePullStreamTasks(c.Request.Context(), &req)
+	tasks, err := h.liveService.DescribePullStreamTasks(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("查询拉流任务列表失败", zap.Error(err))
 		utils.InternalError(c, "查询拉流任务列表失败: "+err.Error())
@@ -198,7 +198,7 @@ func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
 
 	// 如果有任务ID参数，并且在数据库中没有找到该任务，则尝试从腾讯云同步
 	if specifyTaskId != "" {
-		_, err := h.pullStreamTaskService.GetPullStreamTask(c.Request.Context(), specifyTaskId)
+		_, err := h.pullStreamTaskService.GetPullStreamTask(withCompanyID(c), specifyTaskId)
 		if err != nil {
 			// 如果任务在数据库中不存在，则尝试同步
 			if len(tasks.TaskInfos) > 0 {
@@ -222,7 +222,7 @@ func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
 					IsActive:   "Y",
 				}
 
-				if err := h.pullStreamTaskService.CreatePullStreamTask(c.Request.Context(), task); err != nil {
+				if err := h.pullStreamTaskService.CreatePullStreamTask(withCompanyID(c), task); err != nil {
 					zap.L().Error("同步拉流任务到数据库失败", zap.Error(err))
 				}
 			}
@@ -232,7 +232,7 @@ func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
 	// 为每个任务添加 RoomID 和 RoomName 信息
 	for _, taskInfo := range tasks.TaskInfos {
 		// 从本地数据库中获取任务信息
-		localTask, err := h.pullStreamTaskService.GetPullStreamTask(c.Request.Context(), taskInfo.TaskID)
+		localTask, err := h.pullStreamTaskService.GetPullStreamTask(withCompanyID(c), taskInfo.TaskID)
 		if err == nil {
 			taskInfo.RoomID = localTask.RoomID
 			taskInfo.RoomName = localTask.RoomName
@@ -275,7 +275,7 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 	}
 
 	// 更新腾讯云拉流任务
-	err := h.liveService.UpdatePullStreamTask(c.Request.Context(), &req)
+	err := h.liveService.UpdatePullStreamTask(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("更新拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "更新拉流任务失败: "+err.Error())
@@ -317,7 +317,7 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 		task.Status = req.Status
 	}
 
-	if err := h.pullStreamTaskService.UpdatePullStreamTask(c.Request.Context(), task); err != nil {
+	if err := h.pullStreamTaskService.UpdatePullStreamTask(withCompanyID(c), task); err != nil {
 		zap.L().Error("更新拉流任务到数据库失败", zap.Error(err))
 		// 这里不返回错误，因为腾讯云任务已经更新成功
 	}
@@ -349,7 +349,7 @@ func (h *PullStreamHandler) DeletePullStreamTask(c *gin.Context) {
 	}
 
 	// 删除腾讯云拉流任务
-	err := h.liveService.DeletePullStreamTask(c.Request.Context(), taskID, operator)
+	err := h.liveService.DeletePullStreamTask(withCompanyID(c), taskID, operator)
 	if err != nil {
 		zap.L().Error("删除拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "删除拉流任务失败: "+err.Error())
@@ -357,7 +357,7 @@ func (h *PullStreamHandler) DeletePullStreamTask(c *gin.Context) {
 	}
 
 	// 更新本地数据库（软删除）
-	if err := h.pullStreamTaskService.DeletePullStreamTask(c.Request.Context(), taskID); err != nil {
+	if err := h.pullStreamTaskService.DeletePullStreamTask(withCompanyID(c), taskID); err != nil {
 		zap.L().Error("删除拉流任务到数据库失败", zap.Error(err))
 		// 这里不返回错误，因为腾讯云任务已经删除成功
 	}
@@ -381,7 +381,7 @@ func (h *PullStreamHandler) GetPullStreamTaskStatus(c *gin.Context) {
 		return
 	}
 
-	status, err := h.liveService.DescribePullStreamTaskStatus(c.Request.Context(), taskID)
+	status, err := h.liveService.DescribePullStreamTaskStatus(withCompanyID(c), taskID)
 	if err != nil {
 		zap.L().Error("查询拉流任务状态失败", zap.Error(err))
 		utils.InternalError(c, "查询拉流任务状态失败: "+err.Error())
@@ -414,7 +414,7 @@ func (h *PullStreamHandler) RestartPullStreamTask(c *gin.Context) {
 		return
 	}
 
-	err := h.liveService.RestartPullStreamTask(c.Request.Context(), taskID, operator)
+	err := h.liveService.RestartPullStreamTask(withCompanyID(c), taskID, operator)
 	if err != nil {
 		zap.L().Error("重启拉流任务失败", zap.Error(err))
 		utils.InternalError(c, "重启拉流任务失败: "+err.Error())
@@ -454,7 +454,7 @@ func (h *PullStreamHandler) DescribePullTransformPushInfoList(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.liveService.DescribePullTransformPushInfoList(c.Request.Context(), &req)
+	resp, err := h.liveService.DescribePullTransformPushInfoList(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("查询拉流转推任务流数据失败", zap.Error(err))
 		utils.InternalError(c, "查询拉流转推任务流数据失败: "+err.Error())
