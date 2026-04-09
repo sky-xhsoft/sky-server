@@ -4,7 +4,7 @@
 # 应用配置
 app:
   name: "Sky-Server"
-  version: "1.0.0"
+  version: "1.0.1"
   env: "development"  # development, production
   port: 9090
   mode: "debug"  # debug, release
@@ -128,7 +128,7 @@ swagger:
   enabled: true
   title: "Sky-Server API"
   description: "元数据驱动的企业级应用框架"
-  version: "1.0.0"
+  version: "1.0.1"
   host: "localhost:9090"
   basePath: "/api/v1"
 
