@@ -36,8 +36,10 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 			c.Set("companyID", company.ID)
 			c.Set("companyName", company.Name)
 			c.Set("companyDomain", host)
+		} else {
+			// 如果未找到，默认使用公司ID=1（默认公司）
+			c.Set("companyID", uint(1))
 		}
-		// 如果未找到，不设置（允许系统继续运行，可能使用其他方式识别公司）
 
 		c.Next()
 	}
