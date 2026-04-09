@@ -30,6 +30,11 @@ type AliyunOSSConfig struct {
 	CDNDomain       string // CDN加速域名（可选，如: https://cdn.example.com）
 }
 
+// IsAliyunOSS 判断是否是阿里云OSS存储（用于类型断言）
+func (s *AliyunOSS) IsAliyunOSS() bool {
+	return true
+}
+
 // NewAliyunOSS 创建阿里云OSS存储
 func NewAliyunOSS(cfg *AliyunOSSConfig) (Storage, error) {
 	// 创建OSSClient实例

@@ -35,6 +35,11 @@ type TencentCOSConfig struct {
 	CDNDomain  string // CDN加速域名（可选）
 }
 
+// IsTencentCOS 判断是否是腾讯云COS存储（用于类型断言）
+func (s *TencentCOS) IsTencentCOS() bool {
+	return true
+}
+
 // NewTencentCOS 创建腾讯云COS存储
 func NewTencentCOS(cfg *TencentCOSConfig) (Storage, error) {
 	// 验证配置
