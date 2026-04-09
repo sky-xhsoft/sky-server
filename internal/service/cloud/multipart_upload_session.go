@@ -11,6 +11,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -81,10 +82,51 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 	// 4. 计算总分片数
 	totalChunks := int(math.Ceil(float64(req.FileSize) / float64(chunkSize)))
 
-	// 5. 设置存储类型
-	storageType := req.StorageType
-	if storageType == "" {
+	// 5. 获取公司存储实例和配置，确定正确的存储类型
+	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	var storageType string
+	if err != nil {
+		// 获取存储实例失败，使用默认值
 		storageType = "local"
+		logger.Warn("获取公司存储实例失败，使用默认本地存储", zap.Error(err))
+	} else {
+		// 从公司配置中获取正确的存储类型
+		user, getuserErr := s.userRepo.GetUserByID(userID)
+		if getuserErr == nil {
+			companyConfig, getConfigErr := s.companyStorageManager.GetConfig(ctx, user.SysCompanyID)
+			if getConfigErr == nil && companyConfig != nil {
+				storageType = companyConfig.StorageType
+			}
+		}
+		// 如果获取配置失败，根据存储实例类型推断
+		if storageType == "" {
+			// 通过类型断言判断存储类型
+			switch storageInstance.(type) {
+			case *storage.LocalStorage:
+				storageType = "local"
+			default:
+				// 阿里云OSS和腾讯云COS都统一保存为 "oss"
+				if _, ok := storageInstance.(interface{ IsAliyunOSS() bool }); ok {
+					storageType = "oss"
+				} else if _, ok := storageInstance.(interface{ IsTencentCOS() bool }); ok {
+					storageType = "oss" // 腾讯云也保存为 oss
+				} else {
+					// 最后尝试通过反射或其他方式判断
+					storageType = "local"
+				}
+			}
+		} else {
+			// 如果从配置获取到的是长格式类型，统一转换为 "oss"
+			switch storageType {
+			case "aliyunOSS":
+				storageType = "oss"
+			case "tencentCOS":
+				storageType = "oss" // 腾讯云也转换为 oss
+			case "cos":
+				storageType = "oss" // 已有的 cos 也转换为 oss
+			}
+		}
+		logger.Info("使用公司配置的存储类型", zap.String("storageType", storageType))
 	}
 
 	// 6. 创建新的上传会话（使用配置的过期时间）
@@ -113,7 +155,7 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		TotalChunks:     totalChunks,
 		UploadedChunks:  "[]",
 		Status:          "uploading",
-		StorageType:     storageType,
+		StorageType:     storageType, // 使用公司配置的正确存储类型，而不是前端请求的
 		StoragePath:     finalStoragePath, // 使用最终路径而不是临时路径，原生分块直接上传到最终位置
 		StorageUploadID: "",
 		ExpireTime:      &expireTime,
@@ -121,7 +163,6 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 
 	// 如果是腾讯云COS等支持原生分块上传的存储，尝试初始化原生分块上传
 	// 调用存储层的 InitiateMultipartUpload 接口
-	storageInstance, err := s.getCompanyStorage(ctx, userID)
 	if err == nil {
 		if _, ok := storageInstance.(interface {
 			InitiateMultipartUpload(ctx context.Context, path string) (string, error)

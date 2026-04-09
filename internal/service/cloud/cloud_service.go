@@ -398,7 +398,41 @@ func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID
 
 	// 创建文件记录 - 使用 CloudItem
 	username := s.getUsernameByID(ctx, userID)
-	storageType := req.StorageType
+	// 获取正确的存储类型（与分片上传保持一致）
+	var storageType string
+	user, getuserErr := s.userRepo.GetUserByID(userID)
+	if getuserErr == nil {
+		companyConfig, getConfigErr := s.companyStorageManager.GetConfig(ctx, user.SysCompanyID)
+		if getConfigErr == nil && companyConfig != nil {
+			storageType = companyConfig.StorageType
+		}
+	}
+	// 如果获取配置失败，根据存储实例类型推断
+	if storageType == "" {
+		switch storageInstance.(type) {
+		case *storage.LocalStorage:
+			storageType = "local"
+		default:
+			// 阿里云OSS和腾讯云COS都统一保存为 "oss"
+			if _, ok := storageInstance.(interface{ IsAliyunOSS() bool }); ok {
+				storageType = "oss"
+			} else if _, ok := storageInstance.(interface{ IsTencentCOS() bool }); ok {
+				storageType = "oss" // 腾讯云也保存为 oss
+			} else {
+				storageType = "local"
+			}
+		}
+	} else {
+		// 如果从配置获取到的是长格式类型，统一转换为 "oss"
+		switch storageType {
+		case "aliyunOSS":
+			storageType = "oss"
+		case "tencentCOS":
+			storageType = "oss" // 腾讯云也转换为 oss
+		case "cos":
+			storageType = "oss" // 已有的 cos 也转换为 oss
+		}
+	}
 	fileSize := req.FileSize
 	fileType := req.FileType
 	item := &entity.CloudItem{

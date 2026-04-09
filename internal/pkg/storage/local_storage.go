@@ -24,6 +24,11 @@ type LocalStorageConfig struct {
 	BaseURL  string // 基础URL（如: http://localhost:8080/files）
 }
 
+// IsLocalStorage 判断是否是本地存储（用于类型断言）
+func (s *LocalStorage) IsLocalStorage() bool {
+	return true
+}
+
 // NewLocalStorage 创建本地存储
 func NewLocalStorage(cfg *LocalStorageConfig) (Storage, error) {
 	// 确保基础路径存在
