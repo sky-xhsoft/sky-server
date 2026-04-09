@@ -39,6 +39,9 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 	// 如果指定了系统类型，则过滤子系统
 	if systemType != "" {
 		query = query.Where("`KEY` = ?", systemType)
+	} else {
+		// 如果没有指定系统类型，默认只返回有 KEY 的子系统（排除系统管理等通用子系统）
+		query = query.Where("`KEY` IS NOT NULL")
 	}
 
 	if err := query.

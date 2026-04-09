@@ -41,7 +41,7 @@ import (
 )
 
 // @title Sky-Server API
-// @version 1.0.0
+// @version 1.0.1
 // @description 元数据驱动的企业级应用框架
 // @termsOfService http://swagger.io/terms/
 
@@ -190,13 +190,16 @@ func main() {
 	// 初始化消息服务
 	messageService := message.NewService(db, wsManager)
 
-	// 初始化CloudStorageConfigRepository
+	// 初始化CloudStorageConfigRepository (用于 StorageConfigService)
 	cloudStorageConfigRepo := mysql.NewCloudStorageConfigRepository(db)
+
+	// 初始化SysCompanyConfRepository
+	sysCompanyConfRepo := mysql.NewSysCompanyConfRepository(db)
 
 	// 初始化公司存储管理器
 	companyStorageManager, err := storage.NewCompanyStorageManager(
 		&cfg.Storage,
-		cloudStorageConfigRepo,
+		sysCompanyConfRepo,
 		0, // 默认公司ID
 	)
 	if err != nil {
@@ -226,9 +229,6 @@ func main() {
 		zap.Int("defaultChunkSize", cfg.MultipartUpload.ChunkSize),
 		zap.Int("sessionExpireHours", cfg.MultipartUpload.SessionExpireHours))
 
-	// 初始化SysCompanyConfRepository
-	sysCompanyConfRepo := mysql.NewSysCompanyConfRepository(db)
-
 	// 初始化公司级腾讯云客户端管理器
 	companyTencentManager, err := tencent.NewCompanyTencentManager(
 		&cfg.TencentCloud,
@@ -241,7 +241,7 @@ func main() {
 	}
 
 	// 初始化公司级火山引擎客户端管理器
-	companyVolcengineManager, err := volcengine.NewCompanyVolcengineManager(
+	_, err = volcengine.NewCompanyVolcengineManager(
 		&cfg.Volcengine,
 		sysCompanyConfRepo,
 		0, // 默认公司ID

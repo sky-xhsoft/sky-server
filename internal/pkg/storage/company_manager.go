@@ -16,18 +16,18 @@ import (
 
 // CompanyStorageManager 公司级存储管理器
 type CompanyStorageManager struct {
-	globalManager    *StorageManager                         // 全局存储管理器（作为fallback）
-	configRepo       repository.CloudStorageConfigRepository // 存储配置仓储
-	companyStorages  map[uint]*companyStorageEntry           // 公司ID -> 存储实例缓存
-	mu               sync.RWMutex                            // 读写锁
-	defaultCompanyID uint                                    // 默认公司ID
+	globalManager    *StorageManager                     // 全局存储管理器（作为fallback）
+	configRepo       repository.SysCompanyConfRepository // 存储配置仓储
+	companyStorages  map[uint]*companyStorageEntry       // 公司ID -> 存储实例缓存
+	mu               sync.RWMutex                        // 读写锁
+	defaultCompanyID uint                                // 默认公司ID
 }
 
 // companyStorageEntry 公司存储缓存条目
 type companyStorageEntry struct {
-	storage  Storage                    // 存储实例
-	config   *entity.CloudStorageConfig // 配置信息
-	cachedAt time.Time                  // 缓存时间
+	storage  Storage                // 存储实例
+	config   *entity.SysCompanyConf // 配置信息
+	cachedAt time.Time              // 缓存时间
 }
 
 const (
@@ -38,7 +38,7 @@ const (
 // NewCompanyStorageManager 创建公司级存储管理器
 func NewCompanyStorageManager(
 	globalConfig *config.StorageConfig,
-	configRepo repository.CloudStorageConfigRepository,
+	configRepo repository.SysCompanyConfRepository,
 	defaultCompanyID uint,
 ) (*CompanyStorageManager, error) {
 
@@ -179,7 +179,7 @@ func (m *CompanyStorageManager) ClearAllCache() {
 }
 
 // createStorageFromConfig 根据数据库配置创建存储实例
-func (m *CompanyStorageManager) createStorageFromConfig(config *entity.CloudStorageConfig) (Storage, error) {
+func (m *CompanyStorageManager) createStorageFromConfig(config *entity.SysCompanyConf) (Storage, error) {
 	switch config.StorageType {
 	case "local":
 		return m.createLocalStorage(config)
@@ -196,7 +196,7 @@ func (m *CompanyStorageManager) createStorageFromConfig(config *entity.CloudStor
 }
 
 // createLocalStorage 创建本地存储
-func (m *CompanyStorageManager) createLocalStorage(config *entity.CloudStorageConfig) (Storage, error) {
+func (m *CompanyStorageManager) createLocalStorage(config *entity.SysCompanyConf) (Storage, error) {
 	basePath := config.LocalBasePath
 	if basePath == "" {
 		basePath = "uploads"
@@ -214,7 +214,7 @@ func (m *CompanyStorageManager) createLocalStorage(config *entity.CloudStorageCo
 }
 
 // createAliyunOSSStorage 创建阿里云OSS存储
-func (m *CompanyStorageManager) createAliyunOSSStorage(config *entity.CloudStorageConfig) (Storage, error) {
+func (m *CompanyStorageManager) createAliyunOSSStorage(config *entity.SysCompanyConf) (Storage, error) {
 	// 验证必要的配置
 	if config.AliyunOSSEndpoint == "" {
 		return nil, fmt.Errorf("阿里云OSS Endpoint未配置")
@@ -234,12 +234,12 @@ func (m *CompanyStorageManager) createAliyunOSSStorage(config *entity.CloudStora
 		AccessKeyID:     config.AliyunOSSAccessKeyID,
 		AccessKeySecret: config.AliyunOSSAccessKeySecret,
 		BucketName:      config.AliyunOSSBucketName,
-		CDNDomain:       config.AliyunOSSCDNDomain,
+		CDNDomain:       config.AliyunOSSCdnDomain,
 	})
 }
 
 // createTencentCOSStorage 创建腾讯云COS存储
-func (m *CompanyStorageManager) createTencentCOSStorage(config *entity.CloudStorageConfig) (Storage, error) {
+func (m *CompanyStorageManager) createTencentCOSStorage(config *entity.SysCompanyConf) (Storage, error) {
 	// 验证必要的配置
 	if config.TencentCOSBucketURL == "" {
 		return nil, fmt.Errorf("腾讯云COS BucketURL未配置")
@@ -263,7 +263,7 @@ func (m *CompanyStorageManager) createTencentCOSStorage(config *entity.CloudStor
 		SecretKey:  config.TencentCOSSecretKey,
 		BucketName: config.TencentCOSBucketName,
 		Region:     config.TencentCOSRegion,
-		CDNDomain:  config.TencentCOSCDNDomain,
+		CDNDomain:  config.TencentCOSCdnDomain,
 	})
 }
 
@@ -278,7 +278,7 @@ func (m *CompanyStorageManager) Upload(ctx context.Context, companyID uint, path
 }
 
 // GetConfig 获取公司的存储配置（带缓存）
-func (m *CompanyStorageManager) GetConfig(ctx context.Context, companyID uint) (*entity.CloudStorageConfig, error) {
+func (m *CompanyStorageManager) GetConfig(ctx context.Context, companyID uint) (*entity.SysCompanyConf, error) {
 	// 先检查缓存
 	m.mu.RLock()
 	if entry, exists := m.companyStorages[companyID]; exists {
