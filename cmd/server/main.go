@@ -41,7 +41,7 @@ import (
 )
 
 // @title Sky-Server API
-// @version 1.0.1
+// @version 1.0.2
 // @description 元数据驱动的企业级应用框架
 // @termsOfService http://swagger.io/terms/
 
