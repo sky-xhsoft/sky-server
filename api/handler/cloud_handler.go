@@ -900,6 +900,51 @@ func (h *CloudHandler) CancelShare(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "取消分享成功"})
 }
 
+// UpdateShare 更新分享
+// @Summary 更新分享信息
+// @Description 更新分享的访问密码和有效期
+// @Tags Cloud
+// @Accept json
+// @Produce json
+// @Param id path int true "分享ID"
+// @Param request body UpdateShareRequest true "更新分享请求"
+// @Success 200 {object} entity.CloudShare
+// @Router /api/v1/cloud/shares/{id} [put]
+func (h *CloudHandler) UpdateShare(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+
+	var req UpdateShareRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	// 构建更新请求
+	updateReq := &cloud.UpdateShareRequest{
+		Password:   req.Password,
+		ExpireDays: req.ExpireDays,
+	}
+
+	share, err := h.cloudService.UpdateShare(c.Request.Context(), uint(id), updateReq, userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "更新分享失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, share)
+}
+
 // GetUserQuota 获取用户配额
 // @Summary 获取用户配额信息
 // @Description 获取当前用户的存储配额和使用情况
@@ -956,6 +1001,12 @@ type CreateShareRequest struct {
 	Password     string `json:"password"`                        // 访问密码（当shareType=password时需要）
 	ExpireDays   int    `json:"expireDays"`                      // 过期天数（0表示永久）
 	MaxDownloads int    `json:"maxDownloads"`                    // 最大下载次数（0表示无限制）
+}
+
+// UpdateShareRequest 更新分享请求
+type UpdateShareRequest struct {
+	Password   *string `json:"password"`   // 访问密码（nil表示不修改）
+	ExpireDays *int    `json:"expireDays"` // 过期天数（0表示永久，nil表示不修改）
 }
 
 // AccessShareRequest 访问分享请求

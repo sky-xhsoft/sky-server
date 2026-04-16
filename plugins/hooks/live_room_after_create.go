@@ -72,8 +72,16 @@ func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(
 		}
 
 		// 检查直播间文件夹是否存在
-		if err := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-			"folder", roomName, userID, defaultParentID, "Y").First(&roomFolder).Error; err != nil {
+		query := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?",
+			"folder", roomName, userID, "Y")
+		// 根据配置处理 PARENT_ID 查询条件
+		if defaultParentID != nil {
+			query = query.Where("PARENT_ID = ?", *defaultParentID)
+		} else {
+			query = query.Where("PARENT_ID IS NULL")
+		}
+
+		if err := query.First(&roomFolder).Error; err != nil {
 			// 直播间文件夹不存在，创建
 			roomFolder = entity.CloudItem{
 				BaseModel: entity.BaseModel{
@@ -85,7 +93,7 @@ func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(
 				ItemType: "folder",
 				Name:     roomName,
 				ParentID: defaultParentID, // 使用默认的父ID
-				Path:     "/" + roomName, // 根据需要修改路径生成逻辑
+				Path:     "/" + roomName,  // 根据需要修改路径生成逻辑
 				OwnerID:  userID,
 			}
 			if err := txDB.Create(&roomFolder).Error; err != nil {

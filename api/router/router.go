@@ -570,6 +570,7 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 		{
 			shares.GET("", cloudHandler.GetMyShares)
 			shares.POST("", cloudHandler.CreateShare)
+			shares.PUT("/:id", cloudHandler.UpdateShare)
 			shares.DELETE("/:id", cloudHandler.CancelShare)
 		}
 

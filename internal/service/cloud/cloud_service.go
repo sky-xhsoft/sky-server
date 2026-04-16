@@ -50,6 +50,7 @@ type Service interface {
 	GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
+	UpdateShare(ctx context.Context, shareID uint, req *UpdateShareRequest, userID uint) (*entity.CloudShare, error)
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
 	IncrementShareDownloadCount(ctx context.Context, shareID uint) error
 
@@ -128,6 +129,12 @@ type CreateShareRequest struct {
 	Password     string `json:"password"`
 	ExpireDays   int    `json:"expireDays"`   // 过期天数（0=永久）
 	MaxDownloads int    `json:"maxDownloads"` // 最大下载次数（0=无限制）
+}
+
+// UpdateShareRequest 更新分享请求
+type UpdateShareRequest struct {
+	Password   *string `json:"password"`   // 访问密码（nil表示不修改）
+	ExpireDays *int    `json:"expireDays"` // 过期天数（0=永久，nil表示不修改）
 }
 
 // ShareInfo 分享信息
@@ -635,7 +642,6 @@ func (s *service) updateChildrenPaths(ctx context.Context, oldPath, newPath stri
 	return nil
 }
 
-
 func (s *service) generateShareCode() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 8)
@@ -1099,4 +1105,57 @@ func (s *service) CancelShare(ctx context.Context, shareID uint, userID uint) er
 	}
 
 	return nil
+}
+
+// UpdateShare 更新分享
+func (s *service) UpdateShare(ctx context.Context, shareID uint, req *UpdateShareRequest, userID uint) (*entity.CloudShare, error) {
+	var share entity.CloudShare
+	if err := s.db.WithContext(ctx).
+		Where("ID = ? AND IS_ACTIVE = ?", shareID, "Y").
+		First(&share).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrResourceNotFound, "分享不存在")
+		}
+		return nil, errors.Wrap(errors.ErrDatabase, "查询分享失败", err)
+	}
+
+	// 检查权限
+	if share.SharerID != userID {
+		return nil, errors.New(errors.ErrPermissionDenied, "无权限更新此分享")
+	}
+
+	// 构建更新字段
+	updates := map[string]interface{}{
+		"UPDATE_BY":   fmt.Sprintf("user_%d", userID),
+		"UPDATE_TIME": time.Now(),
+	}
+
+	if req.Password != nil {
+		updates["PASSWORD"] = *req.Password
+	}
+
+	if req.ExpireDays != nil {
+		if *req.ExpireDays > 0 {
+			expireTime := time.Now().AddDate(0, 0, *req.ExpireDays)
+			updates["EXPIRE_TIME"] = expireTime
+		} else {
+			updates["EXPIRE_TIME"] = nil // 永久有效
+		}
+	}
+
+	// 更新分享记录
+	if err := s.db.WithContext(ctx).Model(&entity.CloudShare{}).
+		Where("ID = ?", shareID).
+		Updates(updates).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "更新分享失败", err)
+	}
+
+	// 查询更新后的分享记录
+	if err := s.db.WithContext(ctx).
+		Where("ID = ?", shareID).
+		First(&share).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "查询更新后的分享失败", err)
+	}
+
+	return &share, nil
 }
