@@ -4,14 +4,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/api/handler"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"gorm.io/gorm"
 )
 
 // SetupLiveCallbackRoutes 设置直播回调路由
-func SetupLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB, callbackKey string, cloudService cloud.Service) {
-	callbackHandler := handler.NewLiveCallbackHandler(db, callbackKey, cloudService)
+func SetupLiveCallbackRoutes(rg *gin.RouterGroup, cfg *config.Config, jwtUtil *jwt.JWT, db *gorm.DB, callbackKey string, cloudService cloud.Service) {
+	callbackHandler := handler.NewLiveCallbackHandler(db, cfg, callbackKey, cloudService)
 
 	callback := rg.Group("/callback")
 	{

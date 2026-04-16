@@ -615,7 +615,7 @@ func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.
 	if cfg.TencentCloud.CallbackKey != "" {
 		callbackKey = cfg.TencentCloud.CallbackKey
 	}
-	SetupLiveCallbackRoutes(rg.Group("/live"), jwtUtil, db, callbackKey, services.Cloud)
+	SetupLiveCallbackRoutes(rg.Group("/live"), cfg, jwtUtil, db, callbackKey, services.Cloud)
 }
 
 // registerLiveRoomRoutes 注册直播间管理路由

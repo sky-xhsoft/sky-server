@@ -307,9 +307,23 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				// 创建文件夹："直播间名称/直播切片"
 				var roomFolder, highlightFolder entity.CloudItem
 
+				// 获取默认的直播间文件夹父ID（从配置中读取）
+				var defaultParentID *uint = nil
+				if h.cfg.Cloud.DefaultRoomParentID != nil {
+					defaultParentID = h.cfg.Cloud.DefaultRoomParentID
+				}
+
 				// 检查直播间文件夹是否存在
-				if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID IS NULL AND IS_ACTIVE = ?",
-					"folder", room.RoomName, creatorUser.ID, "Y").First(&roomFolder).Error; err != nil {
+				query := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?",
+					"folder", room.RoomName, creatorUser.ID, "Y")
+				// 根据配置处理 PARENT_ID 查询条件
+				if defaultParentID != nil {
+					query = query.Where("PARENT_ID = ?", *defaultParentID)
+				} else {
+					query = query.Where("PARENT_ID IS NULL")
+				}
+
+				if err := query.First(&roomFolder).Error; err != nil {
 					// 直播间文件夹不存在，创建
 					roomFolder = entity.CloudItem{
 						BaseModel: entity.BaseModel{
@@ -319,7 +333,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 						},
 						ItemType: "folder",
 						Name:     room.RoomName,
-						ParentID: nil,
+						ParentID: defaultParentID,
 						Path:     "/" + room.RoomName,
 						OwnerID:  creatorUser.ID,
 					}
@@ -350,7 +364,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				}
 
 				// 创建高光切片文件记录
-				fileName := fmt.Sprintf("%s.mp4", item.BeginTime, strings.TrimSpace(item.Title))
+				fileName := fmt.Sprintf("%s.mp4", strings.TrimSpace(item.Title))
 				// 清理文件名中的无效字符
 				fileName = strings.ReplaceAll(fileName, "\\", "")
 				fileName = strings.ReplaceAll(fileName, "/", "")

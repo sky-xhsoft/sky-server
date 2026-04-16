@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
@@ -20,14 +21,16 @@ import (
 // LiveCallbackHandler 直播回调处理器
 type LiveCallbackHandler struct {
 	db           *gorm.DB
+	cfg          *config.Config    // 应用配置
 	callbackKey  string        // 回调密钥，用于验证签名
 	cloudService cloud.Service // 云盘服务
 }
 
 // NewLiveCallbackHandler 创建直播回调处理器
-func NewLiveCallbackHandler(db *gorm.DB, callbackKey string, cloudService cloud.Service) *LiveCallbackHandler {
+func NewLiveCallbackHandler(db *gorm.DB, cfg *config.Config, callbackKey string, cloudService cloud.Service) *LiveCallbackHandler {
 	return &LiveCallbackHandler{
 		db:           db,
+		cfg:          cfg,
 		callbackKey:  callbackKey,
 		cloudService: cloudService,
 	}
@@ -647,9 +650,23 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 			// 创建文件夹："直播间名称/直播录制"
 			var roomFolder, recordingFolder entity.CloudItem
 
+			// 获取默认的直播间文件夹父ID（从配置中读取）
+			var defaultParentID *uint = nil
+			if h.cfg.Cloud.DefaultRoomParentID != nil {
+				defaultParentID = h.cfg.Cloud.DefaultRoomParentID
+			}
+
 			// 检查直播间文件夹是否存在
-			if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID IS NULL AND IS_ACTIVE = ?",
-				"folder", room.RoomName, creatorUser.ID, "Y").First(&roomFolder).Error; err != nil {
+			query := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?",
+				"folder", room.RoomName, creatorUser.ID, "Y")
+			// 根据配置处理 PARENT_ID 查询条件
+			if defaultParentID != nil {
+				query = query.Where("PARENT_ID = ?", *defaultParentID)
+			} else {
+				query = query.Where("PARENT_ID IS NULL")
+			}
+
+			if err := query.First(&roomFolder).Error; err != nil {
 				// 直播间文件夹不存在，创建
 				roomFolder = entity.CloudItem{
 					BaseModel: entity.BaseModel{
@@ -659,7 +676,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 					},
 					ItemType: "folder",
 					Name:     room.RoomName,
-					ParentID: nil,
+					ParentID: defaultParentID,
 					Path:     "/" + room.RoomName,
 					OwnerID:  creatorUser.ID,
 				}
