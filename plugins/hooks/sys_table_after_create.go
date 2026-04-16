@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"go.uber.org/zap"
@@ -22,7 +23,7 @@ func init() {
 }
 
 // sysTableAfterCreateHandler 处理 sys_table 创建后的逻辑
-func sysTableAfterCreateHandler(manager *core.Manager) func(map[string]interface{}) (interface{}, error) {
+func sysTableAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(map[string]interface{}) (interface{}, error) {
 	return func(params map[string]interface{}) (interface{}, error) {
 		logger.Info("执行 SYS_TABLE_AFTER_CREATE 钩子", zap.Any("params", params))
 

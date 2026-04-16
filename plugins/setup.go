@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"github.com/sky-xhsoft/sky-server/plugins/hotload"
@@ -23,7 +24,7 @@ import (
 // 2. 从注册中心加载所有已注册的插件（静态编译插件）
 // 3. 启动热加载管理器（动态加载插件）
 // 4. 注册 Go 钩子函数到执行器
-func Setup(db *gorm.DB) *core.Manager {
+func Setup(db *gorm.DB, cfg *config.Config) *core.Manager {
 	logger.Info("初始化插件系统...")
 
 	// 1. 创建插件管理器
@@ -41,7 +42,7 @@ func Setup(db *gorm.DB) *core.Manager {
 	setupHotloadManager(db, pluginManager)
 
 	// 5. 注册 Go 钩子函数
-	registerGoHooks(pluginManager)
+	registerGoHooks(pluginManager, cfg)
 
 	// 6. 输出已加载的插件信息
 	logLoadedPlugins(pluginManager)
@@ -54,9 +55,9 @@ func Setup(db *gorm.DB) *core.Manager {
 // registerGoHooks 注册 Go 钩子函数到执行器
 // 将插件系统与 GoFuncRegistry 集成
 // 所有 hooks 通过 init() 自动注册，这里只需调用 RegisterAll
-func registerGoHooks(manager *core.Manager) {
+func registerGoHooks(manager *core.Manager, cfg *config.Config) {
 	// 自动注册所有 hooks
-	hooks.RegisterAll(manager)
+	hooks.RegisterAll(manager, cfg)
 
 	// 输出已注册的 hooks
 	registeredHooks := hooks.GetRegisteredHooks()

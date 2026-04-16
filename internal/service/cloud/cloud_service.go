@@ -324,28 +324,7 @@ func (s *service) DeleteFolder(ctx context.Context, folderID uint, userID uint) 
 		return errors.New(errors.ErrPermissionDenied, "无权限删除此文件夹")
 	}
 
-	// 检查是否有子文件夹
-	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
-		Where("PARENT_ID = ? AND IS_ACTIVE = ? AND ITEM_TYPE = ?", folderID, "Y", "folder").
-		Count(&count).Error; err != nil {
-		return errors.Wrap(errors.ErrDatabase, "检查子文件夹失败", err)
-	}
-	if count > 0 {
-		return errors.New(errors.ErrResourceConflict, "文件夹不为空，无法删除")
-	}
-
-	// 检查是否有文件
-	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
-		Where("PARENT_ID = ? AND ITEM_TYPE = ? AND IS_ACTIVE = ?", folderID, "file", "Y").
-		Count(&count).Error; err != nil {
-		return errors.Wrap(errors.ErrDatabase, "检查文件失败", err)
-	}
-	if count > 0 {
-		return errors.New(errors.ErrResourceConflict, "文件夹包含文件，无法删除")
-	}
-
-	// 软删除
+	// 直接软删除文件夹（不删除存储文件）
 	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
 		Where("ID = ? AND ITEM_TYPE = ?", folderID, "folder").
 		Update("IS_ACTIVE", "N").Error; err != nil {
@@ -656,6 +635,7 @@ func (s *service) updateChildrenPaths(ctx context.Context, oldPath, newPath stri
 	return nil
 }
 
+
 func (s *service) generateShareCode() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 8)
@@ -771,16 +751,8 @@ func (s *service) DeleteFile(ctx context.Context, fileID uint, userID uint) erro
 	// 重新计算配额（从数据库统计）
 	_ = s.RecalculateQuota(ctx, userID)
 
-	// 异步删除物理文件（可选）
-	if file.StoragePath != nil {
-		// 获取公司存储实例
-		storageInstance, err := s.getCompanyStorage(ctx, userID)
-		if err == nil {
-			go func() {
-				_ = storageInstance.Delete(context.Background(), *file.StoragePath)
-			}()
-		}
-	}
+	// 保留存储文件（根据需求修改）
+	// 不再删除物理存储文件
 
 	return nil
 }

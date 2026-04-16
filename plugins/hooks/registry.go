@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/executor"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 )
@@ -12,7 +13,7 @@ type HookRegistrar interface {
 	Name() string
 
 	// Register 执行注册逻辑，将 hook 注册到 executor
-	Register(manager *core.Manager)
+	Register(manager *core.Manager, cfg *config.Config)
 }
 
 // hookRegistry 存储所有已注册的 hook
@@ -25,9 +26,9 @@ func Register(hook HookRegistrar) {
 
 // RegisterAll 注册所有已收集的 hooks 到 executor
 // 在 plugins.Setup() 中调用
-func RegisterAll(manager *core.Manager) {
+func RegisterAll(manager *core.Manager, cfg *config.Config) {
 	for _, hook := range hookRegistry {
-		hook.Register(manager)
+		hook.Register(manager, cfg)
 	}
 }
 
@@ -44,11 +45,11 @@ func GetRegisteredHooks() []string {
 // 可以嵌入到具体的 hook 中复用代码
 type BaseHook struct {
 	hookName string
-	handler  func(manager *core.Manager) func(map[string]interface{}) (interface{}, error)
+	handler  func(manager *core.Manager, cfg *config.Config) func(map[string]interface{}) (interface{}, error)
 }
 
 // NewBaseHook 创建基础 hook
-func NewBaseHook(name string, handler func(manager *core.Manager) func(map[string]interface{}) (interface{}, error)) *BaseHook {
+func NewBaseHook(name string, handler func(manager *core.Manager, cfg *config.Config) func(map[string]interface{}) (interface{}, error)) *BaseHook {
 	return &BaseHook{
 		hookName: name,
 		handler:  handler,
@@ -61,6 +62,6 @@ func (h *BaseHook) Name() string {
 }
 
 // Register 注册到 executor
-func (h *BaseHook) Register(manager *core.Manager) {
-	executor.RegisterGoFunc(h.hookName, h.handler(manager))
+func (h *BaseHook) Register(manager *core.Manager, cfg *config.Config) {
+	executor.RegisterGoFunc(h.hookName, h.handler(manager, cfg))
 }

@@ -350,7 +350,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				}
 
 				// 创建高光切片文件记录
-				fileName := fmt.Sprintf("高光_%d_%s.mp4", item.BeginTime, strings.TrimSpace(item.Title))
+				fileName := fmt.Sprintf("%s.mp4", item.BeginTime, strings.TrimSpace(item.Title))
 				// 清理文件名中的无效字符
 				fileName = strings.ReplaceAll(fileName, "\\", "")
 				fileName = strings.ReplaceAll(fileName, "/", "")

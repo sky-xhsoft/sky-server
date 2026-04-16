@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"go.uber.org/zap"
@@ -22,7 +23,7 @@ func init() {
 }
 
 // sysTableBeforeDeleteHandler 处理 sys_table 删除前的逻辑
-func sysTableBeforeDeleteHandler(manager *core.Manager) func(map[string]interface{}) (interface{}, error) {
+func sysTableBeforeDeleteHandler(manager *core.Manager, cfg *config.Config) func(map[string]interface{}) (interface{}, error) {
 	return func(params map[string]interface{}) (interface{}, error) {
 		logger.Info("执行 SYS_TABLE_BEFORE_DELETE 钩子", zap.Any("params", params))
 

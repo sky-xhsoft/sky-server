@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"go.uber.org/zap"
@@ -26,7 +27,7 @@ func init() {
 // 功能：
 // 1. 如果当前记录的 IS_DEFAULT_VALUE = 'Y'，则更新 sys_dict 表中对应记录的 DEFAULT_VALUE 为当前记录的 VALUE
 // 2. 同时将同一 SYS_DICT_ID 下的其他记录的 IS_DEFAULT_VALUE 设置为 'N'
-func sysDictItemAfterEditHandler(manager *core.Manager) func(map[string]interface{}) (interface{}, error) {
+func sysDictItemAfterEditHandler(manager *core.Manager, cfg *config.Config) func(map[string]interface{}) (interface{}, error) {
 	return func(params map[string]interface{}) (interface{}, error) {
 		logger.Info("执行 SYS_DICT_ITEM_AFTER_EDIT 钩子", zap.Any("params", params))
 

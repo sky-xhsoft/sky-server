@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
@@ -23,7 +24,7 @@ func init() {
 }
 
 // liveRoomAfterCreateHandler 处理 live_room 创建后的逻辑
-func liveRoomAfterCreateHandler(manager *core.Manager) func(map[string]interface{}) (interface{}, error) {
+func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(map[string]interface{}) (interface{}, error) {
 	return func(params map[string]interface{}) (interface{}, error) {
 		logger.Info("执行 LIVE_ROOM_AFTER_CREATE 钩子")
 
@@ -64,9 +65,15 @@ func liveRoomAfterCreateHandler(manager *core.Manager) func(map[string]interface
 		// 直接使用数据库操作创建云盘文件夹
 		var roomFolder entity.CloudItem
 
+		// 获取默认的直播间文件夹父ID（从配置中读取）
+		var defaultParentID *uint = nil
+		if cfg.Cloud.DefaultRoomParentID != nil {
+			defaultParentID = cfg.Cloud.DefaultRoomParentID
+		}
+
 		// 检查直播间文件夹是否存在
-		if err := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID IS NULL AND IS_ACTIVE = ?",
-			"folder", roomName, userID, "Y").First(&roomFolder).Error; err != nil {
+		if err := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+			"folder", roomName, userID, defaultParentID, "Y").First(&roomFolder).Error; err != nil {
 			// 直播间文件夹不存在，创建
 			roomFolder = entity.CloudItem{
 				BaseModel: entity.BaseModel{
@@ -77,8 +84,8 @@ func liveRoomAfterCreateHandler(manager *core.Manager) func(map[string]interface
 				},
 				ItemType: "folder",
 				Name:     roomName,
-				ParentID: nil,
-				Path:     "/" + roomName,
+				ParentID: defaultParentID, // 使用默认的父ID
+				Path:     "/" + roomName, // 根据需要修改路径生成逻辑
 				OwnerID:  userID,
 			}
 			if err := txDB.Create(&roomFolder).Error; err != nil {

@@ -142,7 +142,7 @@ func main() {
 	idgenService := idgen.NewService(db, redisClient)
 
 	// 初始化插件管理器并注册所有钩子函数
-	_ = plugins.Setup(db)
+	_ = plugins.Setup(db, cfg)
 
 	crudService := crud.NewService(
 		db,
