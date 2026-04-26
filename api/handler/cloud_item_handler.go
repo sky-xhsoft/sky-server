@@ -281,6 +281,7 @@ func (h *CloudItemHandler) BatchMove(c *gin.Context) {
 	failedItems := []string{}
 
 	allIDs := append(req.ItemIDs, req.FileIDs...)
+	allIDs = append(allIDs, req.FolderIDs...)
 
 	for _, itemID := range allIDs {
 		if err := h.cloudService.MoveItem(c.Request.Context(), itemID, req.TargetParentID, uid); err != nil {
@@ -322,6 +323,7 @@ type BatchDeleteRequest struct {
 type BatchMoveRequest struct {
 	ItemIDs        []uint `json:"itemIds"`
 	FileIDs        []uint `json:"fileIds"`
+	FolderIDs      []uint `json:"folderIds"`
 	TargetParentID *uint  `json:"targetParentId"`
 }
 

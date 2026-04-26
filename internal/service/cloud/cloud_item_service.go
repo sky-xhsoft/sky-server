@@ -3,6 +3,8 @@ package cloud
 import (
 	"context"
 
+	"gorm.io/gorm"
+
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
@@ -146,20 +148,48 @@ func (s *service) MoveItem(ctx context.Context, itemID uint, targetParentID *uin
 		targetParentID = nil
 	}
 
-	// 更新父文件夹
-	item.ParentID = targetParentID
-	// 重新计算路径
+	// 计算新路径
+	var newPath string
 	if targetParentID == nil {
-		item.Path = "/" + item.Name
+		newPath = "/" + item.Name
 	} else {
 		var parent entity.CloudItem
 		if err := s.db.WithContext(ctx).First(&parent, *targetParentID).Error; err != nil {
 			return err
 		}
-		item.Path = parent.Path + "/" + item.Name
+		newPath = parent.Path + "/" + item.Name
 	}
 
-	return s.UpdateItem(ctx, item)
+	// 使用事务确保原子性
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		oldPath := item.Path
+
+		// 更新项目本身
+		item.ParentID = targetParentID
+		item.Path = newPath
+		if err := tx.Save(item).Error; err != nil {
+			return err
+		}
+
+		// 如果是文件夹，递归更新所有子项目的路径
+		if item.IsFolder() {
+			// 查询所有子项目（路径以 oldPath/ 开头）
+			var children []entity.CloudItem
+			if err := tx.Where("PATH LIKE ?", oldPath+"/%").Find(&children).Error; err != nil {
+				return err
+			}
+
+			// 批量更新子项目路径
+			for i := range children {
+				children[i].Path = newPath + children[i].Path[len(oldPath):]
+				if err := tx.Save(&children[i]).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // RenameItem 重命名项目
@@ -188,7 +218,7 @@ func (s *service) RenameItem(ctx context.Context, itemID uint, newName string, u
 		return errors.New(30002, "同名项目已存在")
 	}
 
-	// 更新名称和路径
+	oldPath := item.Path
 	oldName := item.Name
 	item.Name = newName
 
@@ -200,8 +230,34 @@ func (s *service) RenameItem(ctx context.Context, itemID uint, newName string, u
 		parentPath := item.Path[:len(item.Path)-len(oldName)-1]
 		item.Path = parentPath + "/" + newName
 	}
+	newPath := item.Path
 
-	return s.UpdateItem(ctx, item)
+	// 使用事务确保原子性
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 更新项目本身
+		if err := tx.Save(item).Error; err != nil {
+			return err
+		}
+
+		// 如果是文件夹，递归更新所有子项目的路径
+		if item.IsFolder() {
+			// 查询所有子项目（路径以 oldPath/ 开头）
+			var children []entity.CloudItem
+			if err := tx.Where("PATH LIKE ?", oldPath+"/%").Find(&children).Error; err != nil {
+				return err
+			}
+
+			// 批量更新子项目路径
+			for i := range children {
+				children[i].Path = newPath + children[i].Path[len(oldPath):]
+				if err := tx.Save(&children[i]).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetStorage 获取存储引擎（供 handler 使用，已废弃）
