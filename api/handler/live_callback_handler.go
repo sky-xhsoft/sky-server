@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -610,15 +611,27 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		}
 	}
 
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	// 保存事件到数据库
@@ -812,15 +825,27 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 		zap.String("stream", event.StreamName),
 		zap.String("status", statusText))
 
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	// 保存事件到数据库
@@ -1033,15 +1058,27 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 		zap.Int("height", event.Height))
 
 	eventData, _ := json.Marshal(event)
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -1096,15 +1133,27 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 		zap.Int("confidence", event.Confidence))
 
 	eventData, _ := json.Marshal(event)
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -1159,15 +1208,27 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 		zap.String("audioText", event.AudioText))
 
 	eventData, _ := json.Marshal(event)
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -1222,15 +1283,27 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 		zap.String("description", event.Description))
 
 	eventData, _ := json.Marshal(event)
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -1285,15 +1358,27 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 		zap.Float64("currentValue", event.CurrentValue))
 
 	eventData, _ := json.Marshal(event)
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -1347,15 +1432,27 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 		zap.Int64("duration", event.Duration))
 
 	eventData, _ := json.Marshal(event)
-	// 通过 stream_id 获取直播间信息
+	// 通过 stream_id 获取直播间信息（将字符串ID转换为数字）
 	var room entity.LiveRoom
-	if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
-		logger.Info("找到对应的直播间",
-			zap.String("streamId", event.StreamID),
-			zap.String("roomName", room.RoomName))
+	streamID, _ := strconv.ParseUint(event.StreamID, 10, 32)
+	if streamID > 0 {
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", uint(streamID), "Y").First(&room).Error; err == nil {
+			logger.Info("找到对应的直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		} else {
+			logger.Warn("未找到对应的直播间",
+				zap.String("streamId", event.StreamID))
+		}
 	} else {
-		logger.Warn("未找到对应的直播间",
+		// 转换失败，尝试用字符串方式查询
+		logger.Warn("StreamID 转换失败，尝试用字符串方式查询",
 			zap.String("streamId", event.StreamID))
+		if err := h.db.Where("ID = ? AND IS_ACTIVE = ?", event.StreamID, "Y").First(&room).Error; err == nil {
+			logger.Info("字符串方式查询找到直播间",
+				zap.String("streamId", event.StreamID),
+				zap.String("roomName", room.RoomName))
+		}
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
