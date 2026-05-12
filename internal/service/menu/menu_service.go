@@ -180,6 +180,7 @@ func (s *service) buildMenuTree(
 				ID:          table.ID,
 				Name:        table.Name,
 				DisplayName: table.DisplayName,
+				EName:       table.EName,
 				Icon:        table.IcoImg,
 				URL:         table.URL,
 				OrderNo:     table.OrderNo,
@@ -206,6 +207,7 @@ func (s *service) buildMenuTree(
 				&entity.MenuNode{
 					ID:       category.ID,
 					Name:     category.Name,
+					EName:    category.EName,
 					Icon:     category.Icon,
 					URL:      category.URL,
 					OrderNo:  category.OrderNo,
@@ -232,6 +234,7 @@ func (s *service) buildMenuTree(
 			result = append(result, &entity.MenuNode{
 				ID:       subsystem.ID,
 				Name:     subsystem.Name,
+				EName:    subsystem.EName,
 				Icon:     subsystem.Icon,
 				URL:      subsystem.URL,
 				OrderNo:  subsystem.OrderNo,

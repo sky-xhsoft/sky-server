@@ -78,7 +78,7 @@ func (s *service) ExportToExcel(ctx context.Context, tableName string, filters m
 	// 写入表头
 	for i, col := range columns {
 		cell := string(rune('A'+i)) + "1"
-		f.SetCellValue(sheetName, cell, col.Name)
+		f.SetCellValue(sheetName, cell, col.DisplayName)
 	}
 
 	// 查询数据
@@ -159,7 +159,7 @@ func (s *service) ImportFromExcel(ctx context.Context, tableName string, fileHea
 	colMap := make(map[int]*entity.SysColumn)
 	for i, headerName := range header {
 		for _, col := range columns {
-			if col.Name == headerName || col.DbName == headerName {
+			if col.DisplayName == headerName || col.DbName == headerName {
 				colMap[i] = col
 				break
 			}
@@ -267,7 +267,7 @@ func (s *service) GenerateTemplate(ctx context.Context, tableName string) (strin
 
 		cell := string(rune('A'+i)) + "1"
 		// 使用displayName作为表头，并添加注释
-		f.SetCellValue(sheetName, cell, col.Name)
+		f.SetCellValue(sheetName, cell, col.DisplayName)
 
 		// 添加备注说明字段类型
 		comment := fmt.Sprintf("字段: %s\n类型: %s\n", col.DbName, col.ColType)

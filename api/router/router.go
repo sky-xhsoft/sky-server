@@ -5,6 +5,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/handler"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/config"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/i18n"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
@@ -15,6 +16,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"github.com/sky-xhsoft/sky-server/internal/service/language"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/menu"
 	"github.com/sky-xhsoft/sky-server/internal/service/message"
@@ -49,6 +51,7 @@ type Services struct {
 	LiveRoom        live.LiveRoomService
 	PullStreamTask  live.PullStreamTaskService
 	WSManager       *ws.Manager
+	Language        language.Service // 语言管理服务
 }
 
 // Repositories 仓储集合
@@ -65,6 +68,8 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	engine.Use(middleware.PanicRecovery())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS(cfg.CORS))
+	// 语言国际化中间件
+	engine.Use(i18n.Middleware())
 	// 统一错误处理中间件
 	engine.Use(middleware.ErrorHandler())
 	// 域名多租户识别中间件（根据请求域名自动识别公司）
@@ -141,6 +146,9 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 存储配置管理
 		registerCloudStorageConfigRoutes(v1, jwtUtil, services.StorageConfig)
 
+		// 语言管理路由
+		registerLanguageRoutes(v1, jwtUtil, services.Language)
+
 		// 临时测试路由
 		v1.GET("/ping", func(c *gin.Context) {
 			c.JSON(200, gin.H{
@@ -184,6 +192,7 @@ func registerAuthRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, ssoService sso.Se
 			authenticated.POST("/logout-all", authHandler.LogoutAll)
 			authenticated.GET("/sessions", authHandler.GetActiveSessions)
 			authenticated.POST("/kick-device", authHandler.KickDevice)
+			authenticated.POST("/change-password", authHandler.ChangePassword)
 		}
 	}
 }
@@ -641,5 +650,37 @@ func registerLiveRoomRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service live.
 		rooms.POST("/:id/end", roomHandler.EndLive)
 		// 更新观看人数
 		rooms.PUT("/:id/viewer-count", roomHandler.UpdateViewerCount)
+	}
+}
+
+// registerLanguageRoutes 注册语言管理路由
+func registerLanguageRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, languageService language.Service) {
+	languageHandler := handler.NewLanguageHandler(languageService)
+
+	// 语言管理路由
+	languages := rg.Group("/languages")
+	{
+		// 公开接口：获取语言列表
+		languages.GET("", languageHandler.ListLanguages)
+		// 公开接口：获取单个翻译
+		languages.GET("/translations/:key", languageHandler.GetTranslation)
+
+		// 需要认证的翻译管理接口
+		authenticated := languages.Group("")
+		authenticated.Use(middleware.AuthRequired(jwtUtil))
+		{
+			// 翻译列表（分页）
+			authenticated.GET("/translations", languageHandler.ListTranslations)
+			// 添加翻译
+			authenticated.POST("/translations", languageHandler.AddTranslation)
+			// 更新翻译
+			authenticated.PUT("/translations/:id", languageHandler.UpdateTranslation)
+			// 删除翻译
+			authenticated.DELETE("/translations/:id", languageHandler.DeleteTranslation)
+			// 导出翻译
+			authenticated.GET("/translations/export", languageHandler.ExportTranslations)
+			// 导入翻译
+			authenticated.POST("/translations/import", languageHandler.ImportTranslations)
+		}
 	}
 }

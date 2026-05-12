@@ -10,6 +10,8 @@ type SysUser struct {
 	Phone        string `gorm:"column:PHONE;size:20" json:"phone"`
 	Email        string `gorm:"column:EMAIL;size:255" json:"email"`
 	Language     string `gorm:"column:LANGUAGE;size:255" json:"language"`
+	Timezone     string `gorm:"column:TIMEZONE;size:50" json:"timezone"`
+	Currency     string `gorm:"column:CURRENCY;size:10" json:"currency"`
 	IsAdmin      string `gorm:"column:IS_ADMIN;size:2;default:N" json:"isAdmin"` // Y/N
 	Sgrade       int    `gorm:"column:SGRADE" json:"sgrade"`                     // 字段访问级别
 }

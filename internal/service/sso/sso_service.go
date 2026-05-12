@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
-	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -32,6 +32,9 @@ type Service interface {
 
 	// 踢出指定设备
 	KickDevice(userID uint, deviceID string) error
+
+	// 修改密码
+	ChangePassword(userID uint, oldPassword string, newPassword string) error
 }
 
 // LoginRequest 登录请求
@@ -48,12 +51,12 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token         string                 `json:"token"`
-	RefreshToken  string                 `json:"refreshToken"`
-	ExpiresIn     int                  `json:"expiresIn"`
-	User          *UserInfo            `json:"user"`
-	Company       *entity.SysCompany     `json:"company"`
-	CompanyConf   *entity.SysCompanyConf `json:"companyConf"`
+	Token        string                 `json:"token"`
+	RefreshToken string                 `json:"refreshToken"`
+	ExpiresIn    int                    `json:"expiresIn"`
+	User         *UserInfo              `json:"user"`
+	Company      *entity.SysCompany     `json:"company"`
+	CompanyConf  *entity.SysCompanyConf `json:"companyConf"`
 }
 
 // TokenResponse Token响应
@@ -284,4 +287,38 @@ func (s *service) GetActiveSessions(userID uint) ([]*SessionInfo, error) {
 // KickDevice 踢出指定设备
 func (s *service) KickDevice(userID uint, deviceID string) error {
 	return s.Logout(userID, deviceID)
+}
+
+// ChangePassword 修改密码
+func (s *service) ChangePassword(userID uint, oldPassword string, newPassword string) error {
+	// 查询用户
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		return errors.Wrap(errors.ErrResourceNotFound, "用户不存在", err)
+	}
+
+	// 验证旧密码
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+		return errors.Wrap(errors.ErrInvalidCredentials, "旧密码不正确", err)
+	}
+
+	// 加密新密码
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.Wrap(errors.ErrInternal, "密码加密失败", err)
+	}
+
+	// 更新密码
+	if err := s.userRepo.UpdateUserPassword(userID, string(hashedPassword)); err != nil {
+		return errors.Wrap(errors.ErrDatabase, "更新密码失败", err)
+	}
+
+	// 退出所有会话，强制用户重新登录
+	if err := s.LogoutAll(userID); err != nil {
+		logger.Warn("Failed to logout all sessions after password change",
+			zap.Uint("userId", userID),
+			zap.Error(err))
+	}
+
+	return nil
 }

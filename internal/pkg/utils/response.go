@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/i18n"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/validator"
 )
 
@@ -45,7 +46,7 @@ func Success(c *gin.Context, data interface{}) {
 func Created(c *gin.Context, data interface{}) {
 	c.JSON(201, Response{
 		Code:      201,
-		Message:   "创建成功",
+		Message:   i18n.TranslateContext(c, "created"),
 		Data:      data,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
@@ -55,7 +56,7 @@ func Created(c *gin.Context, data interface{}) {
 func NoContent(c *gin.Context) {
 	c.JSON(204, Response{
 		Code:      204,
-		Message:   "删除成功",
+		Message:   i18n.TranslateContext(c, "deleted"),
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
 }
@@ -71,13 +72,36 @@ func Error(c *gin.Context, httpStatus int, err error) {
 	// 如果是AppError，使用其错误码
 	if appErr, ok := err.(*errors.AppError); ok {
 		resp.Code = appErr.Code
-		resp.Message = appErr.Message
+		// 尝试根据错误码找到对应的翻译
+		var key string
+		switch appErr.Code {
+		case errors.ErrInvalidCredentials:
+			key = "invalid_credentials"
+		case errors.ErrResourceNotFound:
+			key = "user_not_found"
+		case errors.ErrInvalidParam, errors.ErrValidation:
+			key = "invalid_params"
+		case errors.ErrUnauthorized:
+			key = "unauthorized"
+		case errors.ErrForbidden:
+			key = "forbidden"
+		case errors.ErrInternal:
+			key = "internal_error"
+		default:
+			// 使用原始消息
+			key = ""
+		}
+		if key != "" {
+			resp.Message = i18n.TranslateContext(c, key)
+		} else {
+			resp.Message = appErr.Message
+		}
 	}
 
 	// 如果是验证错误，格式化错误响应
 	if valErr, ok := err.(*validator.ValidationError); ok {
 		resp.Code = 400
-		resp.Message = "参数验证失败"
+		resp.Message = i18n.TranslateContext(c, "invalid_params")
 		resp.Error = valErr.Errors
 		httpStatus = 400
 	}

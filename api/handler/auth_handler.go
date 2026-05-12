@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/i18n"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/sso"
 )
@@ -206,6 +207,46 @@ func (h *AuthHandler) KickDevice(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "设备已被踢出"})
 }
 
+// ChangePassword 修改密码
+// @Summary 修改密码
+// @Description 修改当前用户的密码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body ChangePasswordRequest true "修改密码请求"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/auth/change-password [post]
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, i18n.TranslateContext(c, "invalid_params")+": "+err.Error())
+		return
+	}
+
+	// 获取当前用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, i18n.TranslateContext(c, "unauthorized"))
+		return
+	}
+
+	// 调用SSO服务修改密码
+	if err := h.ssoService.ChangePassword(userID.(uint), req.OldPassword, req.NewPassword); err != nil {
+		if errors.Is(err, errors.InvalidCredentials) {
+			utils.BadRequest(c, i18n.TranslateContext(c, "old_password_incorrect"))
+			return
+		}
+		if errors.Is(err, errors.ResourceNotFound) {
+			utils.NotFound(c, i18n.TranslateContext(c, "user_not_found"))
+			return
+		}
+		utils.InternalError(c, i18n.TranslateContext(c, "internal_error")+": "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": i18n.TranslateContext(c, "change_password_success")})
+}
+
 // RefreshTokenRequest 刷新令牌请求
 type RefreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken" binding:"required"`
@@ -219,4 +260,10 @@ type LogoutRequest struct {
 // KickDeviceRequest 踢出设备请求
 type KickDeviceRequest struct {
 	DeviceID string `json:"deviceId" binding:"required"`
+}
+
+// ChangePasswordRequest 修改密码请求
+type ChangePasswordRequest struct {
+	OldPassword string `json:"oldPassword" binding:"required"`
+	NewPassword string `json:"newPassword" binding:"required,min=6"`
 }

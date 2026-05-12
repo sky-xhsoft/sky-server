@@ -5,6 +5,7 @@ type SysTable struct {
 	BaseModel
 	Name               string `gorm:"column:NAME;size:255;uniqueIndex:idx_systable_name;not null" json:"NAME"`
 	DisplayName        string `gorm:"column:DISPLAY_NAME;size:255" json:"DISPLAY_NAME"`
+	EName              string `gorm:"column:ENAME;size:255" json:"ENAME"`
 	RealTableID        *uint  `gorm:"column:REAL_TABLE_ID" json:"REAL_TABLE_ID"`
 	Filter             string `gorm:"column:FILTER;size:2000" json:"FILTER"`
 	AkColumnID         *int   `gorm:"column:AK_COLUMN_ID" json:"AK_COLUMN_ID"`

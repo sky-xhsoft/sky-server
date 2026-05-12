@@ -98,3 +98,9 @@ func (r *userRepository) GetCompanyConfByCompanyID(companyID uint) (*entity.SysC
 	}
 	return &conf, nil
 }
+
+func (r *userRepository) UpdateUserPassword(userID uint, newPassword string) error {
+	return r.db.Model(&entity.SysUser{}).
+		Where("ID = ?", userID).
+		Update("PASSWORD", newPassword).Error
+}

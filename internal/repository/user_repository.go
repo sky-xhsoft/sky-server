@@ -39,4 +39,7 @@ type UserRepository interface {
 
 	// 删除用户所有会话
 	DeleteAllSessions(userID uint) error
+
+	// 更新用户密码
+	UpdateUserPassword(userID uint, newPassword string) error
 }

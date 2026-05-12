@@ -29,6 +29,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
+	"github.com/sky-xhsoft/sky-server/internal/service/language"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/menu"
 	"github.com/sky-xhsoft/sky-server/internal/service/message"
@@ -270,6 +271,18 @@ func main() {
 	// 创建直播房间服务
 	liveRoomService := live.NewLiveRoomService(db, cloudService)
 
+	// 初始化语言服务
+	langRepo := mysql.NewLanguageRepository(db)
+	transRepo := mysql.NewTranslationRepository(db)
+	languageService := language.NewService(
+		langRepo,
+		transRepo,
+		redisClient,
+		log,
+		cfg.Cache.LanguageTTL,
+	)
+	logger.Info("Language service initialized")
+
 	logger.Info("Services initialized")
 
 	// 8. 初始化Gin引擎
@@ -306,6 +319,7 @@ func main() {
 		LiveRoom:        liveRoomService,
 		PullStreamTask:  pullStreamTaskService,
 		WSManager:       wsManager,
+		Language:        languageService,
 	}
 
 	// 创建仓储集合

@@ -61,6 +61,11 @@ type SysCompany struct {
 	Code        string  `gorm:"column:CODE;size:50;uniqueIndex" json:"code"`
 	Domain      *string `gorm:"column:DOMAIN;size:255;uniqueIndex" json:"domain"` // 公司域名（用于多租户识别）
 	Description string  `gorm:"column:DESCRIPTION;size:500" json:"description"`
+	Logo        string  `gorm:"column:LOGO;size:500" json:"logo"`
+	Address     string  `gorm:"column:ADDRESS;size:500" json:"address"`
+	Contact     string  `gorm:"column:CONTACT;size:255" json:"contact"`
+	Phone       string  `gorm:"column:PHONE;size:20" json:"phone"`
+	Email       string  `gorm:"column:EMAIL;size:255" json:"email"`
 	Status      string  `gorm:"column:STATUS;size:1;default:Y" json:"status"` // Y:启用, N:禁用
 }
 
@@ -103,6 +108,13 @@ type SysCompanyConf struct {
 	VolcengineAccessKeySecret string `gorm:"column:VOLCENGINE_ACCESS_KEY_SECRET;size:255" json:"volcengineAccessKeySecret"` // 火山引擎访问密钥Secret
 	VolcengineRegion          string `gorm:"column:VOLCENGINE_REGION;size:50" json:"volcengineRegion"`                      // 火山引擎区域
 	VolcengineService         string `gorm:"column:VOLCENGINE_SERVICE;size:50" json:"volcengineService"`                    // 火山引擎服务名称
+	// 语言配置
+	DefaultLanguage string `gorm:"column:DEFAULT_LANGUAGE;size:50;default:zh-CN" json:"defaultLanguage"` // 默认语言
+	Timezone        string `gorm:"column:TIMEZONE;size:50;default:Asia/Shanghai" json:"timezone"`        // 时区
+	Currency        string `gorm:"column:CURRENCY;size:10;default:CNY" json:"currency"`                  // 货币
+	MaxStorageSize  int64  `gorm:"column:MAX_STORAGE_SIZE;default:0" json:"maxStorageSize"`              // 最大存储大小
+	MaxFileSize     int64  `gorm:"column:MAX_FILE_SIZE;default:0" json:"maxFileSize"`                    // 最大文件大小
+	MaxFiles        int    `gorm:"column:MAX_FILES;default:0" json:"maxFiles"`                           // 最大文件数
 }
 
 // TableName 指定表名

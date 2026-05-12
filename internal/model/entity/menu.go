@@ -5,6 +5,7 @@ type MenuNode struct {
 	ID          uint        `json:"id"`
 	Name        string      `json:"name"`
 	DisplayName string      `json:"displayName,omitempty"` // sys_table 使用
+	EName       string      `json:"EName,omitempty"`       // 英文显示名称
 	Icon        string      `json:"icon,omitempty"`
 	URL         string      `json:"url,omitempty"`
 	OrderNo     int         `json:"orderno"`
@@ -16,6 +17,7 @@ type MenuNode struct {
 type SysSubsystem struct {
 	BaseModel
 	Name        string `gorm:"column:NAME;size:255" json:"name"`
+	EName       string `gorm:"column:ENAME;size:255" json:"EName"`
 	OrderNo     int    `gorm:"column:ORDERNO" json:"orderno"`
 	URL         string `gorm:"column:URL;size:255" json:"url"`
 	Icon        string `gorm:"column:ICON;size:255" json:"icon"`
@@ -33,6 +35,7 @@ type SysTableCategory struct {
 	BaseModel
 	SysSubsystemID uint   `gorm:"column:SYS_SUBSYSTEM_ID;index:idx_subsystem" json:"sysSubsystemId"`
 	Name           string `gorm:"column:NAME;size:255;not null" json:"name"`
+	EName          string `gorm:"column:ENAME;size:255" json:"EName"`
 	OrderNo        int    `gorm:"column:ORDERNO" json:"orderno"`
 	Icon           string `gorm:"column:ICON;size:255" json:"icon"`
 	URL            string `gorm:"column:URL;size:255" json:"url"`
