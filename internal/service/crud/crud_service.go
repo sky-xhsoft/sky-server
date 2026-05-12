@@ -102,7 +102,15 @@ type service struct {
 
 // SaveWithDetails 同时保存主表和明细
 func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsRequest, userID uint) (*SaveWithDetailsResponse, error) {
-	// 开启事务
+	mainTable, err := s.metadataService.GetTable(req.TableName)
+	if err != nil {
+		return nil, fmt.Errorf("表不存在: %s", req.TableName)
+	}
+	mainColumns, err := s.metadataService.GetColumns(mainTable.ID)
+	if err != nil {
+		return nil, fmt.Errorf("获取列信息失败: %s", err.Error())
+	}
+
 	tx := s.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -114,10 +122,7 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 	var mainRecordID uint
 	mainRecord := req.MainRecord
 
-	// 1. 保存主表
 	if req.Mode == "create" {
-		// 新增主表
-		// 生成新的ID（和基础CRUD逻辑保持一致）
 		newID, err := s.idgenService.GetNextID(ctx, req.TableName)
 		if err != nil {
 			tx.Rollback()
@@ -126,25 +131,31 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		mainRecord["ID"] = newID
 		mainRecordID = newID
 
-		// 填充系统字段
-		mainRecord["CREATE_BY"] = userID
-		mainRecord["UPDATE_BY"] = userID
-		mainRecord["IS_ACTIVE"] = "Y"
+		processed, err := s.processFieldsForCreate(mainColumns, mainRecord, userID)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		mainRecord = processed
 
 		if err := tx.Table(req.TableName).Create(&mainRecord).Error; err != nil {
 			tx.Rollback()
 			return nil, err
 		}
 	} else if req.Mode == "update" {
-		// 更新主表
 		mainRecordID = req.MainRecordID
-		mainRecord["UPDATE_BY"] = userID
+
+		processed, err := s.processFieldsForUpdate(mainColumns, mainRecord, userID)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		mainRecord = processed
 
 		if err := tx.Table(req.TableName).Where("id = ?", mainRecordID).Updates(&mainRecord).Error; err != nil {
 			tx.Rollback()
 			return nil, err
 		}
-		// 查询最新的主表数据
 		if err := tx.Table(req.TableName).Where("id = ?", mainRecordID).Take(&mainRecord).Error; err != nil {
 			tx.Rollback()
 			return nil, err
@@ -154,10 +165,8 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		return nil, gorm.ErrInvalidTransaction
 	}
 
-	// 2. 保存所有子表
 	detailResponses := make([]DetailTableResponse, len(req.Details))
 	for i, detail := range req.Details {
-		// 先删除旧的子表数据（更新模式下）
 		if req.Mode == "update" {
 			if err := tx.Table(detail.TableName).Where(detail.RefField+" = ?", mainRecordID).Delete(nil).Error; err != nil {
 				tx.Rollback()
@@ -165,22 +174,32 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 			}
 		}
 
-		// 处理子表记录，设置主表关联ID
+		detailTable, err := s.metadataService.GetTable(detail.TableName)
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("子表不存在: %s", detail.TableName)
+		}
+		detailColumns, err := s.metadataService.GetColumns(detailTable.ID)
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("获取子表列信息失败: %s", err.Error())
+		}
+
 		savedRecords := make([]map[string]interface{}, len(detail.Records))
 		for j, record := range detail.Records {
-			// 设置关联字段值为主表ID
 			record[detail.RefField] = mainRecordID
-			// 填充系统字段
-			record["CREATE_BY"] = userID
-			record["UPDATE_BY"] = userID
-			record["IS_ACTIVE"] = "Y"
 
-			// 保存子表记录
-			if err := tx.Table(detail.TableName).Create(&record).Error; err != nil {
+			processed, err := s.processFieldsForCreate(detailColumns, record, userID)
+			if err != nil {
 				tx.Rollback()
 				return nil, err
 			}
-			savedRecords[j] = record
+
+			if err := tx.Table(detail.TableName).Create(&processed).Error; err != nil {
+				tx.Rollback()
+				return nil, err
+			}
+			savedRecords[j] = processed
 		}
 
 		detailResponses[i] = DetailTableResponse{
@@ -189,12 +208,10 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		}
 	}
 
-	// 提交事务
 	if err := tx.Commit().Error; err != nil {
 		return nil, err
 	}
 
-	// 返回结果
 	return &SaveWithDetailsResponse{
 		MainRecord: mainRecord,
 		Details:    detailResponses,
