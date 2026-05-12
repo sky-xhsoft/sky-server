@@ -51,7 +51,6 @@ type service struct {
 	redisClient *redis.Client
 	cacheTTL    time.Duration
 	metaVersion string
-	ctx         context.Context
 }
 
 // NewService 创建元数据服务
@@ -62,7 +61,6 @@ func NewService(repo repository.MetadataRepository, userRepo repository.UserRepo
 		redisClient: redisClient,
 		cacheTTL:    time.Duration(cacheTTL) * time.Second,
 		metaVersion: time.Now().Format("20060102150405"),
-		ctx:         context.Background(),
 	}
 }
 
@@ -71,7 +69,7 @@ func (s *service) GetTable(tableName string) (*entity.SysTable, error) {
 	cacheKey := fmt.Sprintf("metadata:table:name:%s", tableName)
 
 	// 尝试从缓存获取
-	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
+	cached, err := s.redisClient.Get(context.Background(), cacheKey).Result()
 	if err == nil {
 		var table entity.SysTable
 		if err := json.Unmarshal([]byte(cached), &table); err == nil {
@@ -87,7 +85,7 @@ func (s *service) GetTable(tableName string) (*entity.SysTable, error) {
 
 	// 缓存结果
 	data, _ := json.Marshal(table)
-	s.redisClient.Set(s.ctx, cacheKey, data, s.cacheTTL)
+	s.redisClient.Set(context.Background(), cacheKey, data, s.cacheTTL)
 
 	return table, nil
 }
@@ -97,7 +95,7 @@ func (s *service) GetTableByID(tableID uint) (*entity.SysTable, error) {
 	cacheKey := fmt.Sprintf("metadata:table:id:%d", tableID)
 
 	// 尝试从缓存获取
-	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
+	cached, err := s.redisClient.Get(context.Background(), cacheKey).Result()
 	if err == nil {
 		var table entity.SysTable
 		if err := json.Unmarshal([]byte(cached), &table); err == nil {
@@ -113,7 +111,7 @@ func (s *service) GetTableByID(tableID uint) (*entity.SysTable, error) {
 
 	// 缓存结果
 	data, _ := json.Marshal(table)
-	s.redisClient.Set(s.ctx, cacheKey, data, s.cacheTTL)
+	s.redisClient.Set(context.Background(), cacheKey, data, s.cacheTTL)
 
 	return table, nil
 }
@@ -124,7 +122,7 @@ func (s *service) GetColumns(tableID uint) ([]*entity.SysColumn, error) {
 
 	// 尝试从缓存获取
 	var columns []*entity.SysColumn
-	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
+	cached, err := s.redisClient.Get(context.Background(), cacheKey).Result()
 	if err == nil {
 		if err := json.Unmarshal([]byte(cached), &columns); err == nil {
 			// 从缓存获取成功，但仍需填充 RefTableIsDropdown（因为缓存中可能没有）
@@ -159,7 +157,7 @@ func (s *service) GetColumns(tableID uint) ([]*entity.SysColumn, error) {
 
 	// 缓存结果
 	data, _ := json.Marshal(columns)
-	s.redisClient.Set(s.ctx, cacheKey, data, s.cacheTTL)
+	s.redisClient.Set(context.Background(), cacheKey, data, s.cacheTTL)
 
 	return columns, nil
 }
@@ -169,7 +167,7 @@ func (s *service) GetTableRefs(tableID uint) ([]*entity.SysTableRef, error) {
 	cacheKey := fmt.Sprintf("metadata:refs:%d", tableID)
 
 	// 尝试从缓存获取
-	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
+	cached, err := s.redisClient.Get(context.Background(), cacheKey).Result()
 	if err == nil {
 		var refs []*entity.SysTableRef
 		if err := json.Unmarshal([]byte(cached), &refs); err == nil {
@@ -185,7 +183,7 @@ func (s *service) GetTableRefs(tableID uint) ([]*entity.SysTableRef, error) {
 
 	// 缓存结果
 	data, _ := json.Marshal(refs)
-	s.redisClient.Set(s.ctx, cacheKey, data, s.cacheTTL)
+	s.redisClient.Set(context.Background(), cacheKey, data, s.cacheTTL)
 
 	return refs, nil
 }
@@ -195,7 +193,7 @@ func (s *service) GetActions(tableID uint) ([]*entity.SysAction, error) {
 	cacheKey := fmt.Sprintf("metadata:actions:%d", tableID)
 
 	// 尝试从缓存获取
-	cached, err := s.redisClient.Get(s.ctx, cacheKey).Result()
+	cached, err := s.redisClient.Get(context.Background(), cacheKey).Result()
 	if err == nil {
 		var actions []*entity.SysAction
 		if err := json.Unmarshal([]byte(cached), &actions); err == nil {
@@ -211,7 +209,7 @@ func (s *service) GetActions(tableID uint) ([]*entity.SysAction, error) {
 
 	// 缓存结果
 	data, _ := json.Marshal(actions)
-	s.redisClient.Set(s.ctx, cacheKey, data, s.cacheTTL)
+	s.redisClient.Set(context.Background(), cacheKey, data, s.cacheTTL)
 
 	return actions, nil
 }
@@ -220,10 +218,10 @@ func (s *service) GetActions(tableID uint) ([]*entity.SysAction, error) {
 func (s *service) RefreshCache() error {
 	// 删除所有元数据缓存
 	pattern := "metadata:*"
-	iter := s.redisClient.Scan(s.ctx, 0, pattern, 0).Iterator()
+	iter := s.redisClient.Scan(context.Background(), 0, pattern, 0).Iterator()
 
 	keys := []string{}
-	for iter.Next(s.ctx) {
+	for iter.Next(context.Background()) {
 		keys = append(keys, iter.Val())
 	}
 
@@ -233,7 +231,7 @@ func (s *service) RefreshCache() error {
 
 	// 批量删除
 	if len(keys) > 0 {
-		if err := s.redisClient.Del(s.ctx, keys...).Err(); err != nil {
+		if err := s.redisClient.Del(context.Background(), keys...).Err(); err != nil {
 			return errors.Wrap(errors.ErrCache, "删除缓存失败", err)
 		}
 	}
