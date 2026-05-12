@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/sqlutils"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 )
 
@@ -339,13 +340,18 @@ func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search stri
 
 	fmt.Printf("[DEBUG] baseWhere=%s, whereParams=%v\n", baseWhere, whereParams)
 
+	safeCol, _ := sqlutils.SanitizeIdentifier(displayColumn.DbName)
+	if safeCol == "" {
+		safeCol = displayColumn.DbName
+	}
+
 	// 查询总数
 	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", table.Name, baseWhere)
 	countParams := make([]interface{}, len(whereParams))
 	copy(countParams, whereParams)
 
 	if search != "" {
-		countSQL += fmt.Sprintf(" AND %s LIKE ?", displayColumn.DbName)
+		countSQL += fmt.Sprintf(" AND %s LIKE ?", safeCol)
 		countParams = append(countParams, "%"+search+"%")
 	}
 
@@ -359,11 +365,11 @@ func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search stri
 	copy(dataParams, whereParams)
 
 	if search != "" {
-		dataSQL += fmt.Sprintf(" AND %s LIKE ?", displayColumn.DbName)
+		dataSQL += fmt.Sprintf(" AND %s LIKE ?", safeCol)
 		dataParams = append(dataParams, "%"+search+"%")
 	}
 
-	dataSQL += fmt.Sprintf(" ORDER BY %s LIMIT ? OFFSET ?", displayColumn.DbName)
+	dataSQL += fmt.Sprintf(" ORDER BY %s LIMIT ? OFFSET ?", safeCol)
 	dataParams = append(dataParams, pageSize, offset)
 
 	if err := s.repo.RawQuery(dataSQL, dataParams...).Scan(&options).Error; err != nil {
@@ -471,7 +477,11 @@ func (s *service) GetForeignKeyDisplayValue(tableID uint, value string, columnID
 	}
 
 	// 6. 查询显示值
-	querySQL := fmt.Sprintf("SELECT %s FROM %s WHERE %s", displayColumn.DbName, table.Name, baseWhere)
+	safeCol, _ := sqlutils.SanitizeIdentifier(displayColumn.DbName)
+	if safeCol == "" {
+		return "", errors.New(errors.ErrInvalidParam, "无效的列名")
+	}
+	querySQL := fmt.Sprintf("SELECT %s FROM %s WHERE %s", safeCol, table.Name, baseWhere)
 	var displayValue string
 	if err := s.repo.RawQuery(querySQL, queryParams...).Scan(&displayValue).Error; err != nil {
 		return "", errors.Wrap(errors.ErrDatabase, "查询显示值失败", err)

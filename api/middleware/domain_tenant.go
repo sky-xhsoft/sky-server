@@ -24,7 +24,7 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 		if host == "" || host == "localhost" || strings.HasPrefix(host, "127.") || strings.HasPrefix(host, "192.168.") {
 			c.Set("companyID", 1)
 			c.Next()
-			//return
+			return
 		}
 
 		// 查询数据库，根据域名找到对应的公司

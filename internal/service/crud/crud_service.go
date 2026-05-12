@@ -105,6 +105,7 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
+			panic(r)
 		}
 	}()
 

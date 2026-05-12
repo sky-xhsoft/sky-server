@@ -72,8 +72,8 @@ func getHTTPStatus(errCode int) int {
 	}
 }
 
-// PanicRecovery panic恢复中间件
-func PanicRecovery() gin.HandlerFunc {
+// Recovery panic恢复中间件
+func Recovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {

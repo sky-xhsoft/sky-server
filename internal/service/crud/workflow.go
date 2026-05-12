@@ -2,7 +2,6 @@ package crud
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -36,8 +35,7 @@ func (s *service) Submit(ctx context.Context, tableName string, id uint, userID 
 
 	// 查询记录是否存在
 	var record map[string]interface{}
-	query := fmt.Sprintf("SELECT * FROM %s WHERE ID = ? AND IS_ACTIVE = 'Y'", tableName)
-	if err := s.db.Raw(query).Scan(&record).Error; err != nil {
+	if err := s.db.Table(tableName).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").Take(&record).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return errors.New(errors.ErrResourceNotFound, "记录不存在")
 		}
@@ -66,8 +64,11 @@ func (s *service) Submit(ctx context.Context, tableName string, id uint, userID 
 		}
 
 		if hasStatusField {
-			updateQuery := fmt.Sprintf("UPDATE %s SET STATUS = 'submitted', UPDATE_BY = ?, UPDATE_TIME = ? WHERE ID = ?", tableName)
-			if err := tx.Exec(updateQuery, userID, time.Now(), id).Error; err != nil {
+			if err := tx.Table(tableName).Where("ID = ?", id).Updates(map[string]interface{}{
+				"STATUS":    "submitted",
+				"UPDATE_BY": userID,
+				"UPDATE_TIME": time.Now(),
+			}).Error; err != nil {
 				return errors.Wrap(errors.ErrDatabase, "更新记录状态失败", err)
 			}
 			record["STATUS"] = "submitted"
@@ -106,8 +107,7 @@ func (s *service) Unsubmit(ctx context.Context, tableName string, id uint, userI
 
 	// 查询记录是否存在
 	var record map[string]interface{}
-	query := fmt.Sprintf("SELECT * FROM %s WHERE ID = ? AND IS_ACTIVE = 'Y'", tableName)
-	if err := s.db.Raw(query).Scan(&record).Error; err != nil {
+	if err := s.db.Table(tableName).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").Take(&record).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return errors.New(errors.ErrResourceNotFound, "记录不存在")
 		}
@@ -136,8 +136,11 @@ func (s *service) Unsubmit(ctx context.Context, tableName string, id uint, userI
 		}
 
 		if hasStatusField {
-			updateQuery := fmt.Sprintf("UPDATE %s SET STATUS = 'draft', UPDATE_BY = ?, UPDATE_TIME = ? WHERE ID = ?", tableName)
-			if err := tx.Exec(updateQuery, userID, time.Now(), id).Error; err != nil {
+			if err := tx.Table(tableName).Where("ID = ?", id).Updates(map[string]interface{}{
+				"STATUS":    "draft",
+				"UPDATE_BY": userID,
+				"UPDATE_TIME": time.Now(),
+			}).Error; err != nil {
 				return errors.Wrap(errors.ErrDatabase, "更新记录状态失败", err)
 			}
 			record["STATUS"] = "draft"

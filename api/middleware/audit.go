@@ -52,10 +52,14 @@ func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 		var userID uint
 		var username string
 		if uid, exists := c.Get("userID"); exists {
-			userID = uid.(uint)
+			if id, ok := uid.(uint); ok {
+				userID = id
+			}
 		}
 		if uname, exists := c.Get("username"); exists {
-			username = uname.(string)
+			if name, ok := uname.(string); ok {
+				username = name
+			}
 		}
 
 		// 判断操作状态

@@ -15,6 +15,7 @@ type Claims struct {
 	Username   string `json:"username"`
 	ClientType string `json:"clientType"` // web, mobile, desktop
 	DeviceID   string `json:"deviceId"`
+	TokenType  string `json:"tokenType"` // "access" | "refresh"
 	jwt.RegisteredClaims
 }
 
@@ -39,6 +40,7 @@ func (j *JWT) GenerateToken(userID, companyID uint, username, clientType, device
 		Username:   username,
 		ClientType: clientType,
 		DeviceID:   deviceID,
+		TokenType:  "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(expireDuration)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -52,8 +54,23 @@ func (j *JWT) GenerateToken(userID, companyID uint, username, clientType, device
 
 // GenerateRefreshToken 生成刷新Token
 func (j *JWT) GenerateRefreshToken(userID, companyID uint, username, clientType, deviceID string, expireDuration time.Duration) (string, error) {
-	// 刷新Token使用相同的Claims结构，但过期时间更长
-	return j.GenerateToken(userID, companyID, username, clientType, deviceID, expireDuration)
+	now := time.Now()
+	claims := Claims{
+		UserID:     userID,
+		CompanyID:  companyID,
+		Username:   username,
+		ClientType: clientType,
+		DeviceID:   deviceID,
+		TokenType:  "refresh",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(expireDuration)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(j.secret)
 }
 
 // ParseToken 解析Token

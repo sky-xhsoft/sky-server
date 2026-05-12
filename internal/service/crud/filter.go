@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/sqlutils"
 	"gorm.io/gorm"
 )
 
@@ -39,19 +40,24 @@ func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, c
 			continue
 		}
 
+		// 校验字段名为合法 SQL 标识符
+		safeField, err := sqlutils.SanitizeIdentifier(field)
+		if err != nil {
+			continue
+		}
+
 		// 获取字段的显示类型
-		displayType := columnTypeMap[field]
+		displayType := columnTypeMap[safeField]
 
 		// 对于 text 类型字段（text, textarea），使用 LIKE 模糊查询
-		// 根据 DisplayType 字段定义：blank,button,hr,check,file,image,select,text,textarea,date,datetime,clob,xml,json
 		if displayType == "text" || displayType == "textarea" || displayType == "clob" {
 			// 转换为字符串并添加通配符
 			if strValue, ok := value.(string); ok && strValue != "" {
-				query = query.Where(fmt.Sprintf("`%s` LIKE ?", field), "%"+strValue+"%")
+				query = query.Where(fmt.Sprintf("`%s` LIKE ?", safeField), "%"+strValue+"%")
 			}
 		} else {
 			// 其他类型使用精确匹配（select, date, datetime, check 等）
-			query = query.Where(fmt.Sprintf("`%s` = ?", field), value)
+			query = query.Where(fmt.Sprintf("`%s` = ?", safeField), value)
 		}
 	}
 

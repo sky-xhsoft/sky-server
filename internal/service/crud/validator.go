@@ -6,6 +6,7 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/sqlutils"
 )
 
 // processForeignKeys 处理结果集中的外键字段，将ID转换为显示名称
@@ -125,23 +126,17 @@ func (s *service) checkForeignKeyReferences(ctx context.Context, tableID uint, r
 
 				// 检查 REF_ON_DELETE 策略
 				if col.RefOnDelete == "noAction" || col.RefOnDelete == "" {
-					// 检查是否有记录引用
-					var count int64
-					var query string
-					if hasIsActive {
-						query = fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s = ? AND IS_ACTIVE = 'Y'", refTable.Name, col.DbName)
-					} else {
-						query = fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s = ?", refTable.Name, col.DbName)
-					}
-
-					fmt.Printf("[DEBUG] 执行查询: %s, recordID=%d\n", query, recordID)
-
-					if err := s.db.Raw(query, recordID).Scan(&count).Error; err != nil {
-						fmt.Printf("[DEBUG] 查询失败: %v\n", err)
-						return errors.Wrap(errors.ErrDatabase, "检查外键引用失败", err)
-					}
-
-					fmt.Printf("[DEBUG] 查询结果: count=%d\n", count)
+				// 检查是否有记录引用
+				var count int64
+				safeCol, _ := sqlutils.SanitizeIdentifier(col.DbName)
+				if safeCol == "" {
+					continue
+				}
+				if hasIsActive {
+					s.db.Table(refTable.Name).Where(fmt.Sprintf("`%s` = ? AND IS_ACTIVE = 'Y'", safeCol), recordID).Count(&count)
+				} else {
+					s.db.Table(refTable.Name).Where(fmt.Sprintf("`%s` = ?", safeCol), recordID).Count(&count)
+				}
 
 					if count > 0 {
 						return errors.New(errors.ErrResourceConflict, fmt.Sprintf("无法删除：有 %d 条 %s 记录正在引用", count, refTable.DisplayName))
@@ -166,8 +161,7 @@ func (s *service) validateForeignKeyValue(refTableID uint, value interface{}) er
 
 	// 查询记录是否存在
 	var count int64
-	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE ID = ? AND IS_ACTIVE = 'Y'", refTable.Name)
-	if err := s.db.Raw(query, value).Scan(&count).Error; err != nil {
+	if err := s.db.Table(refTable.Name).Where("ID = ? AND IS_ACTIVE = 'Y'", value).Count(&count).Error; err != nil {
 		return fmt.Errorf("验证失败: %v", err)
 	}
 

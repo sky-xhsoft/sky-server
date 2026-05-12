@@ -65,7 +65,6 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.RequestTiming())
 	engine.Use(middleware.Metrics())
-	engine.Use(middleware.PanicRecovery())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.CORS(cfg.CORS))
 	// 语言国际化中间件
@@ -149,12 +148,6 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 语言管理路由
 		registerLanguageRoutes(v1, jwtUtil, services.Language)
 
-		// 临时测试路由
-		v1.GET("/ping", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"message": "pong",
-			})
-		})
 	}
 }
 
@@ -178,10 +171,12 @@ func registerCloudStorageConfigRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, sto
 func registerAuthRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, ssoService sso.Service) {
 	authHandler := handler.NewAuthHandler(ssoService)
 
+	loginLimiter := middleware.NewIPRateLimiter(2, 5)
+
 	auth := rg.Group("/auth")
 	{
 		// 公开路由（不需要认证）
-		auth.POST("/login", authHandler.Login)
+		auth.POST("/login", loginLimiter.Limit(), authHandler.Login)
 		auth.POST("/refresh", authHandler.RefreshToken)
 
 		// 需要认证的路由
