@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
@@ -17,7 +18,7 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      20002,
 				"message":   "未提供认证令牌",
-				"timestamp": "2026-01-11T00:00:00Z",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			})
 			c.Abort()
 			return
@@ -29,7 +30,7 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      20002,
 				"message":   "认证令牌格式错误",
-				"timestamp": "2026-01-11T00:00:00Z",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			})
 			c.Abort()
 			return
@@ -43,7 +44,7 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      20003,
 				"message":   "令牌无效或已过期",
-				"timestamp": "2026-01-11T00:00:00Z",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			})
 			c.Abort()
 			return
