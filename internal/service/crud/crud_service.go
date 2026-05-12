@@ -2,7 +2,9 @@ package crud
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
@@ -216,4 +218,12 @@ func NewService(
 		userRepo:        userRepo,
 		idgenService:    idgenService,
 	}
+}
+
+// resolveTableName 解析虚拟表映射到真实物理表
+func resolveTableName(table *entity.SysTable) string {
+	if table.RealTableID != nil && *table.RealTableID > 0 {
+		return fmt.Sprintf("table_%d", *table.RealTableID)
+	}
+	return table.Name
 }

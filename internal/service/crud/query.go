@@ -185,8 +185,12 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 
 	// 计算总数
 	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		return nil, errors.Wrap(errors.ErrDatabase, "查询总数失败", err)
+	if table.IsBig == "Y" {
+		total = -1
+	} else {
+		if err := query.Count(&total).Error; err != nil {
+			return nil, errors.Wrap(errors.ErrDatabase, "查询总数失败", err)
+		}
 	}
 
 	// 添加排序（支持多字段，逗号分隔）

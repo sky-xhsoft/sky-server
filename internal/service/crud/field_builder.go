@@ -14,19 +14,32 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// 系统审计字段（无论MASK如何配置都应包含）
+const (
+	colID            = "ID"
+	colSysCompanyID  = "SYS_COMPANY_ID"
+	colCreateBy      = "CREATE_BY"
+	colCreateTime    = "CREATE_TIME"
+	colUpdateBy      = "UPDATE_BY"
+	colUpdateTime    = "UPDATE_TIME"
+	colIsActive      = "IS_ACTIVE"
+	colStatus        = "STATUS"
+	colOrderNo       = "ORDERNO"
+)
+
+var standardFields = map[string]bool{
+	colID:            true,
+	colSysCompanyID:  true,
+	colCreateBy:      true,
+	colCreateTime:    true,
+	colUpdateBy:      true,
+	colUpdateTime:    true,
+	colIsActive:      true,
+}
+
 // buildSelectFields 构建查询字段列表（根据MASK控制）
 func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, operation string) (string, error) {
 	var fields []string
-
-	standardFields := map[string]bool{
-		"ID":             true,
-		"SYS_COMPANY_ID": true,
-		"CREATE_BY":      true,
-		"CREATE_TIME":    true,
-		"UPDATE_BY":      true,
-		"UPDATE_TIME":    true,
-		"IS_ACTIVE":      true,
-	}
 
 	addedStandardFields := make(map[string]bool)
 
