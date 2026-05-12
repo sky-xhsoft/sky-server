@@ -6,10 +6,12 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/mask"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // buildSelectFields 构建查询字段列表（根据MASK控制）
@@ -91,6 +93,36 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 			value = col.DefaultValue
 			exists = true
 			data[col.DbName] = col.DefaultValue
+		}
+
+		switch col.SetValueType {
+		case "ignore":
+			delete(data, col.DbName)
+			continue
+		case "sysdate":
+			now := time.Now()
+			data[col.DbName] = now
+			value = now
+			exists = true
+		case "createBy":
+			data[col.DbName] = userID
+			value = userID
+			exists = true
+		case "operator":
+			if user, err := s.userRepo.GetUserByID(userID); err == nil && user != nil {
+				data[col.DbName] = user.Username
+				value = user.Username
+				exists = true
+			}
+		case "password":
+			if strVal, ok := value.(string); ok && strVal != "" {
+				hashed, err := bcrypt.GenerateFromPassword([]byte(strVal), bcrypt.DefaultCost)
+				if err != nil {
+					return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("字段 %s: 密码加密失败", col.DisplayName), err)
+				}
+				data[col.DbName] = string(hashed)
+				value = string(hashed)
+			}
 		}
 
 		if exists && col.SetValueType == "fk" && col.RefTableID != nil {

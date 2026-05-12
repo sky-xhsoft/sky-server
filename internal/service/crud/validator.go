@@ -147,14 +147,17 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 	return nil
 }
 
-// checkForeignKeyReferences 检查外键引用，防止删除被引用的记录
-func (s *service) checkForeignKeyReferences(ctx context.Context, tableID uint, recordID uint) error {
-	// 直接查询 sys_column，找出所有引用当前表的FK列
-	type fkRef struct {
-		TableName   string
-		ColName     string
-		RefOnDelete string
-	}
+// fkRef 外键引用信息
+type fkRef struct {
+	TableName   string
+	ColName     string
+	RefOnDelete string
+}
+
+// checkForeignKeyReferences 检查外键引用，返回需要级联处理的FK引用列表
+// restrict策略：直接阻断删除
+// cascade/setNull策略：返回引用列表由调用方在事务中处理
+func (s *service) checkForeignKeyReferences(ctx context.Context, tableID uint, recordID uint) ([]fkRef, error) {
 	var fkRefs []fkRef
 	s.db.Raw(`
 		SELECT t.NAME as table_name, c.DB_NAME as col_name, COALESCE(c.REF_ON_DELETE, '') as ref_on_delete
@@ -174,12 +177,12 @@ func (s *service) checkForeignKeyReferences(ctx context.Context, tableID uint, r
 			var count int64
 			s.db.Table(ref.TableName).Where(fmt.Sprintf("`%s` = ? AND IS_ACTIVE = 'Y'", safeCol), recordID).Count(&count)
 			if count > 0 {
-				return errors.New(errors.ErrResourceConflict, fmt.Sprintf("无法删除：有 %d 条 %s 记录正在引用", count, ref.TableName))
+				return nil, errors.New(errors.ErrResourceConflict, fmt.Sprintf("无法删除：有 %d 条 %s 记录正在引用", count, ref.TableName))
 			}
 		}
 	}
 
-	return nil
+	return fkRefs, nil
 }
 
 // validateForeignKeyValue 验证FK字段的值是否在关联表中存在

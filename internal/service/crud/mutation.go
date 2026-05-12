@@ -199,13 +199,28 @@ func (s *service) Delete(ctx context.Context, tableName string, id uint, userID 
 	}
 
 	// 检查外键引用（REF_ON_DELETE 保护）
-	if err := s.checkForeignKeyReferences(ctx, table.ID, id); err != nil {
+	fkRefs, err := s.checkForeignKeyReferences(ctx, table.ID, id)
+	if err != nil {
 		return err
 	}
 
-	// 在事务中执行：before钩子 + 删除 + after钩子
+	// 在事务中执行：级联处理 + before钩子 + 删除 + after钩子
 	deleteData := map[string]interface{}{"ID": id}
 	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {
+		// 处理 REF_ON_DELETE=cascade 和 setNull
+		for _, ref := range fkRefs {
+			switch ref.RefOnDelete {
+			case "cascade":
+				if err := tx.Table(ref.TableName).Where(ref.ColName+" = ?", id).Delete(nil).Error; err != nil {
+					return errors.Wrap(errors.ErrDatabase, fmt.Sprintf("级联删除 %s 失败", ref.TableName), err)
+				}
+			case "setNull":
+				if err := tx.Table(ref.TableName).Where(ref.ColName+" = ?", id).Update(ref.ColName, nil).Error; err != nil {
+					return errors.Wrap(errors.ErrDatabase, fmt.Sprintf("级联置空 %s 失败", ref.TableName), err)
+				}
+			}
+		}
+
 		// 执行before钩子（在事务中）
 		if err := s.executeHooksInTx(ctx, tx, table.ID, "D", "begin", deleteData); err != nil {
 			return errors.Wrap(errors.ErrInternal, "执行before钩子失败", err)
@@ -287,7 +302,8 @@ func (s *service) BatchDelete(ctx context.Context, tableName string, ids []uint,
 
 	// 检查每个ID的外键引用
 	for _, id := range ids {
-		if err := s.checkForeignKeyReferences(ctx, table.ID, id); err != nil {
+		_, err := s.checkForeignKeyReferences(ctx, table.ID, id)
+		if err != nil {
 			return errors.Wrap(errors.ErrInternal, fmt.Sprintf("ID=%d: %s", id, err.Error()), err)
 		}
 	}

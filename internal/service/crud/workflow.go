@@ -154,3 +154,52 @@ func (s *service) Unsubmit(ctx context.Context, tableName string, id uint, userI
 		return nil
 	})
 }
+
+// Void 作废记录
+func (s *service) Void(ctx context.Context, tableName string, id uint, userID uint) error {
+	table, err := s.metadataService.GetTable(tableName)
+	if err != nil {
+		return errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
+	}
+
+	hasPermission, err := s.groupsService.CheckUserTablePermission(ctx, userID, table.ID, groups.PermDelete)
+	if err != nil {
+		return errors.Wrap(errors.ErrPermissionDenied, "检查权限失败", err)
+	}
+	if !hasPermission {
+		return errors.New(errors.ErrPermissionDenied, "没有作废权限")
+	}
+
+	if !mask.HasAction(table.Mask, mask.ActionVoid) {
+		return errors.New(errors.ErrInvalidParam, "该表不支持作废操作")
+	}
+
+	var record map[string]interface{}
+	if err := s.db.Table(tableName).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").Take(&record).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.New(errors.ErrResourceNotFound, "记录不存在或已失效")
+		}
+		return errors.Wrap(errors.ErrDatabase, "查询记录失败", err)
+	}
+
+	return transaction.WithTransaction(s.db, func(tx *gorm.DB) error {
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "V", "begin", record); err != nil {
+			return errors.Wrap(errors.ErrActionExecute, "执行作废前钩子失败", err)
+		}
+
+		if err := tx.Table(tableName).Where("ID = ?", id).Updates(map[string]interface{}{
+			"STATUS":      "voided",
+			"IS_ACTIVE":   "N",
+			"UPDATE_BY":   userID,
+			"UPDATE_TIME": time.Now(),
+		}).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "作废记录失败", err)
+		}
+
+		if err := s.executeHooksInTx(ctx, tx, table.ID, "V", "end", record); err != nil {
+			return errors.Wrap(errors.ErrActionExecute, "执行作废后钩子失败", err)
+		}
+
+		return nil
+	})
+}
