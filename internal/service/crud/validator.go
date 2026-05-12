@@ -9,7 +9,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/sqlutils"
 )
 
-// processForeignKeys 处理结果集中的外键字段，将ID转换为显示名称
+// processForeignKeys 处理结果集中的外键字段，将ID转换为显示名称（批量查询版本）
 func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysColumn, results []map[string]interface{}, userID uint) error {
 	if len(results) == 0 {
 		return nil
@@ -27,51 +27,112 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 		return nil
 	}
 
-	// 为每个FK字段收集所有需要查询的ID
+	// 按 (refTableID, refColumnID) 分组收集所有FK值
+	type fkBatchKey struct {
+		RefTableID  uint
+		RefColumnID *uint
+	}
+	batchGroups := make(map[fkBatchKey]map[interface{}]bool)
+
 	for _, fkCol := range fkColumns {
-		// 收集所有唯一的ID值
-		idSet := make(map[interface{}]bool)
+		key := fkBatchKey{RefTableID: *fkCol.RefTableID, RefColumnID: fkCol.RefColumnID}
+		if batchGroups[key] == nil {
+			batchGroups[key] = make(map[interface{}]bool)
+		}
 		for _, record := range results {
 			if val, exists := record[fkCol.DbName]; exists && val != nil {
-				idSet[val] = true
+				batchGroups[key][val] = true
 			}
 		}
+	}
 
+	// 批量查询每个分组
+	batchResults := make(map[fkBatchKey]map[interface{}]string)
+	for key, idSet := range batchGroups {
 		if len(idSet) == 0 {
 			continue
 		}
 
-		// 批量查询这些ID对应的显示值
-		idToLabelMap := make(map[interface{}]string)
+		ids := make([]interface{}, 0, len(idSet))
 		for id := range idSet {
-			// 转换为字符串进行查询
-			idStr := fmt.Sprintf("%v", id)
-			label, err := s.metadataService.GetForeignKeyDisplayValue(*fkCol.RefTableID, idStr, fkCol.RefColumnID, userID)
-			if err != nil {
-				// 单个FK查询失败不影响其他，使用原始值
-				idToLabelMap[id] = idStr
-			} else {
-				idToLabelMap[id] = label
-			}
+			ids = append(ids, id)
 		}
 
-		// 获取关联表信息（用于跳转）
+		// 获取关联表元数据
+		refTable, err := s.metadataService.GetTableByID(key.RefTableID)
+		if err != nil || refTable == nil {
+			continue
+		}
+		refColumns, err := s.metadataService.GetColumns(key.RefTableID)
+		if err != nil {
+			continue
+		}
+
+		// 确定显示列
+		var displayCol *entity.SysColumn
+		if key.RefColumnID != nil {
+			for _, col := range refColumns {
+				if col.ID == *key.RefColumnID {
+					displayCol = col
+					break
+				}
+			}
+		}
+		if displayCol == nil {
+			for _, col := range refColumns {
+				if col.IsDK == "Y" {
+					displayCol = col
+					break
+				}
+			}
+		}
+		if displayCol == nil {
+			for _, col := range refColumns {
+				if col.ColType == "varchar" || col.ColType == "char" {
+					displayCol = col
+					break
+				}
+			}
+		}
+		if displayCol == nil {
+			continue
+		}
+
+		// 批量查询显示值
+		var rows []map[string]interface{}
+		s.db.Table(refTable.Name).Select(fmt.Sprintf("ID, %s", displayCol.DbName)).Where("ID IN ?", ids).Find(&rows)
+
+		labelMap := make(map[interface{}]string)
+		for _, row := range rows {
+			if id, ok := row["ID"]; ok {
+				if label, ok := row[displayCol.DbName]; ok {
+					labelMap[id] = fmt.Sprintf("%v", label)
+				}
+			}
+		}
+		batchResults[key] = labelMap
+	}
+
+	// 填充结果
+	for _, fkCol := range fkColumns {
+		key := fkBatchKey{RefTableID: *fkCol.RefTableID, RefColumnID: fkCol.RefColumnID}
+		labelMap := batchResults[key]
+
 		refTable, err := s.metadataService.GetTableByID(*fkCol.RefTableID)
 		var refTableName string
 		if err == nil && refTable != nil {
 			refTableName = refTable.Name
 		}
 
-		// 在结果集中添加 _display 和 _ref 字段
 		displayFieldName := fkCol.DbName + "_display"
 		refFieldName := fkCol.DbName + "_ref"
 		for _, record := range results {
 			if val, exists := record[fkCol.DbName]; exists && val != nil {
-				// 添加显示值
-				if label, ok := idToLabelMap[val]; ok {
-					record[displayFieldName] = label
+				if labelMap != nil {
+					if label, ok := labelMap[val]; ok {
+						record[displayFieldName] = label
+					}
 				}
-				// 添加关联表信息（用于跳转）
 				if refTableName != "" {
 					record[refFieldName] = map[string]interface{}{
 						"table_name": refTableName,
@@ -88,66 +149,36 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 
 // checkForeignKeyReferences 检查外键引用，防止删除被引用的记录
 func (s *service) checkForeignKeyReferences(ctx context.Context, tableID uint, recordID uint) error {
-	// 查询所有引用当前表的FK字段
-	allTables, err := s.metadataRepo.GetAllTables()
-	if err != nil {
-		return errors.Wrap(errors.ErrDatabase, "查询表列表失败", err)
+	// 直接查询 sys_column，找出所有引用当前表的FK列
+	type fkRef struct {
+		TableName   string
+		ColName     string
+		RefOnDelete string
 	}
+	var fkRefs []fkRef
+	s.db.Raw(`
+		SELECT t.NAME as table_name, c.DB_NAME as col_name, COALESCE(c.REF_ON_DELETE, '') as ref_on_delete
+		FROM sys_column c
+		JOIN sys_table t ON c.SYS_TABLE_ID = t.ID
+		WHERE c.SET_VALUE_TYPE = 'fk' AND c.REF_TABLE_ID = ?
+		AND t.ID != ?
+	`, tableID, tableID).Scan(&fkRefs)
 
-	fmt.Printf("[DEBUG] 检查外键引用：tableID=%d, recordID=%d, 总表数=%d\n", tableID, recordID, len(allTables))
-
-	for _, refTable := range allTables {
-		// 跳过当前表自己（不检查自己引用自己）
-		if refTable.ID == tableID {
-			fmt.Printf("[DEBUG] 跳过当前表自己: %s (ID=%d)\n", refTable.Name, refTable.ID)
+	for _, ref := range fkRefs {
+		safeCol, _ := sqlutils.SanitizeIdentifier(ref.ColName)
+		if safeCol == "" {
 			continue
 		}
 
-		columns, err := s.metadataService.GetColumns(refTable.ID)
-		if err != nil {
-			fmt.Printf("[DEBUG] 获取表 %s (ID=%d) 的列失败: %v\n", refTable.Name, refTable.ID, err)
-			continue
-		}
-
-		// 检查引用表是否有 IS_ACTIVE 字段
-		hasIsActive := false
-		for _, col := range columns {
-			if col.DbName == "IS_ACTIVE" {
-				hasIsActive = true
-				break
-			}
-		}
-
-		for _, col := range columns {
-			// 检查是否是引用当前表的FK字段
-			if col.SetValueType == "fk" && col.RefTableID != nil && *col.RefTableID == tableID {
-				fmt.Printf("[DEBUG] 发现FK字段：表=%s, 字段=%s, RefTableID=%d, RefOnDelete=%s\n",
-					refTable.Name, col.DbName, *col.RefTableID, col.RefOnDelete)
-
-				// 检查 REF_ON_DELETE 策略
-				if col.RefOnDelete == "noAction" || col.RefOnDelete == "" {
-				// 检查是否有记录引用
-				var count int64
-				safeCol, _ := sqlutils.SanitizeIdentifier(col.DbName)
-				if safeCol == "" {
-					continue
-				}
-				if hasIsActive {
-					s.db.Table(refTable.Name).Where(fmt.Sprintf("`%s` = ? AND IS_ACTIVE = 'Y'", safeCol), recordID).Count(&count)
-				} else {
-					s.db.Table(refTable.Name).Where(fmt.Sprintf("`%s` = ?", safeCol), recordID).Count(&count)
-				}
-
-					if count > 0 {
-						return errors.New(errors.ErrResourceConflict, fmt.Sprintf("无法删除：有 %d 条 %s 记录正在引用", count, refTable.DisplayName))
-					}
-				}
-				// cascade 和 setNull 策略暂不实现，需要在事务中处理
+		if ref.RefOnDelete == "noAction" || ref.RefOnDelete == "" {
+			var count int64
+			s.db.Table(ref.TableName).Where(fmt.Sprintf("`%s` = ? AND IS_ACTIVE = 'Y'", safeCol), recordID).Count(&count)
+			if count > 0 {
+				return errors.New(errors.ErrResourceConflict, fmt.Sprintf("无法删除：有 %d 条 %s 记录正在引用", count, ref.TableName))
 			}
 		}
 	}
 
-	fmt.Printf("[DEBUG] 外键引用检查通过\n")
 	return nil
 }
 

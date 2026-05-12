@@ -1,6 +1,7 @@
 package sso
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -302,6 +303,11 @@ func (s *service) ChangePassword(userID uint, oldPassword string, newPassword st
 		return errors.Wrap(errors.ErrInvalidCredentials, "旧密码不正确", err)
 	}
 
+	// 验证密码复杂度
+	if err := validatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+
 	// 加密新密码
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -320,5 +326,27 @@ func (s *service) ChangePassword(userID uint, oldPassword string, newPassword st
 			zap.Error(err))
 	}
 
+	return nil
+}
+
+var (
+	passwordUpperRegex = regexp.MustCompile(`[A-Z]`)
+	passwordLowerRegex = regexp.MustCompile(`[a-z]`)
+	passwordDigitRegex = regexp.MustCompile(`[0-9]`)
+)
+
+func validatePasswordStrength(password string) error {
+	if len(password) < 8 {
+		return errors.New(errors.ErrInvalidParam, "密码长度至少8位")
+	}
+	if !passwordUpperRegex.MatchString(password) {
+		return errors.New(errors.ErrInvalidParam, "密码需包含大写字母")
+	}
+	if !passwordLowerRegex.MatchString(password) {
+		return errors.New(errors.ErrInvalidParam, "密码需包含小写字母")
+	}
+	if !passwordDigitRegex.MatchString(password) {
+		return errors.New(errors.ErrInvalidParam, "密码需包含数字")
+	}
 	return nil
 }

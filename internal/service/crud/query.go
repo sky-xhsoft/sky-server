@@ -49,6 +49,11 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	// 构建查询
 	query := s.db.Table(table.Name).Select(selectFields)
 
+	// 应用表级数据过滤条件
+	if table.Filter != "" {
+		query = s.applyDataFilter(query, table.Filter, columns)
+	}
+
 	// 添加ID条件
 	query = query.Where("ID = ?", id)
 	fmt.Printf("[DEBUG] GetOne - 查询表: %s, ID: %d\n", table.Name, id)
@@ -148,6 +153,11 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 
 	// 构建查询
 	query := s.db.Table(table.Name).Select(selectFields)
+
+	// 应用表级数据过滤条件
+	if table.Filter != "" {
+		query = s.applyDataFilter(query, table.Filter, columns)
+	}
 
 	// 添加数据过滤条件
 	if dataFilter != nil && len(dataFilter) > 0 {
