@@ -1,14 +1,15 @@
 package handler
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
+	"go.uber.org/zap"
 )
 
 // MetadataHandler 元数据处理器
@@ -68,7 +69,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 			// SysDictID 是字符串，需要转换为uint
 			dictID, err := strconv.ParseUint(col.SysDictID, 10, 32)
 			if err != nil {
-				fmt.Printf("[WARN] 字段 %s 的字典ID格式错误: %s\n", col.DbName, col.SysDictID)
+				logger.Warn("Invalid dict ID format for column", zap.String("column", col.DbName), zap.String("dictId", col.SysDictID))
 				continue
 			}
 			dictIDs[uint(dictID)] = true
@@ -81,7 +82,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 		items, err := h.dictRepo.GetDictItems(dictID)
 		if err != nil {
 			// 字典获取失败不影响整体返回，只记录日志
-			fmt.Printf("[WARN] 获取字典 %d 失败: %v\n", dictID, err)
+			logger.Warn("GetDict failed", zap.Uint("dictId", uint(dictID)), zap.Error(err))
 			continue
 		}
 		dictData[dictID] = items
@@ -91,21 +92,21 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 	childTables := []gin.H{}
 	tableRefs, err := h.metadataService.GetTableRefs(uint(tableID))
 	if err != nil {
-		fmt.Printf("[WARN] 获取表关联关系失败: %v\n", err)
+		logger.Warn("GetTableRefs failed", zap.Error(err))
 	} else if len(tableRefs) > 0 {
 		// 为每个子表获取完整配置
 		for _, ref := range tableRefs {
 			// 获取子表信息
 			childTable, err := h.metadataService.GetTableByID(uint(ref.RefTableID))
 			if err != nil {
-				fmt.Printf("[WARN] 获取子表 %d 定义失败: %v\n", ref.RefTableID, err)
+				logger.Warn("GetTableByID failed for child table", zap.Int("refTableId", int(ref.RefTableID)), zap.Error(err))
 				continue
 			}
 
 			// 获取子表字段列表
 			childColumns, err := h.metadataService.GetColumns(uint(ref.RefTableID))
 			if err != nil {
-				fmt.Printf("[WARN] 获取子表 %d 字段定义失败: %v\n", ref.RefTableID, err)
+				logger.Warn("GetColumns failed for child table", zap.Int("refTableId", int(ref.RefTableID)), zap.Error(err))
 				continue
 			}
 
@@ -115,7 +116,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 				if col.SetValueType == "select" && col.SysDictID != "" {
 					dictID, err := strconv.ParseUint(col.SysDictID, 10, 32)
 					if err != nil {
-						fmt.Printf("[WARN] 子表字段 %s 的字典ID格式错误: %s\n", col.DbName, col.SysDictID)
+						logger.Warn("Invalid dict ID format for child column", zap.String("column", col.DbName), zap.String("dictId", col.SysDictID))
 						continue
 					}
 					childDictIDs[uint(dictID)] = true
@@ -127,7 +128,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 			for dictID := range childDictIDs {
 				items, err := h.dictRepo.GetDictItems(dictID)
 				if err != nil {
-					fmt.Printf("[WARN] 获取子表字典 %d 失败: %v\n", dictID, err)
+					logger.Warn("GetDict failed for child table", zap.Int("dictId", int(dictID)), zap.Error(err))
 					continue
 				}
 				childDictData[dictID] = items
