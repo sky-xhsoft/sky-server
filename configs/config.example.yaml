@@ -78,6 +78,7 @@ cache:
   dictTTL: 3600  # 1小时
   # 权限缓存过期时间（秒）
   permissionTTL: 1800  # 30分钟
+  languageTTL: 86400  # 24小时
 
 # 限流配置
 rateLimit:
@@ -178,6 +179,16 @@ storage:
     region: "ap-guangzhou"
     cdnDomain: ""
 
+# 动作执行配置
+action:
+  scriptTimeout: 30  # 脚本执行超时时间（秒）
+
+# 分片上传配置
+multipartUpload:
+  chunkSize: 52428800  # 分片大小（字节），默认 50MB
+  sessionExpireHours: 24  # 上传会话过期时间（小时）
+  cleanupInterval: 3600  # 过期会话清理间隔（秒），默认 1 小时
+
 # 云盘配置
 cloud:
     # 是否启用云盘功能
@@ -188,6 +199,11 @@ cloud:
     defaultStorage: "tencentCOS"
     # 默认直播间文件夹的父ID（可选）- 如果不设置，将创建在根目录
     defaultRoomParentID: null
+    # 存储配置（各公司默认值）
+    storage:
+      local:
+        basePath: "uploads"
+        baseURL: "http://localhost:9090/files"
 
 # 腾讯云配置
 tencentCloud:
