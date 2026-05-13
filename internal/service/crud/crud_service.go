@@ -6,9 +6,11 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
+	"github.com/sky-xhsoft/sky-server/internal/service/dict"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
+	"github.com/sky-xhsoft/sky-server/internal/service/sequence"
 	"gorm.io/gorm"
 )
 
@@ -95,6 +97,8 @@ type service struct {
 	db              *gorm.DB
 	metadataService metadata.Service
 	groupsService   groups.Service
+	dictService     dict.Service
+	sequenceService sequence.Service
 	metadataRepo    repository.MetadataRepository
 	userRepo        repository.UserRepository
 	idgenService    idgen.Service
@@ -223,6 +227,8 @@ func NewService(
 	db *gorm.DB,
 	metadataService metadata.Service,
 	groupsService groups.Service,
+	dictService dict.Service,
+	sequenceService sequence.Service,
 	metadataRepo repository.MetadataRepository,
 	userRepo repository.UserRepository,
 	idgenService idgen.Service,
@@ -231,6 +237,8 @@ func NewService(
 		db:              db,
 		metadataService: metadataService,
 		groupsService:   groupsService,
+		dictService:     dictService,
+		sequenceService: sequenceService,
 		metadataRepo:    metadataRepo,
 		userRepo:        userRepo,
 		idgenService:    idgenService,

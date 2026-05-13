@@ -149,6 +149,8 @@ func main() {
 		db,
 		metadataService,
 		groupsService,
+		dictService,
+		seqService,
 		metadataRepo,
 		userRepo,
 		idgenService,

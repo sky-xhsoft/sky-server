@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -135,6 +136,35 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 				}
 				data[col.DbName] = string(hashed)
 				value = string(hashed)
+			}
+		case "docno":
+			if col.Seq != "" {
+				docNo, err := s.sequenceService.NextValue(col.Seq)
+				if err != nil {
+					return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("字段 %s: 生成单据编号失败", col.DisplayName), err)
+				}
+				data[col.DbName] = docNo
+				value = docNo
+				exists = true
+			}
+		case "select":
+			if col.SysDictID != "" && exists && value != nil {
+				dictID := parseDictID(col.SysDictID)
+				if dictID > 0 {
+					items, err := s.dictService.GetDictItems(dictID)
+					if err == nil && len(items) > 0 {
+						found := false
+						for _, item := range items {
+							if item.Value == fmt.Sprintf("%v", value) {
+								found = true
+								break
+							}
+						}
+						if !found {
+							return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: 值不在字典选项中", col.DisplayName))
+						}
+					}
+				}
 			}
 		}
 
@@ -281,4 +311,12 @@ func (r *regexCacheImpl) get(pattern string) *regexp.Regexp {
 	re := regexp.MustCompile(pattern)
 	r.cache[pattern] = re
 	return re
+}
+
+func parseDictID(s string) uint {
+	id, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(id)
 }
