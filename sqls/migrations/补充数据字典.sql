@@ -246,3 +246,23 @@ INSERT IGNORE INTO sys_dict_item (SYS_DICT_ID, VALUE, DISPLAY_NAME, ORDERNO, IS_
 (30, 'operator', '操作人', 8, 'Y'),
 (30, 'password', '密码', 9, 'Y'),
 (30, 'ignore', '忽略', 10, 'Y');
+
+-- ============================================================
+-- Phase 7: 补全 display_type 字典缺失项 (dict 29)
+-- ============================================================
+INSERT IGNORE INTO sys_dict_item (SYS_DICT_ID, VALUE, DISPLAY_NAME, ORDERNO, IS_ACTIVE) VALUES
+(29, 'number', '数字输入', 3, 'Y'),
+(29, 'time', '时间', 6, 'Y'),
+(29, 'switch', '开关', 9, 'Y'),
+(29, 'color', '颜色选择', 14, 'Y'),
+(29, 'fk', '外键选择', 3, 'Y'),
+(29, 'richtext', '富文本', 12, 'Y'),
+(29, 'xml', 'XML编辑器', 13, 'Y'),
+(29, 'permissionbit', '权限位', 14, 'Y');
+
+-- ============================================================
+-- Phase 8: 更新 sys_column 的 COL_TYPE SYS_DICT_ID 引用
+-- ============================================================
+UPDATE sys_column SET SYS_DICT_ID = '28' WHERE DB_NAME = 'COL_TYPE' AND SYS_DICT_ID IS NULL;
+UPDATE sys_column SET SYS_DICT_ID = '29' WHERE DB_NAME = 'DISPLAY_TYPE' AND SYS_DICT_ID IS NULL;
+UPDATE sys_column SET SYS_DICT_ID = '30' WHERE DB_NAME = 'SET_VALUE_TYPE' AND SYS_DICT_ID IS NULL AND SET_VALUE_TYPE IS NOT NULL;
