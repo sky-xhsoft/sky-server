@@ -11,7 +11,6 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/contextutil"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent"
 	tencentLive "github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
-	redisRepo "github.com/sky-xhsoft/sky-server/internal/repository/redis"
 )
 
 // Service 直播服务接口
@@ -75,8 +74,7 @@ const (
 )
 
 // NewService 创建直播服务（已弃用，请使用 NewServiceWithCompanyManager）
-func NewService(cfg *config.TencentCloudConfig) (Service, error) {
-	// 创建腾讯云客户端
+func NewService(cfg *config.TencentCloudConfig, redisClient *redis.Client) (Service, error) {
 	client, err := tencent.NewClient(cfg)
 	if err != nil {
 		return nil, err
@@ -84,18 +82,18 @@ func NewService(cfg *config.TencentCloudConfig) (Service, error) {
 
 	return &liveService{
 		tencentClient: client,
-		redisClient:   redisRepo.Client,
+		redisClient:   redisClient,
 	}, nil
 }
 
 // NewServiceWithCompanyManager 创建支持公司级配置的直播服务
-func NewServiceWithCompanyManager(tencentMgr *tencent.CompanyTencentManager) (Service, error) {
+func NewServiceWithCompanyManager(tencentMgr *tencent.CompanyTencentManager, redisClient *redis.Client) (Service, error) {
 	defaultClient := tencentMgr.GetDefaultClient()
 
 	return &liveService{
 		tencentMgr:    tencentMgr,
 		tencentClient: defaultClient,
-		redisClient:   redisRepo.Client,
+		redisClient:   redisClient,
 	}, nil
 }
 

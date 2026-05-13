@@ -88,7 +88,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
-	defer mysql.Close()
+	defer mysql.CloseDB(db)
 	logger.Info("Database connected successfully")
 
 	// 4. 初始化Redis连接
@@ -96,7 +96,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to connect to redis", zap.Error(err))
 	}
-	defer redis.Close()
+	defer redis.CloseClient(redisClient)
 	logger.Info("Redis connected successfully")
 
 	// 5. 初始化仓储层
@@ -255,9 +255,9 @@ func main() {
 	// 初始化直播服务
 	var liveService live.Service
 	if companyTencentManager != nil {
-		liveService, err = live.NewServiceWithCompanyManager(companyTencentManager)
+		liveService, err = live.NewServiceWithCompanyManager(companyTencentManager, redisClient)
 	} else {
-		liveService, err = live.NewService(&cfg.TencentCloud)
+		liveService, err = live.NewService(&cfg.TencentCloud, redisClient)
 	}
 
 	if err != nil {

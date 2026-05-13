@@ -11,8 +11,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-var DB *gorm.DB
-
 // Init 初始化MySQL连接
 func Init(cfg *config.MySQLConfig, log *zap.Logger) (*gorm.DB, error) {
 	// 解析日志级别
@@ -65,14 +63,13 @@ func Init(cfg *config.MySQLConfig, log *zap.Logger) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	DB = db
 	return db, nil
 }
 
-// Close 关闭数据库连接
-func Close() error {
-	if DB != nil {
-		sqlDB, err := DB.DB()
+// CloseDB 关闭数据库连接
+func CloseDB(db *gorm.DB) error {
+	if db != nil {
+		sqlDB, err := db.DB()
 		if err != nil {
 			return err
 		}

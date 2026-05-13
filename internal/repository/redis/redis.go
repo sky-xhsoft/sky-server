@@ -9,8 +9,6 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/config"
 )
 
-var Client *redis.Client
-
 // Init 初始化Redis连接
 func Init(cfg *config.RedisConfig) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
@@ -25,20 +23,18 @@ func Init(cfg *config.RedisConfig) (*redis.Client, error) {
 		PoolTimeout:  4 * time.Second,
 	})
 
-	// 测试连接
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
-	Client = client
 	return client, nil
 }
 
-// Close 关闭Redis连接
-func Close() error {
-	if Client != nil {
-		return Client.Close()
+// CloseClient 关闭Redis连接
+func CloseClient(client *redis.Client) error {
+	if client != nil {
+		return client.Close()
 	}
 	return nil
 }
