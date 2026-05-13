@@ -3,6 +3,7 @@ package crud
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
@@ -11,6 +12,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
 	"github.com/sky-xhsoft/sky-server/internal/service/sequence"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
@@ -71,6 +73,15 @@ type Service interface {
 
 	// 同时保存主表和明细
 	SaveWithDetails(ctx context.Context, req *SaveWithDetailsRequest, userID uint) (*SaveWithDetailsResponse, error)
+
+	// 作废记录
+	Void(ctx context.Context, tableName string, id uint, userID uint) error
+
+	// 导出到Excel
+	Export(ctx context.Context, tableName string, userID uint) (*excelize.File, error)
+
+	// 从Excel导入
+	Import(ctx context.Context, tableName string, file multipart.File, userID uint) (int, error)
 }
 
 // QueryRequest 查询请求

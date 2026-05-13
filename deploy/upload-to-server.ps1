@@ -1,9 +1,17 @@
 # Sky-Server 自动上传脚本 - PowerShell
-# 运行此脚本会自动上传所有文件到服务器 119.45.20.166
+# 使用环境变量配置服务器连接信息:
+#   $env:SKY_DEPLOY_HOST     - 目标服务器地址
+#   $env:SKY_DEPLOY_USER     - SSH 用户名
+#   $env:SKY_DEPLOY_PASSWORD - SSH 密码 (或使用 SSH Key)
 
-$server = "119.45.20.166"
-$username = "root"
-$password = "***REMOVED***"
+$server = $env:SKY_DEPLOY_HOST
+$username = $env:SKY_DEPLOY_USER
+$password = $env:SKY_DEPLOY_PASSWORD
+
+if (-not $server -or -not $username) {
+    Write-Error "请设置环境变量 SKY_DEPLOY_HOST 和 SKY_DEPLOY_USER"
+    exit 1
+}
 
 $files = @(
     "bin\sky-server",

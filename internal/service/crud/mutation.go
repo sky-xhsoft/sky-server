@@ -13,7 +13,6 @@ import (
 
 // Create 创建记录
 func (s *service) Create(ctx context.Context, tableName string, data map[string]interface{}, userID uint) (map[string]interface{}, error) {
-	// 获取表元数据
 	table, err := s.metadataService.GetTable(tableName)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)

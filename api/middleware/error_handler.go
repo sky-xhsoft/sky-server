@@ -33,7 +33,6 @@ func ErrorHandler() gin.HandlerFunc {
 			c.JSON(getHTTPStatus(appErr.Code), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
-				"error":   err.Error(),
 			})
 			return
 		}
@@ -47,7 +46,6 @@ func ErrorHandler() gin.HandlerFunc {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    http.StatusInternalServerError,
 			"message": "服务器内部错误",
-			"error":   err.Error(),
 		})
 	}
 }

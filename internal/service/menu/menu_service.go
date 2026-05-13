@@ -36,12 +36,12 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 	query := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ?", "Y")
 
-	// 如果指定了系统类型，则过滤子系统
+	// 如果指定了系统类型，则过滤子系统（包含通用子系统 KEY=NULL）
 	if systemType != "" {
-		query = query.Where("`KEY` = ?", systemType)
+		query = query.Where("`KEY` = ? OR `KEY` IS NULL", systemType)
 	} else {
-		// 如果没有指定系统类型，默认只返回有 KEY 的子系统（排除系统管理等通用子系统）
-		query = query.Where("`KEY` IS NOT NULL")
+		// 如果没有指定系统类型，返回所有子系统（包括系统管理等通用子系统）
+		query = query.Where("`KEY` IS NOT NULL OR `KEY` IS NULL")
 	}
 
 	if err := query.

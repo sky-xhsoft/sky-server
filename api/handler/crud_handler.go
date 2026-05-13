@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -461,4 +462,71 @@ func (h *CrudHandler) Unsubmit(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{"message": "反提交成功"})
+}
+
+// Void 作废记录
+func (h *CrudHandler) Void(c *gin.Context) {
+	tableName := c.Param("tableName")
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	if err := h.crudService.Void(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
+		utils.InternalError(c, "作废失败: "+err.Error())
+		return
+	}
+	utils.Success(c, gin.H{"message": "作废成功"})
+}
+
+// Export 导出数据到Excel
+func (h *CrudHandler) Export(c *gin.Context) {
+	tableName := c.Param("tableName")
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	f, err := h.crudService.Export(c.Request.Context(), tableName, userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "导出失败: "+err.Error())
+		return
+	}
+	buf, _ := f.WriteToBuffer()
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, tableName))
+	c.Data(200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
+}
+
+// Import 从Excel导入数据
+func (h *CrudHandler) Import(c *gin.Context) {
+	tableName := c.Param("tableName")
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	file, err := c.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "请上传Excel文件")
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		utils.BadRequest(c, "无法读取文件")
+		return
+	}
+	defer f.Close()
+	count, err := h.crudService.Import(c.Request.Context(), tableName, f, userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "导入失败: "+err.Error())
+		return
+	}
+	utils.Success(c, gin.H{"imported": count})
 }

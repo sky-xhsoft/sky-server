@@ -263,6 +263,11 @@ func registerCRUDRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, crudService crud.
 		data.POST("/:tableName/:id/unsubmit", crudHandler.Unsubmit)
 		// 同时保存主表和明细
 		data.POST("/save-with-details", crudHandler.SaveWithDetails)
+		// 作废
+		data.POST("/:tableName/:id/void", crudHandler.Void)
+		// 导入导出
+		data.GET("/:tableName/export", crudHandler.Export)
+		data.POST("/:tableName/import", crudHandler.Import)
 	}
 }
 

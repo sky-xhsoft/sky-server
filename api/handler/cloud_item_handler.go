@@ -5,8 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
+	"go.uber.org/zap"
 )
 
 // CloudItemHandler 云盘项目处理器（统一处理文件和文件夹）
@@ -107,7 +109,9 @@ func (h *CloudItemHandler) CreateItem(c *gin.Context) {
 	}
 
 	// 重新计算配额
-	_ = h.cloudService.RecalculateQuota(c.Request.Context(), uid)
+	if err := h.cloudService.RecalculateQuota(c.Request.Context(), uid); err != nil {
+		logger.Warn("RecalculateQuota failed", zap.Uint("userId", uid), zap.Error(err))
+	}
 
 	utils.Created(c, item)
 }
@@ -148,7 +152,9 @@ func (h *CloudItemHandler) DeleteItem(c *gin.Context) {
 	}
 
 	// 重新计算配额
-	_ = h.cloudService.RecalculateQuota(c.Request.Context(), uid)
+	if err := h.cloudService.RecalculateQuota(c.Request.Context(), uid); err != nil {
+		logger.Warn("RecalculateQuota failed", zap.Uint("userId", uid), zap.Error(err))
+	}
 
 	utils.Success(c, gin.H{"message": "删除成功"})
 }
@@ -252,7 +258,9 @@ func (h *CloudItemHandler) BatchDelete(c *gin.Context) {
 
 	// 批量删除完成后，重新计算配额
 	if successCount > 0 {
-		_ = h.cloudService.RecalculateQuota(c.Request.Context(), uid)
+		if err := h.cloudService.RecalculateQuota(c.Request.Context(), uid); err != nil {
+		logger.Warn("RecalculateQuota failed", zap.Uint("userId", uid), zap.Error(err))
+	}
 	}
 
 	utils.Success(c, BatchDeleteResponse{
