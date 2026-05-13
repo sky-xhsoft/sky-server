@@ -77,8 +77,8 @@ type Service interface {
 	// 作废记录
 	Void(ctx context.Context, tableName string, id uint, userID uint) error
 
-	// 导出到Excel
-	Export(ctx context.Context, tableName string, userID uint) (*excelize.File, error)
+	// 导出到Excel（支持过滤条件，nil=全部）
+	Export(ctx context.Context, tableName string, filters map[string]interface{}, userID uint) (*excelize.File, error)
 
 	// 从Excel导入
 	Import(ctx context.Context, tableName string, file multipart.File, userID uint) (int, error)

@@ -10,8 +10,8 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// Export 导出表数据到 Excel
-func (s *service) Export(ctx context.Context, tableName string, userID uint) (*excelize.File, error) {
+// Export 导出表数据到 Excel（支持过滤条件）
+func (s *service) Export(ctx context.Context, tableName string, filters map[string]interface{}, userID uint) (*excelize.File, error) {
 	table, err := s.metadataService.GetTable(tableName)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
@@ -31,6 +31,7 @@ func (s *service) Export(ctx context.Context, tableName string, userID uint) (*e
 		TableName: tableName,
 		Page:      1,
 		PageSize:  10000,
+		Filters:   filters,
 	}, userID)
 	if err != nil {
 		return nil, err

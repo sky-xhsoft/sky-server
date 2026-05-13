@@ -485,7 +485,7 @@ func (h *CrudHandler) Void(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "作废成功"})
 }
 
-// Export 导出数据到Excel
+// Export 导出数据到Excel（支持查询参数过滤和排序）
 func (h *CrudHandler) Export(c *gin.Context) {
 	tableName := c.Param("tableName")
 	userID, exists := c.Get("userID")
@@ -493,7 +493,13 @@ func (h *CrudHandler) Export(c *gin.Context) {
 		utils.Unauthorized(c, "请先登录")
 		return
 	}
-	f, err := h.crudService.Export(c.Request.Context(), tableName, userID.(uint))
+
+	var req crud.QueryRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		req = crud.QueryRequest{TableName: tableName}
+	}
+
+	f, err := h.crudService.Export(c.Request.Context(), tableName, req.Filters, userID.(uint))
 	if err != nil {
 		utils.InternalError(c, "导出失败: "+err.Error())
 		return
