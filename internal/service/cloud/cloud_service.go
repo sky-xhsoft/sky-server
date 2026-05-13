@@ -11,8 +11,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -755,7 +757,9 @@ func (s *service) DeleteFile(ctx context.Context, fileID uint, userID uint) erro
 	}
 
 	// 重新计算配额（从数据库统计）
-	_ = s.RecalculateQuota(ctx, userID)
+	if err := s.RecalculateQuota(ctx, userID); err != nil {
+		logger.Warn("RecalculateQuota failed after delete", zap.Uint("userId", userID), zap.Error(err))
+	}
 
 	// 保留存储文件（根据需求修改）
 	// 不再删除物理存储文件

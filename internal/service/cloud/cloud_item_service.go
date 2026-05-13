@@ -7,7 +7,9 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
+	"go.uber.org/zap"
 )
 
 // CloudItem 相关方法
@@ -68,7 +70,9 @@ func (s *service) DeleteItem(ctx context.Context, itemID uint, userID uint) erro
 		// 获取公司存储实例
 		storageInstance, err := s.getCompanyStorage(ctx, userID)
 		if err == nil {
-			_ = storageInstance.Delete(ctx, *item.StoragePath)
+			if err := storageInstance.Delete(ctx, *item.StoragePath); err != nil {
+		logger.Warn("Storage delete failed for item", zap.Uint("itemId", item.ID), zap.Error(err))
+	}
 		}
 	}
 
@@ -103,7 +107,9 @@ func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, user
 				// 获取公司存储实例
 				storageInstance, err := s.getCompanyStorage(ctx, userID)
 				if err == nil {
-					_ = storageInstance.Delete(ctx, *child.StoragePath)
+					if err := storageInstance.Delete(ctx, *child.StoragePath); err != nil {
+		logger.Warn("Storage delete failed for child item", zap.Uint("itemId", child.ID), zap.Error(err))
+	}
 				}
 			}
 		}
@@ -115,9 +121,13 @@ func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, user
 
 		// 更新配额
 		if child.IsFile() && child.FileSize != nil {
-			_ = s.UpdateQuota(ctx, userID, -*child.FileSize, -1, 0)
+			if err := s.UpdateQuota(ctx, userID, -*child.FileSize, -1, 0); err != nil {
+				logger.Warn("UpdateQuota failed for file", zap.Uint("userId", userID), zap.Error(err))
+			}
 		} else if child.IsFolder() {
-			_ = s.UpdateQuota(ctx, userID, 0, 0, -1)
+			if err := s.UpdateQuota(ctx, userID, 0, 0, -1); err != nil {
+				logger.Warn("UpdateQuota failed for folder", zap.Uint("userId", userID), zap.Error(err))
+			}
 		}
 	}
 
