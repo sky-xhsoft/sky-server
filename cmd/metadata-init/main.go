@@ -84,7 +84,7 @@ func main() {
 	if e != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(e))
 	}
-	defer mysql.Close()
+	defer mysql.CloseDB(db)
 	logger.Info("Database connected successfully")
 
 	ctx := context.Background()
