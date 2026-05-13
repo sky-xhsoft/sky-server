@@ -268,6 +268,8 @@ func registerCRUDRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, crudService crud.
 		// 导入导出
 		data.GET("/:tableName/export", crudHandler.Export)
 		data.POST("/:tableName/import", crudHandler.Import)
+		// 批量修改
+		data.PUT("/:tableName/batch-update", crudHandler.BatchUpdate)
 	}
 }
 

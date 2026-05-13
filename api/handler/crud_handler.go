@@ -536,3 +536,35 @@ func (h *CrudHandler) Import(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{"imported": count})
 }
+
+// BatchUpdate 批量修改记录
+func (h *CrudHandler) BatchUpdate(c *gin.Context) {
+	tableName := c.Param("tableName")
+	var req struct {
+		IDs  []uint                 `json:"ids" binding:"required"`
+		Data map[string]interface{} `json:"data" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+
+	var failed int
+	for _, id := range req.IDs {
+		if err := h.crudService.Update(c.Request.Context(), tableName, id, req.Data, userID.(uint)); err != nil {
+			failed++
+		}
+	}
+
+	if failed > 0 {
+		utils.Success(c, gin.H{"message": fmt.Sprintf("修改完成，成功 %d 条，失败 %d 条", len(req.IDs)-failed, failed)})
+		return
+	}
+	utils.Success(c, gin.H{"message": fmt.Sprintf("成功修改 %d 条记录", len(req.IDs))})
+}
