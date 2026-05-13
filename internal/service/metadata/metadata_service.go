@@ -10,8 +10,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/sqlutils"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
+	"go.uber.org/zap"
 )
 
 // Service 元数据服务接口
@@ -311,14 +313,14 @@ func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search stri
 	baseWhere := "IS_ACTIVE = 'Y'"
 	whereParams := []interface{}{}
 
-	fmt.Printf("[DEBUG] GetForeignKeyOptions: table.Name=%s, userID=%d, user.SysCompanyID=%d\n", table.Name, userID, user.SysCompanyID)
+	logger.Debug("GetForeignKeyOptions", zap.String("tableName", table.Name), zap.Uint("userID", userID), zap.Uint("companyID", user.SysCompanyID))
 
 	// 特殊处理：sys_company 表本身没有 SYS_COMPANY_ID 字段
 	// 用户只能看到自己所属的公司
 	if strings.EqualFold(table.Name, "sys_company") {
 		baseWhere += " AND ID = ?"
 		whereParams = append(whereParams, user.SysCompanyID)
-		fmt.Printf("[DEBUG] sys_company 特殊处理：添加 ID 过滤\n")
+		logger.Debug("sys_company special handling: added ID filter")
 	} else {
 		// 检查目标表是否有 SYS_COMPANY_ID 字段
 		hasCompanyColumn := false
@@ -332,11 +334,11 @@ func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search stri
 		if hasCompanyColumn {
 			baseWhere += " AND SYS_COMPANY_ID = ?"
 			whereParams = append(whereParams, user.SysCompanyID)
-			fmt.Printf("[DEBUG] 添加 SYS_COMPANY_ID 过滤\n")
+			logger.Debug("Added SYS_COMPANY_ID filter")
 		}
 	}
 
-	fmt.Printf("[DEBUG] baseWhere=%s, whereParams=%v\n", baseWhere, whereParams)
+	logger.Debug("GetForeignKeyOptions SQL", zap.String("baseWhere", baseWhere), zap.Any("whereParams", whereParams))
 
 	safeCol, _ := sqlutils.SanitizeIdentifier(displayColumn.DbName)
 	if safeCol == "" {

@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/transaction"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -58,14 +60,14 @@ func (s *service) Create(ctx context.Context, tableName string, data map[string]
 		// 设置创建人和公司ID
 		processedData["CREATE_BY"] = user.Username
 		processedData["SYS_COMPANY_ID"] = user.SysCompanyID
-		fmt.Printf("[DEBUG] 设置审计字段: CREATE_BY=%s, SYS_COMPANY_ID=%d\n", user.Username, user.SysCompanyID)
+		logger.Debug("Create audit fields set", zap.String("createBy", user.Username), zap.Uint("sysCompanyId", uint(user.SysCompanyID)))
 	} else {
-		fmt.Printf("[DEBUG] 获取用户信息失败: userID=%d, err=%v\n", userID, userErr)
+		logger.Debug("GetUserByID failed", zap.Uint("userID", userID), zap.Error(userErr))
 	}
 	// 设置创建时间
 	processedData["CREATE_TIME"] = time.Now()
 
-	fmt.Printf("[DEBUG] 准备插入的数据: %+v\n", processedData)
+	logger.Debug("Prepared insert data", zap.Any("data", processedData))
 
 	// 在事务中执行：before钩子 + 插入 + after钩子
 	err = transaction.RunInTransaction(s.db, func(tx *gorm.DB) error {

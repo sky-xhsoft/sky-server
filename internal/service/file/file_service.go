@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -169,7 +171,7 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 
 		// 更新访问URL
 		if err := s.db.WithContext(ctx).Model(newFile).Update("ACCESS_URL", newFile.AccessURL).Error; err != nil {
-			fmt.Printf("更新文件访问URL失败: %v\n", err)
+			logger.Warn("Update ACCESS_URL failed", zap.Error(err))
 		}
 
 		return newFile, nil
@@ -242,7 +244,7 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 	// 更新访问URL
 	if err := s.db.WithContext(ctx).Model(sysFile).Update("ACCESS_URL", sysFile.AccessURL).Error; err != nil {
 		// 记录错误但不影响返回
-		fmt.Printf("更新文件访问URL失败: %v\n", err)
+		logger.Warn("Update ACCESS_URL failed", zap.Error(err))
 	}
 
 	return sysFile, nil

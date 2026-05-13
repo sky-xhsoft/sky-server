@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -38,7 +40,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("[DEBUG] GetOne - 查询字段: %s\n", selectFields)
+	logger.Debug("GetOne query fields", zap.String("fields", selectFields))
 
 	// 获取数据过滤条件
 	dataFilter, err := s.groupsService.GetUserDataFilter(ctx, userID, table.ID)
@@ -56,11 +58,11 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 
 	// 添加ID条件
 	query = query.Where("ID = ?", id)
-	fmt.Printf("[DEBUG] GetOne - 查询表: %s, ID: %d\n", table.Name, id)
+	logger.Debug("GetOne table and ID", zap.String("table", table.Name), zap.Uint("id", id))
 
 	// 添加数据过滤条件
 	if dataFilter != nil && len(dataFilter) > 0 {
-		fmt.Printf("[DEBUG] GetOne - 原始数据过滤条件: %+v\n", dataFilter)
+		logger.Debug("GetOne dataFilter", zap.Any("filter", dataFilter))
 
 		// 从数据过滤条件中移除 IS_ACTIVE（GetOne 不应该过滤 IS_ACTIVE）
 		filteredDataFilter := make(map[string]interface{})
@@ -71,7 +73,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 		}
 
 		if len(filteredDataFilter) > 0 {
-			fmt.Printf("[DEBUG] GetOne - 过滤后的数据过滤条件: %+v\n", filteredDataFilter)
+			logger.Debug("GetOne filtered dataFilter", zap.Any("filter", filteredDataFilter))
 			query = s.applyFilters(query, filteredDataFilter, columns)
 		}
 	}
@@ -84,7 +86,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
 		return tx.Take(&map[string]interface{}{})
 	})
-	fmt.Printf("[DEBUG] GetOne - 执行 SQL: %s\n", sql)
+	logger.Debug("GetOne SQL", zap.String("sql", sql))
 
 	// 执行查询
 	var result map[string]interface{}
@@ -99,7 +101,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	results := []map[string]interface{}{result}
 	if err := s.processForeignKeys(ctx, columns, results, userID); err != nil {
 		// FK 转换失败不影响主查询，只记录错误
-		fmt.Printf("[WARN] 处理外键字段失败: %v\n", err)
+		logger.Warn("processFK failed", zap.Error(err))
 	}
 
 	return result, nil
@@ -245,7 +247,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	// 处理外键字段，将ID转换为显示名称
 	if err := s.processForeignKeys(ctx, columns, results, userID); err != nil {
 		// FK 转换失败不影响主查询，只记录错误
-		fmt.Printf("[WARN] 处理外键字段失败: %v\n", err)
+		logger.Warn("processFK failed", zap.Error(err))
 	}
 
 	return &QueryResponse{
