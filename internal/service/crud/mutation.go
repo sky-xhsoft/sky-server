@@ -35,6 +35,11 @@ func (s *service) Create(ctx context.Context, tableName string, data map[string]
 		return nil, err
 	}
 
+	// IS_ACTIVE 默认值（必须在 processFieldsForCreate 之前，避免 NullAble 误报）
+	if _, exists := data["IS_ACTIVE"]; !exists {
+		data["IS_ACTIVE"] = "Y"
+	}
+
 	// 验证和处理字段（在事务外）
 	processedData, err := s.processFieldsForCreate(columns, data, userID)
 	if err != nil {
