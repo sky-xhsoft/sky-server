@@ -114,7 +114,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 		req.Page = 1
 	}
 	if req.PageSize <= 0 {
-		req.PageSize = 20
+		req.PageSize = 15
 	}
 	if req.PageSize > 100 {
 		req.PageSize = 100
