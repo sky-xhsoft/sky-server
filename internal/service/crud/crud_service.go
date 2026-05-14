@@ -2,8 +2,10 @@ package crud
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"strconv"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
@@ -182,13 +184,6 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 
 	detailResponses := make([]DetailTableResponse, len(req.Details))
 	for i, detail := range req.Details {
-		if req.Mode == "update" {
-			if err := tx.Table(detail.TableName).Where(detail.RefField+" = ?", mainRecordID).Delete(nil).Error; err != nil {
-				tx.Rollback()
-				return nil, err
-			}
-		}
-
 		detailTable, err := s.metadataService.GetTable(detail.TableName)
 		if err != nil {
 			tx.Rollback()
@@ -200,27 +195,78 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 			return nil, fmt.Errorf("获取子表列信息失败: %s", err.Error())
 		}
 
-		savedRecords := make([]map[string]interface{}, len(detail.Records))
-		for j, record := range detail.Records {
+		if req.Mode == "update" {
+			// 收集前端传入的已有记录 ID
+			incomingIDs := make(map[uint]bool)
+			for _, rec := range detail.Records {
+				if id, ok := rec["ID"]; ok {
+					if uid, ok := toUint(id); ok && uid > 0 {
+						incomingIDs[uid] = true
+					}
+				}
+			}
+
+			// 删除数据库中不在传入列表中旧记录
+			if len(incomingIDs) > 0 {
+				var existingIDs []uint
+				if err := tx.Table(detail.TableName).Where(detail.RefField+" = ?", mainRecordID).Pluck("ID", &existingIDs).Error; err != nil {
+					tx.Rollback()
+					return nil, fmt.Errorf("查询已有子表记录失败: %s", err.Error())
+				}
+				for _, eid := range existingIDs {
+					if !incomingIDs[eid] {
+						if err := tx.Table(detail.TableName).Where("ID = ?", eid).Delete(nil).Error; err != nil {
+							tx.Rollback()
+							return nil, fmt.Errorf("删除子表记录失败: %s", err.Error())
+						}
+					}
+				}
+			} else {
+				// 没有传入任何已有ID，全部删除
+				if err := tx.Table(detail.TableName).Where(detail.RefField+" = ?", mainRecordID).Delete(nil).Error; err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+			}
+		}
+
+		savedRecords := make([]map[string]interface{}, 0, len(detail.Records))
+		for _, record := range detail.Records {
 			record[detail.RefField] = mainRecordID
 
-			var processed map[string]interface{}
-			var err error
-			if req.Mode == "update" {
-				processed, err = s.processFieldsForUpdate(detailColumns, record, userID)
+			if req.Mode == "update" && hasID(record) {
+				// 已有记录：更新
+				rid := toUintVal(record["ID"])
+				delete(record, "ID")
+				processed, err := s.processFieldsForUpdate(detailColumns, record, userID)
+				if err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				if err := tx.Table(detail.TableName).Where("ID = ?", rid).Updates(&processed).Error; err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				// 取回最新数据
+				var updated map[string]interface{}
+				if err := tx.Table(detail.TableName).Where("ID = ?", rid).Take(&updated).Error; err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				savedRecords = append(savedRecords, updated)
 			} else {
-				processed, err = s.processFieldsForCreate(detailColumns, record, userID)
+				// 新记录：插入
+				processed, err := s.processFieldsForCreate(detailColumns, record, userID)
+				if err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				if err := tx.Table(detail.TableName).Create(&processed).Error; err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+				savedRecords = append(savedRecords, processed)
 			}
-			if err != nil {
-				tx.Rollback()
-				return nil, err
-			}
-
-			if err := tx.Table(detail.TableName).Create(&processed).Error; err != nil {
-				tx.Rollback()
-				return nil, err
-			}
-			savedRecords[j] = processed
 		}
 
 		detailResponses[i] = DetailTableResponse{
@@ -237,6 +283,43 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		MainRecord: mainRecord,
 		Details:    detailResponses,
 	}, nil
+}
+
+func hasID(record map[string]interface{}) bool {
+	id, ok := record["ID"]
+	if !ok {
+		return false
+	}
+	_, ok = toUint(id)
+	return ok
+}
+
+func toUintVal(v interface{}) uint {
+	uid, _ := toUint(v)
+	return uid
+}
+
+func toUint(v interface{}) (uint, bool) {
+	switch val := v.(type) {
+	case uint:
+		return val, val > 0
+	case uint64:
+		return uint(val), val > 0
+	case int:
+		return uint(val), val > 0
+	case int64:
+		return uint(val), val > 0
+	case float64:
+		return uint(val), val > 0
+	case string:
+		n, err := strconv.ParseUint(val, 10, 64)
+		return uint(n), err == nil && n > 0
+	case json.Number:
+		n, err := val.Int64()
+		return uint(n), err == nil && n > 0
+	default:
+		return 0, false
+	}
 }
 
 // NewService 创建通用CRUD服务
