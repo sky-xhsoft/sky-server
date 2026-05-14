@@ -316,11 +316,17 @@ func toUint(v interface{}) (uint, bool) {
 		return val, val > 0
 	case uint64:
 		return uint(val), val > 0
+	case uint32:
+		return uint(val), val > 0
 	case int:
 		return uint(val), val > 0
 	case int64:
 		return uint(val), val > 0
+	case int32:
+		return uint(val), val > 0
 	case float64:
+		return uint(val), val > 0
+	case float32:
 		return uint(val), val > 0
 	case string:
 		n, err := strconv.ParseUint(val, 10, 64)
@@ -329,7 +335,9 @@ func toUint(v interface{}) (uint, bool) {
 		n, err := val.Int64()
 		return uint(n), err == nil && n > 0
 	default:
-		return 0, false
+		s := fmt.Sprintf("%v", val)
+		n, err := strconv.ParseUint(s, 10, 64)
+		return uint(n), err == nil && n > 0
 	}
 }
 
