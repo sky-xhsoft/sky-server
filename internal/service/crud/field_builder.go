@@ -126,7 +126,14 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 			}
 		}
 
-		isAutoFill := col.SetValueType == "sysdate" || col.SetValueType == "createBy" || col.SetValueType == "operator" || col.SetValueType == "docno" || col.SetValueType == "pk"
+		// 默认值填充（在 NullAble 之前，因为默认值可以满足必填要求）
+		if !exists && col.DefaultValue != "" {
+			value = col.DefaultValue
+			exists = true
+			data[col.DbName] = col.DefaultValue
+		}
+
+		isAutoFill := col.SetValueType == "sysdate" || col.SetValueType == "createBy" || col.SetValueType == "operator" || col.SetValueType == "docno" || col.SetValueType == "pk" || col.DefaultValue != ""
 
 		if col.NullAble == "N" && !isAutoFill && (!exists || value == nil) {
 			return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 不能为空", col.DisplayName))
@@ -144,12 +151,6 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 					return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 格式不正确", col.DisplayName))
 				}
 			}
-		}
-
-		if !exists && col.DefaultValue != "" {
-			value = col.DefaultValue
-			exists = true
-			data[col.DbName] = col.DefaultValue
 		}
 
 		switch col.SetValueType {
