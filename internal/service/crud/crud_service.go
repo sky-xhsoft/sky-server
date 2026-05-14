@@ -204,7 +204,13 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		for j, record := range detail.Records {
 			record[detail.RefField] = mainRecordID
 
-			processed, err := s.processFieldsForCreate(detailColumns, record, userID)
+			var processed map[string]interface{}
+			var err error
+			if req.Mode == "update" {
+				processed, err = s.processFieldsForUpdate(detailColumns, record, userID)
+			} else {
+				processed, err = s.processFieldsForCreate(detailColumns, record, userID)
+			}
 			if err != nil {
 				tx.Rollback()
 				return nil, err
