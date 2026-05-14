@@ -309,3 +309,8 @@ VALUES
 (@us_id, 'STATUS', '状态', '状态', 'select', 'varchar', 50, 'N', 16, '1111111111', 'select', 'Y')
 ON DUPLICATE KEY UPDATE DISPLAY_NAME=VALUES(DISPLAY_NAME);
 
+-- ============================================================
+-- Phase 15: IS_ACTIVE 列补全 DEFAULT_VALUE='Y'（必填校验前自动填充）
+-- ============================================================
+UPDATE sys_column SET DEFAULT_VALUE = 'Y' WHERE DB_NAME = 'IS_ACTIVE' AND IS_ACTIVE = 'Y' AND (DEFAULT_VALUE IS NULL OR DEFAULT_VALUE = '');
+
