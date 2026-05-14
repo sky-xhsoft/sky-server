@@ -85,30 +85,7 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 	for _, col := range columns {
 		value, exists := data[col.DbName]
 
-		if col.NullAble == "N" && (!exists || value == nil) {
-			return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 不能为空", col.DisplayName))
-		}
-		if col.NullAble == "N" && exists && value != nil {
-			if str, ok := value.(string); ok && str == "" {
-				return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 不能为空", col.DisplayName))
-			}
-		}
-
-		if col.RegExpression != "" && exists && value != nil {
-			if strVal, ok := value.(string); ok {
-				re := regexCache.get(col.RegExpression)
-				if !re.MatchString(strVal) {
-					return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 格式不正确", col.DisplayName))
-				}
-			}
-		}
-
-		if !exists && col.DefaultValue != "" {
-			value = col.DefaultValue
-			exists = true
-			data[col.DbName] = col.DefaultValue
-		}
-
+		// SetValueType 策略处理（必须在 NullAble 之前，因为自动填充字段不需要前端传值）
 		switch col.SetValueType {
 		case "ignore":
 			delete(data, col.DbName)
@@ -147,6 +124,35 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 				value = docNo
 				exists = true
 			}
+		}
+
+		isAutoFill := col.SetValueType == "sysdate" || col.SetValueType == "createBy" || col.SetValueType == "operator" || col.SetValueType == "docno" || col.SetValueType == "pk"
+
+		if col.NullAble == "N" && !isAutoFill && (!exists || value == nil) {
+			return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 不能为空", col.DisplayName))
+		}
+		if col.NullAble == "N" && !isAutoFill && exists && value != nil {
+			if str, ok := value.(string); ok && str == "" {
+				return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 不能为空", col.DisplayName))
+			}
+		}
+
+		if col.RegExpression != "" && exists && value != nil {
+			if strVal, ok := value.(string); ok {
+				re := regexCache.get(col.RegExpression)
+				if !re.MatchString(strVal) {
+					return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 格式不正确", col.DisplayName))
+				}
+			}
+		}
+
+		if !exists && col.DefaultValue != "" {
+			value = col.DefaultValue
+			exists = true
+			data[col.DbName] = col.DefaultValue
+		}
+
+		switch col.SetValueType {
 		case "select":
 			if col.SysDictID != "" && exists && value != nil {
 				dictID := parseDictID(col.SysDictID)
