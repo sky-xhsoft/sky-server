@@ -169,7 +169,13 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		}
 		mainRecord = processed
 
-		if err := tx.Table(req.TableName).Where("id = ?", mainRecordID).Updates(&mainRecord).Error; err != nil {
+		// 只更新传入的字段（前端只传变更字段）
+		updateFields := make([]string, 0, len(mainRecord))
+		for field := range mainRecord {
+			updateFields = append(updateFields, field)
+		}
+
+		if err := tx.Table(req.TableName).Where("id = ?", mainRecordID).Select(updateFields).Updates(&mainRecord).Error; err != nil {
 			tx.Rollback()
 			return nil, err
 		}
@@ -243,7 +249,12 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 					tx.Rollback()
 					return nil, err
 				}
-				if err := tx.Table(detail.TableName).Where("ID = ?", rid).Updates(&processed).Error; err != nil {
+				// 只更新传入的字段
+				updateFields := make([]string, 0, len(processed))
+				for field := range processed {
+					updateFields = append(updateFields, field)
+				}
+				if err := tx.Table(detail.TableName).Where("ID = ?", rid).Select(updateFields).Updates(&processed).Error; err != nil {
 					tx.Rollback()
 					return nil, err
 				}
