@@ -17,25 +17,25 @@ import (
 
 // 系统审计字段（无论MASK如何配置都应包含）
 const (
-	colID            = "ID"
-	colSysCompanyID  = "SYS_COMPANY_ID"
-	colCreateBy      = "CREATE_BY"
-	colCreateTime    = "CREATE_TIME"
-	colUpdateBy      = "UPDATE_BY"
-	colUpdateTime    = "UPDATE_TIME"
-	colIsActive      = "IS_ACTIVE"
-	colStatus        = "STATUS"
-	colOrderNo       = "ORDERNO"
+	colID           = "ID"
+	colSysCompanyID = "SYS_COMPANY_ID"
+	colCreateBy     = "CREATE_BY"
+	colCreateTime   = "CREATE_TIME"
+	colUpdateBy     = "UPDATE_BY"
+	colUpdateTime   = "UPDATE_TIME"
+	colIsActive     = "IS_ACTIVE"
+	colStatus       = "STATUS"
+	colOrderNo      = "ORDERNO"
 )
 
 var standardFields = map[string]bool{
-	colID:            true,
-	colSysCompanyID:  true,
-	colCreateBy:      true,
-	colCreateTime:    true,
-	colUpdateBy:      true,
-	colUpdateTime:    true,
-	colIsActive:      true,
+	colID:           true,
+	colSysCompanyID: true,
+	colCreateBy:     true,
+	colCreateTime:   true,
+	colUpdateBy:     true,
+	colUpdateTime:   true,
+	colIsActive:     true,
 }
 
 // buildSelectFields 构建查询字段列表（根据MASK控制）
@@ -45,6 +45,11 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 	addedStandardFields := make(map[string]bool)
 
 	for _, col := range columns {
+		// 跳过UI-only字段（不在真实数据库表中）
+		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
+			continue
+		}
+
 		isPrimaryKey := col.IsAK == "Y" || col.SetValueType == "pk"
 		isStandardField := standardFields[col.DbName]
 		isForeignKey := col.SetValueType == "fk"
@@ -83,6 +88,11 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 	processedData := make(map[string]interface{})
 
 	for _, col := range columns {
+		// 跳过UI-only字段
+		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
+			continue
+		}
+
 		value, exists := data[col.DbName]
 
 		// SetValueType 策略处理（必须在 NullAble 之前，因为自动填充字段不需要前端传值）
@@ -232,6 +242,10 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 	processedData := make(map[string]interface{})
 
 	for _, col := range columns {
+		// 跳过UI-only字段
+		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
+			continue
+		}
 		value, exists := data[col.DbName]
 
 		if col.RegExpression != "" && exists && value != nil {

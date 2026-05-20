@@ -40,6 +40,14 @@ func (s *service) Create(ctx context.Context, tableName string, data map[string]
 		data["IS_ACTIVE"] = "Y"
 	}
 
+	// SYS_COMPANY_ID 预填（必须在 processFieldsForCreate 之前，避免 FK 校验失败）
+	user, userErr := s.userRepo.GetUserByID(userID)
+	if userErr == nil && user != nil {
+		if _, exists := data["SYS_COMPANY_ID"]; !exists {
+			data["SYS_COMPANY_ID"] = user.SysCompanyID
+		}
+	}
+
 	// 验证和处理字段（在事务外）
 	processedData, err := s.processFieldsForCreate(columns, data, userID)
 	if err != nil {
@@ -59,12 +67,12 @@ func (s *service) Create(ctx context.Context, tableName string, data map[string]
 		processedData["IS_ACTIVE"] = "Y"
 	}
 
-	// 获取用户信息以填充审计字段
-	user, userErr := s.userRepo.GetUserByID(userID)
+	// 设置创建人和公司ID（user 已在上方 pre-fill 时获取）
 	if userErr == nil && user != nil {
-		// 设置创建人和公司ID
 		processedData["CREATE_BY"] = user.Username
-		processedData["SYS_COMPANY_ID"] = user.SysCompanyID
+		if _, exists := processedData["SYS_COMPANY_ID"]; !exists {
+			processedData["SYS_COMPANY_ID"] = user.SysCompanyID
+		}
 		logger.Debug("Create audit fields set", zap.String("createBy", user.Username), zap.Uint("sysCompanyId", uint(user.SysCompanyID)))
 	} else {
 		logger.Debug("GetUserByID failed", zap.Uint("userID", userID), zap.Error(userErr))

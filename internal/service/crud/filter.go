@@ -3,6 +3,7 @@ package crud
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/sqlutils"
@@ -35,8 +36,11 @@ func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, c
 	}
 
 	for field, value := range filters {
-		// 跳过 nil 值
+		// 跳过 nil 值和空字符串
 		if value == nil {
+			continue
+		}
+		if strValue, ok := value.(string); ok && strValue == "" {
 			continue
 		}
 
@@ -56,8 +60,25 @@ func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, c
 				query = query.Where(fmt.Sprintf("`%s` LIKE ?", safeField), "%"+strValue+"%")
 			}
 		} else {
-			// 其他类型使用精确匹配（select, date, datetime, check 等）
-			query = query.Where(fmt.Sprintf("`%s` = ?", safeField), value)
+			// 其他类型使用精确匹配
+			// 如果值是逗号分隔的字符串，使用 IN 查询
+			if strValue, ok := value.(string); ok && strings.Contains(strValue, ",") {
+				parts := strings.Split(strValue, ",")
+				var values []interface{}
+				for _, p := range parts {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						values = append(values, p)
+					}
+				}
+				if len(values) > 0 {
+					placeholders := strings.Repeat("?,", len(values))
+					placeholders = placeholders[:len(placeholders)-1]
+					query = query.Where(fmt.Sprintf("`%s` IN (%s)", safeField, placeholders), values...)
+				}
+			} else {
+				query = query.Where(fmt.Sprintf("`%s` = ?", safeField), value)
+			}
 		}
 	}
 

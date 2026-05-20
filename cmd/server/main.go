@@ -24,8 +24,10 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
+	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/crud"
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
+	emailSvc "github.com/sky-xhsoft/sky-server/internal/service/email"
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
@@ -107,13 +109,13 @@ func main() {
 	logger.Info("Repositories initialized")
 
 	// 6. 初始化JWT工具
-	jwtUtil := jwtPkg.New(cfg.JWT.Secret)
+	jwtUtil := jwtPkg.New(cfg.JWT.Secret, jwtPkg.WithRedis(redisClient, "jwt_blacklist:"))
 	logger.Info("JWT utility initialized")
 
 	// 7. 初始化服务层
 	ssoService := sso.NewService(
 		userRepo,
-		cfg.JWT.Secret,
+		jwtUtil,
 		cfg.JWT.AccessTokenExpire,
 		cfg.JWT.RefreshTokenExpire,
 	)
@@ -192,6 +194,12 @@ func main() {
 
 	// 初始化消息服务
 	messageService := message.NewService(db, wsManager)
+
+	// 初始化邮件服务
+	emailService := emailSvc.NewService(&cfg.Email)
+
+	// 初始化公司注册服务
+	companyService := company.NewService(db)
 
 	// 初始化CloudStorageConfigRepository (用于 StorageConfigService)
 	cloudStorageConfigRepo := mysql.NewCloudStorageConfigRepository(db)
@@ -314,6 +322,8 @@ func main() {
 		Menu:            menuService,
 		File:            fileService,
 		Message:         messageService,
+		Email:           emailService,
+		Company:         companyService,
 		Cloud:           cloudService,
 		MultipartUpload: multipartService,
 		StorageConfig:   storageConfigService,

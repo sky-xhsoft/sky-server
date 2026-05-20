@@ -63,6 +63,7 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 	var tables []entity.SysTable
 	if err := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ? AND IS_MENU = ?", "Y", "Y").
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0)", companyID).
 		Order("ORDERNO ASC, ID ASC").
 		Find(&tables).Error; err != nil {
 		return nil, fmt.Errorf("查询菜单表失败: %w", err)
@@ -148,7 +149,8 @@ func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint, s
 	// 6. 只查询用户有权限的菜单表
 	var tables []entity.SysTable
 	query := s.db.WithContext(ctx).
-		Where("IS_ACTIVE = ? AND IS_MENU = ?", "Y", "Y")
+		Where("IS_ACTIVE = ? AND IS_MENU = ?", "Y", "Y").
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0)", companyID)
 
 	if len(allowedTableIDs) > 0 {
 		query = query.Where("ID IN ?", allowedTableIDs)

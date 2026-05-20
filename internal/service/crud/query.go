@@ -141,6 +141,14 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 		return nil, err
 	}
 
+	// 构建允许的字段名集合
+	allowedFields := make(map[string]bool)
+	for _, col := range columns {
+		allowedFields[strings.ToUpper(col.DbName)] = true
+	}
+	// 也允许 ID 字段（主键）
+	allowedFields["ID"] = true
+
 	// 构建查询字段（根据MASK控制）
 	selectFields, err := s.buildSelectFields(columns, userID, "list")
 	if err != nil {
@@ -180,6 +188,17 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	// 用户可以通过查询条件主动过滤 IS_ACTIVE
 	// 例如：filters: { IS_ACTIVE: 'Y' }
 
+	// 添加公司过滤（如果表有 SYS_COMPANY_ID 字段）
+	for _, col := range columns {
+		if col.DbName == "SYS_COMPANY_ID" {
+			user, userErr := s.userRepo.GetUserByID(userID)
+			if userErr == nil && user != nil {
+				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0", user.SysCompanyID)
+			}
+			break
+		}
+	}
+
 	// 添加过滤条件
 	if req.Filters != nil && len(req.Filters) > 0 {
 		query = s.applyFilters(query, req.Filters, columns)
@@ -195,7 +214,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 		}
 	}
 
-	// 添加排序（支持多字段，逗号分隔）
+	// 添加排序（支持多字段，逗号分隔）- 安全版本
 	if req.OrderBy != "" {
 		// 分割排序字段和方向
 		orderByFields := strings.Split(req.OrderBy, ",")
@@ -208,6 +227,14 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 				continue
 			}
 
+			// 验证字段名是否在允许的列表中
+			fieldUpper := strings.ToUpper(field)
+			if !allowedFields[fieldUpper] {
+				logger.Warn("Invalid order by field skipped", zap.String("field", field))
+				continue
+			}
+
+			// 验证排序方向
 			direction := "ASC"
 			if i < len(orderDirections) {
 				dir := strings.TrimSpace(strings.ToUpper(orderDirections[i]))
@@ -216,7 +243,8 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 				}
 			}
 
-			query = query.Order(fmt.Sprintf("%s %s", field, direction))
+			// 使用安全的排序方式
+			query = query.Order(gorm.Expr("? ?", gorm.Expr(field), gorm.Expr(direction)))
 		}
 	} else {
 		// 检查是否有ORDERNO字段，如果有则默认按ORDERNO升序排序

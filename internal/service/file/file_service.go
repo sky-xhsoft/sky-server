@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -129,6 +130,73 @@ func (s *service) UploadFile(ctx context.Context, fileHeader *multipart.FileHead
 		return nil, errors.Wrap(errors.ErrInternal, "打开文件失败", err)
 	}
 	defer file.Close()
+
+	// 验证文件的真实内容类型（防止文件类型伪装）
+	// 读取文件开头来检测 MIME 类型
+	mimeBuf := make([]byte, 512) // mimetype 库需要前 512 字节
+	n, err := file.Read(mimeBuf)
+	if err != nil && err != io.EOF {
+		return nil, errors.Wrap(errors.ErrInternal, "读取文件失败", err)
+	}
+	// 重置文件读取位置
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, errors.Wrap(errors.ErrInternal, "重置文件位置失败", err)
+	}
+
+	// 检测 MIME 类型
+	detectedMIME := mimetype.Detect(mimeBuf[:n])
+	logger.Debug("File MIME detection",
+		zap.String("filename", fileHeader.Filename),
+		zap.String("detectedMIME", detectedMIME.String()),
+		zap.String("detectedExtension", detectedMIME.Extension()))
+
+	// 验证检测到的 MIME 类型是否与允许的扩展名匹配
+	// 先获取允许的扩展名对应的 MIME 类型
+	allowed := false
+	if ext != "" {
+		// 检查检测到的扩展名是否匹配
+		detectedExt := strings.ToLower(detectedMIME.Extension())
+		if detectedExt == ext || s.isAllowedExt(detectedExt) {
+			allowed = true
+		} else {
+			// 对于某些常见文件类型，进行额外检查
+			switch ext {
+			case ".jpg", ".jpeg":
+				allowed = strings.HasPrefix(detectedMIME.String(), "image/jpeg")
+			case ".png":
+				allowed = strings.HasPrefix(detectedMIME.String(), "image/png")
+			case ".gif":
+				allowed = strings.HasPrefix(detectedMIME.String(), "image/gif")
+			case ".pdf":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/pdf")
+			case ".doc":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/msword")
+			case ".docx":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+			case ".xls":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/vnd.ms-excel")
+			case ".xlsx":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+			case ".txt":
+				allowed = strings.HasPrefix(detectedMIME.String(), "text/plain")
+			case ".zip":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/zip")
+			case ".rar":
+				allowed = strings.HasPrefix(detectedMIME.String(), "application/x-rar-compressed")
+			default:
+				// 对于其他类型，检查是否是检测到的 MIME 类型的扩展名
+				allowed = s.isAllowedExt(detectedExt)
+			}
+		}
+	}
+
+	if !allowed {
+		logger.Warn("File type verification failed",
+			zap.String("filename", fileHeader.Filename),
+			zap.String("expectedExt", ext),
+			zap.String("detectedMIME", detectedMIME.String()))
+		return nil, errors.New(errors.ErrInvalidParam, "文件类型验证失败，文件可能已被篡改")
+	}
 
 	// 计算文件MD5
 	hash := md5.New()

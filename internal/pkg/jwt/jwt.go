@@ -1,10 +1,12 @@
 package jwt
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
@@ -21,14 +23,32 @@ type Claims struct {
 
 // JWT JWT工具
 type JWT struct {
-	secret []byte
+	secret    []byte
+	redisCli  *redis.Client
+	keyPrefix string
+}
+
+// Option JWT选项
+type Option func(*JWT)
+
+// WithRedis 配置Redis用于黑名单
+func WithRedis(redisCli *redis.Client, keyPrefix string) Option {
+	return func(j *JWT) {
+		j.redisCli = redisCli
+		j.keyPrefix = keyPrefix
+	}
 }
 
 // New 创建JWT工具
-func New(secret string) *JWT {
-	return &JWT{
-		secret: []byte(secret),
+func New(secret string, opts ...Option) *JWT {
+	jwt := &JWT{
+		secret:    []byte(secret),
+		keyPrefix: "jwt_blacklist:",
 	}
+	for _, opt := range opts {
+		opt(jwt)
+	}
+	return jwt
 }
 
 // GenerateToken 生成Token
@@ -105,6 +125,11 @@ func (j *JWT) ValidateToken(tokenString string) (*Claims, error) {
 		return nil, errors.InvalidToken
 	}
 
+	// 检查是否在黑名单中
+	if j.IsBlacklisted(tokenString) {
+		return nil, errors.InvalidToken
+	}
+
 	return claims, nil
 }
 
@@ -116,6 +141,65 @@ func (j *JWT) RefreshToken(refreshToken string, accessTokenExpire time.Duration)
 		return "", errors.InvalidToken
 	}
 
+	// 验证是否为刷新Token
+	if claims.TokenType != "refresh" {
+		return "", errors.InvalidToken
+	}
+
+	// 检查刷新Token是否在黑名单中
+	if j.IsBlacklisted(refreshToken) {
+		return "", errors.InvalidToken
+	}
+
 	// 生成新的访问Token
 	return j.GenerateToken(claims.UserID, claims.CompanyID, claims.Username, claims.ClientType, claims.DeviceID, accessTokenExpire)
+}
+
+// IsBlacklisted 检查Token是否在黑名单中
+func (j *JWT) IsBlacklisted(tokenString string) bool {
+	if j.redisCli == nil {
+		// 如果没有Redis，暂时不检查黑名单
+		return false
+	}
+
+	ctx := context.Background()
+	key := j.keyPrefix + tokenString
+	exists, err := j.redisCli.Exists(ctx, key).Result()
+	if err != nil {
+		// Redis出错时，默认不阻止访问（降级处理）
+		return false
+	}
+
+	return exists > 0
+}
+
+// BlacklistToken 将Token加入黑名单
+func (j *JWT) BlacklistToken(tokenString string, expiration time.Duration) error {
+	if j.redisCli == nil {
+		// 如果没有Redis，暂时不支持黑名单
+		return nil
+	}
+
+	ctx := context.Background()
+	key := j.keyPrefix + tokenString
+	return j.redisCli.Set(ctx, key, "1", expiration).Err()
+}
+
+// BlacklistTokenByClaims 根据Claims将Token加入黑名单
+func (j *JWT) BlacklistTokenByClaims(claims *Claims) error {
+	if claims.ExpiresAt == nil {
+		return nil
+	}
+
+	// 计算剩余有效期
+	expiresIn := time.Until(claims.ExpiresAt.Time)
+	if expiresIn <= 0 {
+		// Token已过期，不需要加入黑名单
+		return nil
+	}
+
+	// 注意：这种方式需要保存完整的token，这里我们需要知道token字符串
+	// 通常在调用处会有token字符串，所以这个方法可能不太适用
+	// 保留此方法作为占位
+	return nil
 }

@@ -54,6 +54,7 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 		c.Set("username", claims.Username)
 		c.Set("clientType", claims.ClientType)
 		c.Set("deviceID", claims.DeviceID)
+		c.Set("token", token)
 
 		c.Next()
 	}

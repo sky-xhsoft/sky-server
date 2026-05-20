@@ -115,8 +115,12 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
+	// 获取当前token
+	token, _ := c.Get("token")
+	tokenStr, _ := token.(string)
+
 	// 调用SSO服务登出
-	if err := h.ssoService.Logout(userID.(uint), req.DeviceID); err != nil {
+	if err := h.ssoService.Logout(userID.(uint), req.DeviceID, tokenStr); err != nil {
 		utils.InternalError(c, "登出失败: "+err.Error())
 		return
 	}

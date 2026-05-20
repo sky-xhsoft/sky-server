@@ -23,7 +23,7 @@ type Service interface {
 	RefreshToken(refreshToken string) (*TokenResponse, error)
 
 	// 登出（单个设备）
-	Logout(userID uint, deviceID string) error
+	Logout(userID uint, deviceID string, token string) error
 
 	// 登出所有设备
 	LogoutAll(userID uint) error
@@ -95,10 +95,10 @@ type service struct {
 }
 
 // NewService 创建SSO服务
-func NewService(userRepo repository.UserRepository, jwtSecret string, accessTokenExpire, refreshTokenExpire int) Service {
+func NewService(userRepo repository.UserRepository, jwtUtil *jwt.JWT, accessTokenExpire, refreshTokenExpire int) Service {
 	return &service{
 		userRepo:           userRepo,
-		jwtUtil:            jwt.New(jwtSecret),
+		jwtUtil:            jwtUtil,
 		accessTokenExpire:  time.Duration(accessTokenExpire) * time.Second,
 		refreshTokenExpire: time.Duration(refreshTokenExpire) * time.Second,
 	}
@@ -112,9 +112,13 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 		return nil, errors.InvalidCredentials
 	}
 
-	// 验证公司ID（如果提供了）
+	// 验证公司ID（如果提供了，且公司已配置域名）
 	if req.CompanyID != nil && user.SysCompanyID != *req.CompanyID {
-		return nil, errors.InvalidCredentials
+		// 检查公司是否配置了域名，未配置则不校验
+		company, _ := s.userRepo.GetCompanyByID(user.SysCompanyID)
+		if company != nil && company.Domain != nil && *company.Domain != "" {
+			return nil, errors.InvalidCredentials
+		}
 	}
 
 	// 验证密码
@@ -158,19 +162,17 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 		IsActive:       "Y",
 	}
 
-	// 检查是否已存在该设备的会话（包括非活跃的）
+	// 先删除该设备的所有旧会话，避免唯一索引冲突
+	s.userRepo.DeleteSessionByDeviceID(user.ID, deviceID)
+
+	// 检查是否已存在该用户的会话（包括非活跃的），更新或创建
 	existingSession, err := s.userRepo.GetSessionByDeviceID(user.ID, deviceID)
-	if err == nil {
-		// 更新现有会话
+	if err == nil && existingSession != nil {
 		session.ID = existingSession.ID
 		if err := s.userRepo.UpdateSession(session); err != nil {
 			return nil, errors.Wrap(errors.ErrDatabase, "更新会话失败", err)
 		}
 	} else {
-		// 先删除该设备的所有旧会话（包括非活跃的），避免唯一索引冲突
-		s.userRepo.DeleteSessionByDeviceID(user.ID, deviceID)
-
-		// 创建新会话
 		if err := s.userRepo.CreateSession(session); err != nil {
 			return nil, errors.Wrap(errors.ErrDatabase, "创建会话失败", err)
 		}
@@ -248,10 +250,26 @@ func (s *service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 }
 
 // Logout 登出（单个设备）
-func (s *service) Logout(userID uint, deviceID string) error {
+func (s *service) Logout(userID uint, deviceID string, token string) error {
 	session, err := s.userRepo.GetSessionByDeviceID(userID, deviceID)
 	if err != nil {
 		return errors.Wrap(errors.ErrResourceNotFound, "会话不存在", err)
+	}
+
+	// 将token加入黑名单
+	if token != "" {
+		// 先尝试解析token获取过期时间
+		if claims, err := s.jwtUtil.ParseToken(token); err == nil && claims.ExpiresAt != nil {
+			expiresIn := time.Until(claims.ExpiresAt.Time)
+			if expiresIn > 0 {
+				_ = s.jwtUtil.BlacklistToken(token, expiresIn)
+			}
+		}
+	}
+
+	// 同时将刷新token加入黑名单
+	if session.RefreshToken != "" {
+		_ = s.jwtUtil.BlacklistToken(session.RefreshToken, s.refreshTokenExpire)
 	}
 
 	return s.userRepo.DeleteSession(session.ID)

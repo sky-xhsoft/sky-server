@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
+	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
 )
 
 // DirectoryPermissionRequired 安全目录权限检查中间件
@@ -95,10 +96,10 @@ func TablePermissionRequired(groupService groups.Service, tableID uint, required
 // DynamicTablePermissionRequired 动态表权限检查中间件(从路径参数获取表名)
 // tableNameParam: 表名参数的key(如"tableName")
 // requiredPerm: 需要的权限(位运算值)
-func DynamicTablePermissionRequired(groupService groups.Service, tableNameParam string, requiredPerm int) gin.HandlerFunc {
+func DynamicTablePermissionRequired(groupService groups.Service, metadataService metadata.Service, tableNameParam string, requiredPerm int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取用户ID
-		_, exists := c.Get("userID")
+		userID, exists := c.Get("userID")
 		if !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    errors.ErrUnauthorized,
@@ -119,9 +120,46 @@ func DynamicTablePermissionRequired(groupService groups.Service, tableNameParam 
 			return
 		}
 
-		// TODO: 需要一个从表名查询表ID的方法
-		// 这里暂时跳过，实际使用时需要实现
-		// 或者改为直接使用表名而不是表ID
+		// 从表名获取表元数据
+		table, err := metadataService.GetTable(tableName)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    errors.ErrResourceNotFound,
+				"message": "表不存在",
+			})
+			c.Abort()
+			return
+		}
+
+		// 检查用户对该表的权限
+		hasPermission, err := groupService.CheckUserTablePermission(
+			c.Request.Context(),
+			userID.(uint),
+			table.ID,
+			requiredPerm,
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    errors.ErrInternal,
+				"message": "权限检查失败",
+			})
+			c.Abort()
+			return
+		}
+
+		if !hasPermission {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":    errors.ErrForbidden,
+				"message": "无权限访问该表",
+			})
+			c.Abort()
+			return
+		}
+
+		// 将表信息存储到上下文，供后续处理使用
+		c.Set("tableID", table.ID)
+		c.Set("tableName", table.Name)
 
 		c.Next()
 	}

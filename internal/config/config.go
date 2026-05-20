@@ -36,6 +36,17 @@ type Config struct {
 	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
 	TencentCloud    TencentCloudConfig    `mapstructure:"tencentCloud"`
 	Volcengine      VolcengineConfig      `mapstructure:"volcengine"` // 火山引擎配置
+	Email           EmailConfig           `mapstructure:"email"`
+}
+
+// EmailConfig 邮件配置
+type EmailConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	SmtpHost string `mapstructure:"smtpHost"`
+	SmtpPort int    `mapstructure:"smtpPort"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	From     string `mapstructure:"from"`
 }
 
 // StorageConfig 存储配置

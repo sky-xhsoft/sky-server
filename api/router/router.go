@@ -12,8 +12,10 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
+	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/crud"
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
+	"github.com/sky-xhsoft/sky-server/internal/service/email"
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	"github.com/sky-xhsoft/sky-server/internal/service/language"
@@ -44,6 +46,8 @@ type Services struct {
 	Menu            menu.Service
 	File            file.Service
 	Message         message.Service
+	Email           email.Service
+	Company         company.Service
 	Cloud           cloud.Service
 	MultipartUpload cloud.MultipartUploadService
 	StorageConfig   cloud.StorageConfigService
@@ -116,6 +120,8 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 
 		// 注册权限组管理路由
 		registerGroupsRoutes(v1, jwtUtil, services.Groups)
+		registerEmailRoutes(v1, services.Email)
+		registerCompanyRoutes(v1, services.Company)
 
 		// 注册安全目录管理路由
 		registerDirectoryRoutes(v1, jwtUtil, services.Groups)
@@ -419,11 +425,13 @@ func registerMenuRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, menuService menu.
 // registerFileRoutes 注册文件管理路由
 func registerFileRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, fileService file.Service) {
 	fileHandler := handler.NewFileHandler(fileService)
+	// 为公开文件访问接口添加速率限制器
+	fileAccessLimiter := middleware.NewIPRateLimiter(10, 60) // 每分钟10次请求
 
 	files := rg.Group("/files")
 	{
-		// 公开访问接口（不需要认证）
-		files.GET("/access/:storageName", fileHandler.GetFileByPath)
+		// 公开访问接口（不需要认证，但有速率限制）
+		files.GET("/access/:storageName", fileAccessLimiter.Limit(), fileHandler.GetFileByPath)
 
 		// 需要认证的接口
 		authenticated := files.Group("")

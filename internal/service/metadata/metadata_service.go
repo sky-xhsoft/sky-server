@@ -332,9 +332,9 @@ func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search stri
 		}
 		// 如果目标表有 SYS_COMPANY_ID 字段，添加公司过滤
 		if hasCompanyColumn {
-			baseWhere += " AND SYS_COMPANY_ID = ?"
+			baseWhere += " AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0)"
 			whereParams = append(whereParams, user.SysCompanyID)
-			logger.Debug("Added SYS_COMPANY_ID filter")
+			logger.Debug("Added SYS_COMPANY_ID filter with global fallback")
 		}
 	}
 
