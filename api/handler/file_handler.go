@@ -22,6 +22,13 @@ func NewFileHandler(fileService file.Service) *FileHandler {
 }
 
 // UploadFile 上传单个文件
+// @Summary 上传文件
+// @Tags file
+// @Accept multipart/form-data
+// @Produce json
+// @Param file formData file true "上传文件"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/files/upload [post]
 func (h *FileHandler) UploadFile(c *gin.Context) {
 	// 获取上传的文件
 	fileHeader, err := c.FormFile("file")
@@ -76,6 +83,13 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 }
 
 // UploadMultipleFiles 批量上传文件
+// @Summary 批量上传多个文件
+// @Tags file
+// @Accept multipart/form-data
+// @Produce json
+// @Param files formData file true "上传文件列表"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/files/upload/multiple [post]
 func (h *FileHandler) UploadMultipleFiles(c *gin.Context) {
 	// 获取表单
 	form, err := c.MultipartForm()
@@ -144,6 +158,12 @@ func (h *FileHandler) UploadMultipleFiles(c *gin.Context) {
 }
 
 // DownloadFile 下载文件
+// @Summary 下载指定文件
+// @Tags file
+// @Produce octet-stream
+// @Param id path int true "文件ID"
+// @Success 200 {file} binary
+// @Router /api/v1/files/download/{id} [get]
 func (h *FileHandler) DownloadFile(c *gin.Context) {
 	// 获取文件ID
 	fileIDStr := c.Param("id")
@@ -180,6 +200,12 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 }
 
 // PreviewFile 预览文件（不增加下载次数）
+// @Summary 在线预览文件
+// @Tags file
+// @Produce octet-stream
+// @Param id path int true "文件ID"
+// @Success 200 {file} binary
+// @Router /api/v1/files/preview/{id} [get]
 func (h *FileHandler) PreviewFile(c *gin.Context) {
 	// 获取文件ID
 	fileIDStr := c.Param("id")
@@ -211,6 +237,12 @@ func (h *FileHandler) PreviewFile(c *gin.Context) {
 }
 
 // DeleteFile 删除文件
+// @Summary 删除指定文件
+// @Tags file
+// @Produce json
+// @Param id path int true "文件ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/files/{id} [delete]
 func (h *FileHandler) DeleteFile(c *gin.Context) {
 	// 获取文件ID
 	fileIDStr := c.Param("id")
@@ -242,6 +274,12 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 }
 
 // GetFile 获取文件信息
+// @Summary 获取文件元数据信息
+// @Tags file
+// @Produce json
+// @Param id path int true "文件ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/files/{id} [get]
 func (h *FileHandler) GetFile(c *gin.Context) {
 	// 获取文件ID
 	fileIDStr := c.Param("id")
@@ -272,6 +310,13 @@ func (h *FileHandler) GetFile(c *gin.Context) {
 }
 
 // ListFiles 查询文件列表
+// @Summary 分页查询文件列表
+// @Tags file
+// @Accept json
+// @Produce json
+// @Param request body file.ListFilesRequest true "查询请求"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/files/list [post]
 func (h *FileHandler) ListFiles(c *gin.Context) {
 	var req file.ListFilesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -305,6 +350,12 @@ func (h *FileHandler) ListFiles(c *gin.Context) {
 }
 
 // GetFileByPath 根据存储名称直接获取文件（用于访问URL）
+// @Summary 通过存储名访问文件
+// @Tags file
+// @Produce octet-stream
+// @Param storageName path string true "文件存储名"
+// @Success 200 {file} binary
+// @Router /api/v1/files/access/{storageName} [get]
 func (h *FileHandler) GetFileByPath(c *gin.Context) {
 	storageName := c.Param("storageName")
 	if storageName == "" {

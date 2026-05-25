@@ -23,6 +23,7 @@ func Logger() gin.HandlerFunc {
 		latency := end.Sub(start)
 
 		logger.Info("HTTP请求",
+			zap.Any("request_id", c.GetString("RequestID")),
 			zap.Int("status", c.Writer.Status()),
 			zap.String("method", c.Request.Method),
 			zap.String("path", path),

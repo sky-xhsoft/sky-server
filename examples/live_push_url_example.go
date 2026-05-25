@@ -8,7 +8,8 @@ import (
 )
 
 func main() {
-	fmt.Println("=== 腾讯云直播推流地址生成示例 ===\n")
+	fmt.Println("=== 腾讯云直播推流地址生成示例 ===")
+	fmt.Println()
 
 	// 配置参数（请替换为您的实际配置）
 	pushDomain := "push.example.com" // 推流域名

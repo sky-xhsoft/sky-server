@@ -11,366 +11,187 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/api/router"
-	_ "github.com/sky-xhsoft/sky-server/api/swagger" // Swagger docs
+	_ "github.com/sky-xhsoft/sky-server/api/swagger"
 	"github.com/sky-xhsoft/sky-server/internal/config"
-	jwtPkg "github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/volcengine"
-	ws "github.com/sky-xhsoft/sky-server/internal/pkg/websocket"
 	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
-	"github.com/sky-xhsoft/sky-server/internal/repository/redis"
-	"github.com/sky-xhsoft/sky-server/internal/service/action"
-	"github.com/sky-xhsoft/sky-server/internal/service/audit"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
-	"github.com/sky-xhsoft/sky-server/internal/service/company"
-	"github.com/sky-xhsoft/sky-server/internal/service/crud"
-	"github.com/sky-xhsoft/sky-server/internal/service/dict"
-	emailSvc "github.com/sky-xhsoft/sky-server/internal/service/email"
-	"github.com/sky-xhsoft/sky-server/internal/service/file"
-	"github.com/sky-xhsoft/sky-server/internal/service/groups"
-	"github.com/sky-xhsoft/sky-server/internal/service/idgen"
-	"github.com/sky-xhsoft/sky-server/internal/service/language"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
-	"github.com/sky-xhsoft/sky-server/internal/service/menu"
-	"github.com/sky-xhsoft/sky-server/internal/service/message"
-	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
-	"github.com/sky-xhsoft/sky-server/internal/service/sequence"
-	"github.com/sky-xhsoft/sky-server/internal/service/sso"
-	"github.com/sky-xhsoft/sky-server/internal/service/workflow"
 	"github.com/sky-xhsoft/sky-server/plugins"
+	"github.com/sky-xhsoft/sky-server/wire"
 	"go.uber.org/zap"
 )
 
 // @title Sky-Server API
 // @version 1.0.2
-// @description 元数据驱动的企业级应用框架
+// @description 元数据驱动的企业级应用框架 - 完整 REST API 文档
 // @termsOfService http://swagger.io/terms/
-
 // @contact.name API Support
 // @contact.url http://www.example.com/support
 // @contact.email support@example.com
-
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-
 // @host localhost:9090
 // @BasePath /api/v1
-
+// @schemes http https
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
-	// 1. 加载配置
-	cfg, err := config.Load()
+	// 1. 通过 Wire 初始化所有核心依赖
+	app, err := wire.InitializeApp()
 	if err != nil {
-		fmt.Printf("Failed to load config: %v\n", err)
+		fmt.Printf("Failed to initialize application: %v\n", err)
 		os.Exit(1)
 	}
 
-	// 2. 初始化日志
-	log, err := logger.Init(&cfg.Log)
-	if err != nil {
-		fmt.Printf("Failed to initialize logger: %v\n", err)
-		os.Exit(1)
-	}
-	defer log.Sync()
+	defer app.Logger.Sync()
+	defer mysql.CloseDB(app.DB)
+	defer app.DBMonitor.Stop()
 
 	logger.Info("Starting Sky-Server",
-		zap.String("version", cfg.App.Version),
-		zap.String("env", cfg.App.Env),
-		zap.Int("port", cfg.App.Port),
+		zap.String("version", "1.0.2"),
+		zap.Int("port", 9090),
 	)
 
-	// 3. 初始化数据库连接
-	db, err := mysql.Init(&cfg.Database.MySQL, log)
-	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
+	// 2. 加载配置（用于可选组件）
+	cfg, _ := config.Load()
+
+	// 3. 启动数据库监控和消息队列
+	app.DBMonitor.Start()
+	logger.Info("DB monitor started")
+
+	ctx, cancelQueue := context.WithCancel(context.Background())
+	defer cancelQueue()
+	if err := app.TaskQueue.Start(ctx); err != nil {
+		logger.Warn("Failed to start task queue", zap.Error(err))
+	} else {
+		defer app.TaskQueue.Stop()
 	}
-	defer mysql.CloseDB(db)
-	logger.Info("Database connected successfully")
 
-	// 4. 初始化Redis连接
-	redisClient, err := redis.Init(&cfg.Redis)
-	if err != nil {
-		logger.Fatal("Failed to connect to redis", zap.Error(err))
-	}
-	defer redis.CloseClient(redisClient)
-	logger.Info("Redis connected successfully")
-
-	// 5. 初始化仓储层
-	userRepo := mysql.NewUserRepository(db)
-	metadataRepo := mysql.NewMetadataRepository(db)
-	dictRepo := mysql.NewDictRepository(db)
-	seqRepo := mysql.NewSequenceRepository(db)
-	logger.Info("Repositories initialized")
-
-	// 6. 初始化JWT工具
-	jwtUtil := jwtPkg.New(cfg.JWT.Secret, jwtPkg.WithRedis(redisClient, "jwt_blacklist:"))
-	logger.Info("JWT utility initialized")
-
-	// 7. 初始化服务层
-	ssoService := sso.NewService(
-		userRepo,
-		jwtUtil,
-		cfg.JWT.AccessTokenExpire,
-		cfg.JWT.RefreshTokenExpire,
-	)
-
-	metadataService := metadata.NewService(
-		metadataRepo,
-		userRepo,
-		redisClient,
-		cfg.Cache.MetadataTTL,
-	)
-
-	dictService := dict.NewService(
-		dictRepo,
-		redisClient,
-		cfg.Cache.DictTTL,
-	)
-
-	seqService := sequence.NewService(
-		seqRepo,
-		redisClient,
-	)
-
-	// 初始化权限组服务（CRUD和Action服务依赖它）
-	groupsService := groups.NewService(db)
-
-	// 初始化ID生成服务（基于Redis缓存）
-	idgenService := idgen.NewService(db, redisClient)
-
-	// 初始化插件管理器并注册所有钩子函数
-	_ = plugins.Setup(db, cfg)
-
-	crudService := crud.NewService(
-		db,
-		metadataService,
-		groupsService,
-		dictService,
-		seqService,
-		metadataRepo,
-		userRepo,
-		idgenService,
-	)
-
-	actionService := action.NewService(
-		db,
-		metadataService,
-		groupsService,
-		cfg.Action.ScriptTimeout,
-	)
-
-	workflowService := workflow.NewService(
-		db,
-		actionService,
-	)
-
-	auditService := audit.NewService(db)
-
-	// 初始化菜单服务
-	menuService := menu.NewService(db)
-
-	// 初始化文件服务
-	logger.Info("Initializing file service",
-		zap.String("uploadDir", cfg.File.UploadDir),
-		zap.Int64("maxFileSize", cfg.File.MaxFileSize),
-		zap.Float64("maxFileSizeGB", float64(cfg.File.MaxFileSize)/(1024*1024*1024)),
-	)
-	fileService := file.NewService(db, &file.Config{
-		UploadDir:   cfg.File.UploadDir,
-		MaxFileSize: cfg.File.MaxFileSize,
-		AllowedExts: cfg.File.AllowedExts,
-	})
-
-	// 初始化WebSocket管理器
-	wsManager := ws.NewManager(log)
-	go wsManager.Run() // 在goroutine中运行WebSocket管理器
+	// 4. 启动WebSocket管理器
+	go app.WSManager.Run()
 	logger.Info("WebSocket manager started")
 
-	// 初始化消息服务
-	messageService := message.NewService(db, wsManager)
+	// 5. 初始化插件管理器
+	_ = plugins.Setup(app.DB, cfg)
+	logger.Info("Plugins initialized")
 
-	// 初始化邮件服务
-	emailService := emailSvc.NewService(&cfg.Email)
+	// 6. 初始化云盘和直播服务（条件依赖）
+	cloudStorageConfigRepo := mysql.NewCloudStorageConfigRepository(app.DB)
+	sysCompanyConfRepo := mysql.NewSysCompanyConfRepository(app.DB)
 
-	// 初始化公司注册服务
-	companyService := company.NewService(db)
-
-	// 初始化CloudStorageConfigRepository (用于 StorageConfigService)
-	cloudStorageConfigRepo := mysql.NewCloudStorageConfigRepository(db)
-
-	// 初始化SysCompanyConfRepository
-	sysCompanyConfRepo := mysql.NewSysCompanyConfRepository(db)
-
-	// 初始化公司存储管理器
-	companyStorageManager, err := storage.NewCompanyStorageManager(
-		&cfg.Storage,
-		sysCompanyConfRepo,
-		0, // 默认公司ID
-	)
+	companyStorageManager, err := storage.NewCompanyStorageManager(&cfg.Storage, sysCompanyConfRepo, 0)
 	if err != nil {
 		logger.Fatal("Failed to initialize company storage manager", zap.Error(err))
 	}
 
-	// 初始化StorageConfigService
-	storageConfigService := cloud.NewStorageConfigService(
-		db,
-		cloudStorageConfigRepo,
-		companyStorageManager,
-	)
+	storageConfigService := cloud.NewStorageConfigService(app.DB, cloudStorageConfigRepo, companyStorageManager)
+	cloudService := cloud.NewService(app.DB, companyStorageManager, app.UserRepo)
 
-	// 初始化云盘服务
-	cloudService := cloud.NewService(db, companyStorageManager, userRepo)
-
-	// 初始化分片上传服务
 	multipartService := cloud.NewMultipartUploadService(
-		db,
-		companyStorageManager,
-		userRepo,
-		cloudService,
-		cfg.MultipartUpload.ChunkSize,
-		cfg.MultipartUpload.SessionExpireHours,
+		app.DB, companyStorageManager, app.UserRepo, cloudService,
+		cfg.MultipartUpload.ChunkSize, cfg.MultipartUpload.SessionExpireHours,
 	)
-	logger.Info("Multipart upload service initialized",
-		zap.Int("defaultChunkSize", cfg.MultipartUpload.ChunkSize),
-		zap.Int("sessionExpireHours", cfg.MultipartUpload.SessionExpireHours))
+	logger.Info("Multipart upload service initialized")
 
-	// 初始化公司级腾讯云客户端管理器
-	companyTencentManager, err := tencent.NewCompanyTencentManager(
-		&cfg.TencentCloud,
-		sysCompanyConfRepo,
-		0, // 默认公司ID
-	)
+	companyTencentManager, err := tencent.NewCompanyTencentManager(&cfg.TencentCloud, sysCompanyConfRepo, 0)
 	if err != nil {
 		logger.Warn("Failed to initialize company tencent manager", zap.Error(err))
-		// 初始化失败不影响主服务启动，将使用全局配置
 	}
 
-	// 初始化公司级火山引擎客户端管理器
-	_, err = volcengine.NewCompanyVolcengineManager(
-		&cfg.Volcengine,
-		sysCompanyConfRepo,
-		0, // 默认公司ID
-	)
+	_, err = volcengine.NewCompanyVolcengineManager(&cfg.Volcengine, sysCompanyConfRepo, 0)
 	if err != nil {
 		logger.Warn("Failed to initialize company volcengine manager", zap.Error(err))
-		// 初始化失败不影响主服务启动，将使用全局配置
 	}
 
-	// 初始化直播服务
 	var liveService live.Service
 	if companyTencentManager != nil {
-		liveService, err = live.NewServiceWithCompanyManager(companyTencentManager, redisClient)
+		liveService, err = live.NewServiceWithCompanyManager(companyTencentManager, app.RedisClient)
 	} else {
-		liveService, err = live.NewService(&cfg.TencentCloud, redisClient)
+		liveService, err = live.NewService(&cfg.TencentCloud, app.RedisClient)
 	}
-
 	if err != nil {
 		logger.Warn("Failed to initialize live service", zap.Error(err))
-		// 直播服务初始化失败不影响主服务启动
-		liveService = nil
 	} else {
 		logger.Info("Live service initialized successfully")
 	}
 
-	// 创建直播房间服务
-	liveRoomService := live.NewLiveRoomService(db, cloudService)
-
-	// 初始化语言服务
-	langRepo := mysql.NewLanguageRepository(db)
-	transRepo := mysql.NewTranslationRepository(db)
-	languageService := language.NewService(
-		langRepo,
-		transRepo,
-		redisClient,
-		log,
-		cfg.Cache.LanguageTTL,
-	)
-	logger.Info("Language service initialized")
+	liveRoomService := live.NewLiveRoomService(app.DB, cloudService)
+	pullStreamTaskService := live.NewPullStreamTaskService(app.DB)
 
 	logger.Info("Services initialized")
 
-	// 8. 初始化Gin引擎
+	// 7. 初始化Gin引擎
 	if cfg.App.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	engine := gin.New()
+	engine.MaxMultipartMemory = 32 << 20
 
-	// 设置文件上传大小限制（32MB内存缓存，超过的部分会写入临时文件）
-	// 这样可以支持大文件上传而不会占用过多内存
-	engine.MaxMultipartMemory = 32 << 20 // 32 MB
-
-	// 9. 注册路由
-	// 创建拉流任务服务
-	pullStreamTaskService := live.NewPullStreamTaskService(db)
-
+	// 8. 注册路由
 	services := &router.Services{
-		SSO:             ssoService,
-		Metadata:        metadataService,
-		Dict:            dictService,
-		Sequence:        seqService,
-		CRUD:            crudService,
-		Action:          actionService,
-		Workflow:        workflowService,
-		Audit:           auditService,
-		Groups:          groupsService,
-		Menu:            menuService,
-		File:            fileService,
-		Message:         messageService,
-		Email:           emailService,
-		Company:         companyService,
+		SSO:             app.SSOService,
+		Metadata:        app.MetadataService,
+		Dict:            app.DictService,
+		Sequence:        app.SequenceService,
+		CRUD:            app.CRUDService,
+		Action:          app.ActionService,
+		Workflow:        app.WorkflowService,
+		Audit:           app.AuditService,
+		Groups:          app.GroupsService,
+		Menu:            app.MenuService,
+		File:            app.FileService,
+		Message:         app.MessageService,
+		Email:           app.EmailService,
+		Company:         app.CompanyService,
 		Cloud:           cloudService,
 		MultipartUpload: multipartService,
 		StorageConfig:   storageConfigService,
 		Live:            liveService,
 		LiveRoom:        liveRoomService,
 		PullStreamTask:  pullStreamTaskService,
-		WSManager:       wsManager,
-		Language:        languageService,
+		WSManager:       app.WSManager,
+		Language:        app.LanguageService,
 	}
 
-	// 创建仓储集合
 	repos := &router.Repositories{
-		DictRepo: dictRepo,
+		DictRepo: app.DictRepo,
 	}
 
-	router.Setup(engine, cfg, jwtUtil, services, repos, log, db)
+	router.Setup(engine, cfg, app.JWTUtil, services, repos, app.Logger, app.DB)
 	logger.Info("Routes registered successfully")
 
-	// 10. 启动定时清理任务
+	// 9. 启动定时清理任务
 	go func() {
 		interval := cfg.MultipartUpload.CleanupInterval
 		if interval <= 0 {
-			interval = 3600 // default 1 hour
+			interval = 3600
 		}
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
-
-		logger.Info("分片上传清理任务已启动",
-			zap.Int("intervalSeconds", interval))
-
+		logger.Info("Multipart cleanup task started", zap.Int("intervalSeconds", interval))
 		for range ticker.C {
-			ctx := context.Background()
-			if err := multipartService.CleanupExpiredSessions(ctx); err != nil {
-				logger.Error("清理过期会话失败", zap.Error(err))
+			cleanCtx := context.Background()
+			if err := multipartService.CleanupExpiredSessions(cleanCtx); err != nil {
+				logger.Error("Cleanup expired sessions failed", zap.Error(err))
 			} else {
-				logger.Info("过期会话清理完成")
+				logger.Info("Expired sessions cleaned")
 			}
 		}
 	}()
 
-	// 11. 启动HTTP服务器
+	// 10. 启动HTTP服务器
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.App.Port),
 		Handler: engine,
 	}
 
-	// 在goroutine中启动服务器
 	go func() {
 		logger.Info("Server started", zap.Int("port", cfg.App.Port))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -378,17 +199,17 @@ func main() {
 		}
 	}()
 
-	// 12. 优雅关闭
+	// 11. 优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Info("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Server forced to shutdown", zap.Error(err))
 	}
 

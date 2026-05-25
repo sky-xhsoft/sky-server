@@ -66,10 +66,12 @@ type Repositories struct {
 // Setup 设置路由
 func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *Services, repos *Repositories, logger *zap.Logger, db *gorm.DB) {
 	// 全局中间件
+	engine.Use(middleware.RequestID())
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.RequestTiming())
 	engine.Use(middleware.Metrics())
 	engine.Use(middleware.Recovery())
+	engine.Use(middleware.Compression())
 	engine.Use(middleware.CORS(cfg.CORS))
 	// 语言国际化中间件
 	engine.Use(i18n.Middleware())
@@ -83,6 +85,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 
 	// 指标接口
 	engine.GET("/metrics", middleware.MetricsStats())
+	engine.GET("/metrics/prometheus", middleware.PrometheusMetrics())
 	engine.POST("/metrics/reset", middleware.ResetMetrics)
 
 	// Swagger文档
@@ -261,6 +264,7 @@ func registerCRUDRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, crudService crud.
 	{
 		data.GET("/:tableName/:id", crudHandler.GetOne)
 		data.POST("/:tableName/query", crudHandler.GetList)
+		data.POST("/:tableName/search", crudHandler.Search)
 		data.POST("/:tableName", crudHandler.Create)
 		data.PUT("/:tableName/:id", crudHandler.Update)
 		data.DELETE("/:tableName/:id", crudHandler.Delete)

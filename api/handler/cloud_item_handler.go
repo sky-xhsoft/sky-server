@@ -24,6 +24,12 @@ func NewCloudItemHandler(cloudService cloud.Service) *CloudItemHandler {
 }
 
 // ListItems 列出项目（文件+文件夹）
+// @Summary 列出云盘项目
+// @Tags cloud
+// @Produce json
+// @Param folderId query int false "文件夹ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items [get]
 func (h *CloudItemHandler) ListItems(c *gin.Context) {
 	parentIDStr := c.Query("parentId")
 	var parentID *uint = nil
@@ -69,6 +75,13 @@ func (h *CloudItemHandler) ListItems(c *gin.Context) {
 }
 
 // CreateItem 创建项目
+// @Summary 创建云盘项目（文件或文件夹）
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param request body object true "创建请求"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items [post]
 func (h *CloudItemHandler) CreateItem(c *gin.Context) {
 	var req CreateItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -117,6 +130,12 @@ func (h *CloudItemHandler) CreateItem(c *gin.Context) {
 }
 
 // DeleteItem 删除项目
+// @Summary 删除云盘项目
+// @Tags cloud
+// @Produce json
+// @Param id path int true "项目ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/{id} [delete]
 func (h *CloudItemHandler) DeleteItem(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -160,6 +179,14 @@ func (h *CloudItemHandler) DeleteItem(c *gin.Context) {
 }
 
 // RenameItem 重命名项目
+// @Summary 重命名云盘项目
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param id path int true "项目ID"
+// @Param request body object true "新名称"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/{id}/rename [put]
 func (h *CloudItemHandler) RenameItem(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -189,6 +216,14 @@ func (h *CloudItemHandler) RenameItem(c *gin.Context) {
 }
 
 // MoveItem 移动项目
+// @Summary 移动云盘项目到目标文件夹
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param id path int true "项目ID"
+// @Param request body object true "目标文件夹ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/{id}/move [put]
 func (h *CloudItemHandler) MoveItem(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -218,6 +253,13 @@ func (h *CloudItemHandler) MoveItem(c *gin.Context) {
 }
 
 // BatchDelete 批量删除
+// @Summary 批量删除云盘项目
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param request body object true "项目ID列表"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/batch/delete [post]
 func (h *CloudItemHandler) BatchDelete(c *gin.Context) {
 	var req BatchDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -271,6 +313,13 @@ func (h *CloudItemHandler) BatchDelete(c *gin.Context) {
 }
 
 // BatchMove 批量移动
+// @Summary 批量移动云盘项目
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param request body object true "项目ID列表和目标文件夹"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/batch/move [post]
 func (h *CloudItemHandler) BatchMove(c *gin.Context) {
 	var req BatchMoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

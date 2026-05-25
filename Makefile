@@ -1,6 +1,6 @@
 # Sky-Server Makefile
 
-.PHONY: help init build run test clean tidy swagger metadata-init test-cloud test-cloud-coverage test-cloud-integration test-cloud-bench test-all-cloud
+.PHONY: help init build run test clean tidy swagger metadata-init lint coverage test-cloud test-cloud-coverage test-cloud-integration test-cloud-bench test-all-cloud
 
 # 显示帮助信息
 help:
@@ -9,6 +9,8 @@ help:
 	@echo "  make build         - 编译项目"
 	@echo "  make run           - 运行项目"
 	@echo "  make test          - 运行所有测试"
+	@echo "  make lint          - 运行 golangci-lint 代码检查"
+	@echo "  make coverage      - 生成测试覆盖率报告"
 	@echo "  make test-cloud    - 运行云盘服务单元测试"
 	@echo "  make test-cloud-coverage  - 运行云盘服务测试并生成覆盖率报告"
 	@echo "  make test-cloud-integration - 运行云盘服务集成测试"
@@ -41,6 +43,18 @@ run:
 test:
 	@echo "Running tests..."
 	go test -v ./...
+
+# 代码检查
+lint:
+	@echo "Running golangci-lint..."
+	@golangci-lint run ./...
+
+# 生成覆盖率报告
+coverage:
+	@echo "Running tests with coverage..."
+	go test -v -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: coverage.html"
 
 # 云盘服务测试
 .PHONY: test-cloud

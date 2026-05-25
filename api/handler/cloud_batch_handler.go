@@ -22,6 +22,14 @@ type CloudBatchDeleteResponse struct {
 }
 
 // BatchDelete 批量删除
+// @Summary 批量删除云盘文件/文件夹（已废弃，请使用 /cloud/items/batch/delete）
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Deprecated true
+// @Param request body object true "ID列表"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/batch/delete [post]
 func (h *CloudHandler) BatchDelete(c *gin.Context) {
 	var req CloudBatchDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,6 +82,14 @@ type CloudBatchMoveResponse struct {
 }
 
 // BatchMove 批量移动
+// @Summary 批量移动云盘文件/文件夹（已废弃，请使用 /cloud/items/batch/move）
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Deprecated true
+// @Param request body object true "ID列表和目标"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/batch/move [post]
 func (h *CloudHandler) BatchMove(c *gin.Context) {
 	var req CloudBatchMoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

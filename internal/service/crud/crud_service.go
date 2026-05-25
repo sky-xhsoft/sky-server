@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"strconv"
 
+	"github.com/sky-xhsoft/sky-server/internal/domain/search"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
@@ -54,6 +55,9 @@ type Service interface {
 
 	// 查询列表（支持分页、排序、过滤）
 	GetList(ctx context.Context, req *QueryRequest, userID uint) (*QueryResponse, error)
+
+	// 高级搜索（支持多条件组合、多种运算符）
+	Search(ctx context.Context, req *search.SearchRequest, tableName string, userID uint) (*QueryResponse, error)
 
 	// 创建记录
 	Create(ctx context.Context, tableName string, data map[string]interface{}, userID uint) (map[string]interface{}, error)

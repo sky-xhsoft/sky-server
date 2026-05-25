@@ -22,6 +22,13 @@ func NewMessageHandler(messageService message.Service) *MessageHandler {
 }
 
 // SendMessage 发送消息
+// @Summary 发送消息给指定用户
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param request body message.SendMessageRequest true "消息内容"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/send [post]
 func (h *MessageHandler) SendMessage(c *gin.Context) {
 	var req message.SendMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -57,6 +64,12 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 }
 
 // GetMessage 获取消息详情
+// @Summary 获取消息详情
+// @Tags message
+// @Produce json
+// @Param id path int true "消息ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/{id} [get]
 func (h *MessageHandler) GetMessage(c *gin.Context) {
 	messageID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -86,6 +99,13 @@ func (h *MessageHandler) GetMessage(c *gin.Context) {
 }
 
 // ListUserMessages 查询用户消息列表
+// @Summary 查询用户消息列表
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param request body message.ListMessagesRequest true "查询请求"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/list [post]
 func (h *MessageHandler) ListUserMessages(c *gin.Context) {
 	var req message.ListMessagesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -120,6 +140,12 @@ func (h *MessageHandler) ListUserMessages(c *gin.Context) {
 }
 
 // MarkAsRead 标记为已读
+// @Summary 标记消息为已读
+// @Tags message
+// @Produce json
+// @Param id path int true "消息ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/{id}/read [post]
 func (h *MessageHandler) MarkAsRead(c *gin.Context) {
 	messageID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -147,6 +173,11 @@ func (h *MessageHandler) MarkAsRead(c *gin.Context) {
 }
 
 // MarkAllAsRead 标记所有为已读
+// @Summary 标记所有消息为已读
+// @Tags message
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/read-all [post]
 func (h *MessageHandler) MarkAllAsRead(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
@@ -165,6 +196,11 @@ func (h *MessageHandler) MarkAllAsRead(c *gin.Context) {
 }
 
 // GetUnreadCount 获取未读消息数
+// @Summary 获取未读消息数量
+// @Tags message
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/unread/count [get]
 func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
@@ -187,6 +223,12 @@ func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 }
 
 // GetUnreadMessages 获取最新未读消息
+// @Summary 获取最新未读消息列表
+// @Tags message
+// @Produce json
+// @Param limit query int false "数量限制" default(10)
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/unread/list [get]
 func (h *MessageHandler) GetUnreadMessages(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
@@ -214,6 +256,12 @@ func (h *MessageHandler) GetUnreadMessages(c *gin.Context) {
 }
 
 // DeleteMessage 删除消息
+// @Summary 删除指定消息
+// @Tags message
+// @Produce json
+// @Param id path int true "消息ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/{id} [delete]
 func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 	messageID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -241,6 +289,14 @@ func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 }
 
 // StarMessage 标记/取消星标
+// @Summary 标记或取消消息星标
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param id path int true "消息ID"
+// @Param request body object true "星标请求 {isStarred: boolean}"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/{id}/star [post]
 func (h *MessageHandler) StarMessage(c *gin.Context) {
 	messageID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -279,6 +335,12 @@ func (h *MessageHandler) StarMessage(c *gin.Context) {
 }
 
 // ArchiveMessage 归档消息
+// @Summary 归档指定消息
+// @Tags message
+// @Produce json
+// @Param id path int true "消息ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/{id}/archive [post]
 func (h *MessageHandler) ArchiveMessage(c *gin.Context) {
 	messageID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -306,6 +368,13 @@ func (h *MessageHandler) ArchiveMessage(c *gin.Context) {
 }
 
 // SendTemplateMessage 发送模板消息
+// @Summary 使用模板发送消息
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param request body message.SendTemplateMessageRequest true "模板消息"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/send/template [post]
 func (h *MessageHandler) SendTemplateMessage(c *gin.Context) {
 	var req message.SendTemplateMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -341,6 +410,13 @@ func (h *MessageHandler) SendTemplateMessage(c *gin.Context) {
 }
 
 // SendBatchMessage 批量发送消息
+// @Summary 批量发送消息给多个用户
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param request body object true "批量发送请求 {userIds, message}"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/send/batch [post]
 func (h *MessageHandler) SendBatchMessage(c *gin.Context) {
 	var req struct {
 		UserIDs []uint                     `json:"userIds" binding:"required"`
@@ -382,6 +458,13 @@ func (h *MessageHandler) SendBatchMessage(c *gin.Context) {
 }
 
 // SendToAll 发送给所有用户
+// @Summary 群发消息给所有用户
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param request body message.SendMessageRequest true "消息内容"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/messages/send/all [post]
 func (h *MessageHandler) SendToAll(c *gin.Context) {
 	var req message.SendMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

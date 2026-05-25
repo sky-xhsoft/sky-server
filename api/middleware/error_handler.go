@@ -23,29 +23,34 @@ func ErrorHandler() gin.HandlerFunc {
 
 		// 根据错误类型返回不同的响应
 		appErr, isAppErr := err.(*errors.AppError)
+		requestID, _ := c.Get("RequestID")
 		if isAppErr {
 			// 业务错误
 			logger.Warn("Business error",
+				zap.Any("request_id", requestID),
 				zap.Int("code", appErr.Code),
 				zap.String("message", appErr.Message),
 				zap.Error(appErr.Err))
 
 			c.JSON(getHTTPStatus(appErr.Code), gin.H{
-				"code":    appErr.Code,
-				"message": appErr.Message,
+				"code":       appErr.Code,
+				"message":    appErr.Message,
+				"request_id": requestID,
 			})
 			return
 		}
 
 		// 未知错误
 		logger.Error("Unexpected error",
+			zap.Any("request_id", requestID),
 			zap.String("path", c.Request.URL.Path),
 			zap.String("method", c.Request.Method),
 			zap.Error(err))
 
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    http.StatusInternalServerError,
-			"message": "服务器内部错误",
+			"code":       http.StatusInternalServerError,
+			"message":    "服务器内部错误",
+			"request_id": requestID,
 		})
 	}
 }

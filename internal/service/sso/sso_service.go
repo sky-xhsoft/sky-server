@@ -277,6 +277,20 @@ func (s *service) Logout(userID uint, deviceID string, token string) error {
 
 // LogoutAll 登出所有设备
 func (s *service) LogoutAll(userID uint) error {
+	// 先获取所有活跃会话
+	sessions, err := s.userRepo.GetActiveSessions(userID)
+	if err == nil {
+		// 将所有会话的 token 加入黑名单
+		for _, session := range sessions {
+			if session.Token != "" {
+				_ = s.jwtUtil.BlacklistToken(session.Token, s.accessTokenExpire)
+			}
+			if session.RefreshToken != "" {
+				_ = s.jwtUtil.BlacklistToken(session.RefreshToken, s.refreshTokenExpire)
+			}
+		}
+	}
+
 	return s.userRepo.DeleteAllSessions(userID)
 }
 
@@ -305,7 +319,22 @@ func (s *service) GetActiveSessions(userID uint) ([]*SessionInfo, error) {
 
 // KickDevice 踢出指定设备
 func (s *service) KickDevice(userID uint, deviceID string) error {
-	return s.Logout(userID, deviceID)
+	session, err := s.userRepo.GetSessionByDeviceID(userID, deviceID)
+	if err != nil {
+		return errors.Wrap(errors.ErrResourceNotFound, "会话不存在", err)
+	}
+
+	// 将刷新token加入黑名单
+	if session.RefreshToken != "" {
+		_ = s.jwtUtil.BlacklistToken(session.RefreshToken, s.refreshTokenExpire)
+	}
+
+	// 也将会话中的token加入黑名单
+	if session.Token != "" {
+		_ = s.jwtUtil.BlacklistToken(session.Token, s.accessTokenExpire)
+	}
+
+	return s.userRepo.DeleteSession(session.ID)
 }
 
 // ChangePassword 修改密码

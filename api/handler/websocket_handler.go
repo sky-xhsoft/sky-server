@@ -34,6 +34,11 @@ func NewWebSocketHandler(manager *ws.Manager, logger *zap.Logger) *WebSocketHand
 }
 
 // HandleConnection 处理WebSocket连接
+// @Summary 建立WebSocket连接
+// @Tags websocket
+// @Produce json
+// @Success 101 {string} string "Switching Protocols"
+// @Router /api/v1/ws/messages [get]
 func (h *WebSocketHandler) HandleConnection(c *gin.Context) {
 	// 从上下文获取用户ID（由JWT中间件设置）
 	userIDInterface, exists := c.Get("userID")
@@ -91,6 +96,11 @@ func (h *WebSocketHandler) HandleConnection(c *gin.Context) {
 }
 
 // GetOnlineUsers 获取在线用户列表
+// @Summary 获取在线用户列表
+// @Tags websocket
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/ws/online/users [get]
 func (h *WebSocketHandler) GetOnlineUsers(c *gin.Context) {
 	onlineUsers := h.manager.GetOnlineUsers()
 	onlineCount := h.manager.GetOnlineCount()
@@ -106,6 +116,12 @@ func (h *WebSocketHandler) GetOnlineUsers(c *gin.Context) {
 }
 
 // CheckUserOnline 检查用户是否在线
+// @Summary 检查指定用户是否在线
+// @Tags websocket
+// @Produce json
+// @Param userId query string true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/ws/online/check [get]
 func (h *WebSocketHandler) CheckUserOnline(c *gin.Context) {
 	userID := c.GetUint("userID")
 	isOnline := h.manager.IsUserOnline(userID)
@@ -121,6 +137,13 @@ func (h *WebSocketHandler) CheckUserOnline(c *gin.Context) {
 }
 
 // BroadcastMessage 广播消息给所有在线用户（管理员功能）
+// @Summary 广播消息给所有在线用户
+// @Tags websocket
+// @Accept json
+// @Produce json
+// @Param request body object true "广播消息体"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/ws/broadcast [post]
 func (h *WebSocketHandler) BroadcastMessage(c *gin.Context) {
 	var req struct {
 		Type string      `json:"type" binding:"required"`

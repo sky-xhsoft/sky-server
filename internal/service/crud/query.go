@@ -2,9 +2,9 @@ package crud
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
+	"github.com/sky-xhsoft/sky-server/internal/domain/search"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
@@ -275,6 +275,166 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	// 处理外键字段，将ID转换为显示名称
 	if err := s.processForeignKeys(ctx, columns, results, userID); err != nil {
 		// FK 转换失败不影响主查询，只记录错误
+		logger.Warn("processFK failed", zap.Error(err))
+	}
+
+	return &QueryResponse{
+		Total:    total,
+		Page:     req.Page,
+		PageSize: req.PageSize,
+		Data:     results,
+	}, nil
+}
+
+// Search 高级多条件搜索
+func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableName string, userID uint) (*QueryResponse, error) {
+	req.Validate()
+
+	table, err := s.metadataService.GetTable(tableName)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
+	}
+
+	hasPermission, err := s.groupsService.CheckUserTablePermission(ctx, userID, table.ID, groups.PermRead)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrInternal, "权限检查失败", err)
+	}
+	if !hasPermission {
+		return nil, errors.New(errors.ErrPermissionDenied, "无查询权限")
+	}
+
+	columns, err := s.metadataService.GetColumns(table.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建可查询字段白名单（只有 IS_QUERY='Y' 的字段才能被搜索）
+	queryableFields := make(map[string]bool)
+	for _, col := range columns {
+		queryableFields[strings.ToUpper(col.DbName)] = true
+	}
+	queryableFields["ID"] = true
+
+	// 校验搜索字段必须在白名单内
+	if req.HasFilters() {
+		for _, filter := range req.Filters {
+			if !queryableFields[strings.ToUpper(filter.Field)] {
+				return nil, errors.New(errors.ErrInvalidParam, "字段不允许搜索: "+filter.Field)
+			}
+		}
+	}
+
+	selectFields, err := s.buildSelectFields(columns, userID, "list")
+	if err != nil {
+		return nil, err
+	}
+
+	dataFilter, err := s.groupsService.GetUserDataFilter(ctx, userID, table.ID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrInternal, "获取数据过滤条件失败", err)
+	}
+
+	query := s.db.Table(table.Name).Select(selectFields)
+
+	if table.Filter != "" {
+		query = s.applyDataFilter(query, table.Filter, columns)
+	}
+
+	if dataFilter != nil && len(dataFilter) > 0 {
+		filteredDataFilter := make(map[string]interface{})
+		for k, v := range dataFilter {
+			if k != "IS_ACTIVE" {
+				filteredDataFilter[k] = v
+			}
+		}
+		if len(filteredDataFilter) > 0 {
+			query = s.applyFilters(query, filteredDataFilter, columns)
+		}
+	}
+
+	for _, col := range columns {
+		if col.DbName == "SYS_COMPANY_ID" {
+			user, userErr := s.userRepo.GetUserByID(userID)
+			if userErr == nil && user != nil {
+				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0", user.SysCompanyID)
+			}
+			break
+		}
+	}
+
+	// 应用高级搜索条件
+	if req.HasFilters() {
+		query, err = s.buildAdvancedSearch(query, req)
+		if err != nil {
+			return nil, errors.Wrap(errors.ErrInvalidParam, "搜索条件构建失败", err)
+		}
+	}
+
+	var total int64
+	if table.IsBig == "Y" {
+		total = -1
+	} else {
+		if err := query.Count(&total).Error; err != nil {
+			return nil, errors.Wrap(errors.ErrDatabase, "查询总数失败", err)
+		}
+	}
+
+	allowedFields := make(map[string]bool)
+	for _, col := range columns {
+		allowedFields[strings.ToUpper(col.DbName)] = true
+	}
+	allowedFields["ID"] = true
+
+	if req.OrderBy != "" {
+		orderByFields := strings.Split(req.OrderBy, ",")
+		orderDirections := strings.Split(req.Order, ",")
+
+		for i, field := range orderByFields {
+			field = strings.TrimSpace(field)
+			if field == "" {
+				continue
+			}
+
+			fieldUpper := strings.ToUpper(field)
+			if !allowedFields[fieldUpper] {
+				logger.Warn("Invalid order by field skipped", zap.String("field", field))
+				continue
+			}
+
+			direction := "ASC"
+			if i < len(orderDirections) {
+				dir := strings.TrimSpace(strings.ToUpper(orderDirections[i]))
+				if dir == "DESC" {
+					direction = "DESC"
+				}
+			}
+
+			query = query.Order(gorm.Expr("? ?", gorm.Expr(field), gorm.Expr(direction)))
+		}
+	} else {
+		hasOrderNo := false
+		for _, col := range columns {
+			if strings.EqualFold(col.DbName, "ORDERNO") {
+				hasOrderNo = true
+				break
+			}
+		}
+		if hasOrderNo {
+			query = query.Order("ORDERNO ASC")
+		} else {
+			query = query.Order("ID DESC")
+		}
+	}
+
+	offset := (req.Page - 1) * req.PageSize
+	query = query.Limit(req.PageSize).Offset(offset)
+
+	var results []map[string]interface{}
+	if err := query.Find(&results).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "查询失败", err)
+	}
+
+	if err := s.processForeignKeys(ctx, columns, results, userID); err != nil {
 		logger.Warn("processFK failed", zap.Error(err))
 	}
 

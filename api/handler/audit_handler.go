@@ -40,6 +40,19 @@ type QueryLogsRequest struct {
 }
 
 // QueryLogs 查询审计日志
+// @Summary 查询审计日志
+// @Description 分页查询审计日志，支持按用户、操作、资源、时间范围等过滤
+// @Tags audit
+// @Accept json
+// @Produce json
+// @Param userId query int false "用户ID"
+// @Param username query string false "用户名"
+// @Param action query string false "操作类型"
+// @Param resource query string false "资源类型"
+// @Param page query int false "页码"
+// @Param pageSize query int false "每页条数"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/audit/logs [get]
 func (h *AuditHandler) QueryLogs(c *gin.Context) {
 	var req QueryLogsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -112,6 +125,12 @@ func (h *AuditHandler) QueryLogs(c *gin.Context) {
 }
 
 // GetLog 获取单条审计日志
+// @Summary 获取审计日志详情
+// @Tags audit
+// @Produce json
+// @Param id path int true "日志ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/audit/logs/{id} [get]
 func (h *AuditHandler) GetLog(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -140,6 +159,11 @@ func (h *AuditHandler) GetLog(c *gin.Context) {
 }
 
 // GetUserLogs 获取用户的审计日志
+// @Summary 获取指定用户的审计日志
+// @Tags audit
+// @Param userId path int true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/audit/users/{userId}/logs [get]
 func (h *AuditHandler) GetUserLogs(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := strconv.ParseUint(userIDStr, 10, 32)
@@ -175,6 +199,12 @@ func (h *AuditHandler) GetUserLogs(c *gin.Context) {
 }
 
 // GetResourceLogs 获取资源的审计日志
+// @Summary 获取指定资源的审计日志
+// @Tags audit
+// @Param resource path string true "资源类型"
+// @Param resourceId path string true "资源ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/audit/resources/{resource}/{resourceId}/logs [get]
 func (h *AuditHandler) GetResourceLogs(c *gin.Context) {
 	resource := c.Param("resource")
 	resourceID := c.Param("resourceId")
@@ -210,6 +240,10 @@ type StatisticsRequest struct {
 }
 
 // GetStatistics 获取审计统计
+// @Summary 获取审计日志统计信息
+// @Tags audit
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/audit/statistics [get]
 func (h *AuditHandler) GetStatistics(c *gin.Context) {
 	var req StatisticsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -273,6 +307,12 @@ type CleanExpiredLogsRequest struct {
 }
 
 // CleanExpiredLogs 清理过期日志
+// @Summary 清理过期的审计日志
+// @Tags audit
+// @Accept json
+// @Param request body CleanExpiredLogsRequest true "清理请求"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/audit/clean [post]
 func (h *AuditHandler) CleanExpiredLogs(c *gin.Context) {
 	var req CleanExpiredLogsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

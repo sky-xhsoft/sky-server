@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/domain/search"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/crud"
 )
@@ -567,4 +568,38 @@ func (h *CrudHandler) BatchUpdate(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"message": fmt.Sprintf("成功修改 %d 条记录", len(req.IDs))})
+}
+
+// Search 高级搜索
+// @Summary 高级搜索
+// @Description 支持多条件组合搜索，支持 eq/ne/gt/gte/lt/lte/contains/startsWith/endsWith/in/between/isNull/isNotNull 运算符
+// @Tags CRUD
+// @Accept json
+// @Produce json
+// @Param tableName path string true "表名"
+// @Param request body search.SearchRequest true "搜索请求"
+// @Success 200 {object} crud.QueryResponse
+// @Router /api/v1/data/{tableName}/search [post]
+func (h *CrudHandler) Search(c *gin.Context) {
+	tableName := c.Param("tableName")
+
+	var req search.SearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	result, err := h.crudService.Search(c.Request.Context(), &req, tableName, userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "搜索失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, result)
 }

@@ -6,9 +6,24 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/test"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+type testUser struct {
+	ID    uint   `gorm:"primaryKey"`
+	Name  string `gorm:"size:200"`
+	Email string `gorm:"size:200"`
+}
+
+func (testUser) TableName() string { return "test_users" }
+
+type testItem struct {
+	ID    uint
+	Name  string
+	Value int
+}
+
+func (testItem) TableName() string { return "test_items" }
 
 // TestBaseRepositoryCRUD 测试基础Repository的CRUD功能
 func TestBaseRepositoryCRUD(t *testing.T) {
@@ -22,11 +37,7 @@ func TestBaseRepositoryCRUD(t *testing.T) {
 	ctx := context.Background()
 	db.Exec("CREATE TABLE IF NOT EXISTS test_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT)")
 
-	user := struct {
-		ID    uint   `gorm:"primaryKey"`
-		Name  string `gorm:"size:200"`
-		Email string `gorm:"size:200"`
-	}{
+	user := testUser{
 		Name:  "Test User",
 		Email: "test@example.com",
 	}
@@ -34,11 +45,7 @@ func TestBaseRepositoryCRUD(t *testing.T) {
 	test.AssertNoError(t, repo.Create(ctx, &user), "Create failed")
 	test.AssertNotNil(t, user.ID, "User should have ID after creation")
 
-	var retrievedUser struct {
-		ID    uint
-		Name  string
-		Email string
-	}
+	var retrievedUser testUser
 	test.AssertNoError(t, repo.GetByID(ctx, &retrievedUser, user.ID), "GetByID failed")
 	test.AssertEqual(t, user.ID, retrievedUser.ID, "ID mismatch")
 	test.AssertEqual(t, user.Name, retrievedUser.Name, "Name mismatch")
@@ -112,11 +119,7 @@ func TestPageQuery(t *testing.T) {
 		Order:    "desc",
 	}
 
-	dest := []struct {
-		ID    uint
-		Name  string
-		Value int
-	}{}
+	dest := []testItem{}
 
 	result, err := repo.GetPage(context.Background(), query, &dest)
 	test.AssertNoError(t, err, "GetPage failed")
@@ -130,7 +133,7 @@ func TestPageQuery(t *testing.T) {
 }
 
 func ItemName(i int) string {
-	return "Item " + string('A'-1+i)
+	return "Item " + string(rune('A'-1+i))
 }
 
 // TestNoopCache 测试空操作缓存
@@ -242,7 +245,7 @@ func TestMultipleQueries(t *testing.T) {
 
 	qb := NewQueryBuilder(db).
 		Table("items").
-		Select("id", "name", "quantity").
+		Select("id", "name", "category", "quantity").
 		Where("category", "=", "Electronics").
 		OrderBy("quantity", "desc")
 
@@ -250,6 +253,7 @@ func TestMultipleQueries(t *testing.T) {
 		ID       uint
 		Name     string
 		Quantity int
+		Category string
 	}
 
 	test.AssertNoError(t, qb.GetAll(&electronicsItems), "GetAll failed")
@@ -266,8 +270,7 @@ func TestMultipleQueries(t *testing.T) {
 func TestBaseRepositoryOptions(t *testing.T) {
 	db := test.SetupGormTestDB(t)
 
-	logger, err := zap.NewProduction()
-	test.AssertNoError(t, err, "Logger creation failed")
+	logger := test.NewTestLogger()
 
 	repo1 := NewBaseRepository(db, logger, &NoopCache{}, 0)
 	test.AssertNotNil(t, repo1, "BaseRepository with logger should not be nil")
