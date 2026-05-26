@@ -37,6 +37,7 @@ configs/config.yaml
 
 # Build output
 bin/
+.gocache/
 
 # Uploads
 uploads/
