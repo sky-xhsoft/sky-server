@@ -19,7 +19,12 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/volcengine"
 	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
+	"github.com/sky-xhsoft/sky-server/internal/service/company"
+	"github.com/sky-xhsoft/sky-server/internal/service/dashboard"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
+	"github.com/sky-xhsoft/sky-server/internal/service/pref"
+	"github.com/sky-xhsoft/sky-server/internal/service/schedule"
+	"github.com/sky-xhsoft/sky-server/internal/service/sms"
 	"github.com/sky-xhsoft/sky-server/plugins"
 	"github.com/sky-xhsoft/sky-server/wire"
 	"go.uber.org/zap"
@@ -105,9 +110,25 @@ func main() {
 		logger.Warn("Failed to initialize company tencent manager", zap.Error(err))
 	}
 
-	_, err = volcengine.NewCompanyVolcengineManager(&cfg.Volcengine, sysCompanyConfRepo, 0)
+	companyVolcengineManager, err := volcengine.NewCompanyVolcengineManager(&cfg.Volcengine, sysCompanyConfRepo, 0)
 	if err != nil {
 		logger.Warn("Failed to initialize company volcengine manager", zap.Error(err))
+	}
+
+	// 公司配置更新后，同步刷新腾讯云/火山引擎客户端缓存，使新配置的密钥即时生效
+	if setter, ok := app.CompanyService.(company.ConfigChangedSetter); ok {
+		setter.SetConfigChangedCallback(func(companyID uint) {
+			if companyTencentManager != nil {
+				if cerr := companyTencentManager.RefreshCompanyConfig(context.Background(), companyID); cerr != nil {
+					logger.Warn("Refresh tencent config cache failed", zap.Uint("companyID", companyID), zap.Error(cerr))
+				}
+			}
+			if companyVolcengineManager != nil {
+				if cerr := companyVolcengineManager.RefreshCompanyConfig(context.Background(), companyID); cerr != nil {
+					logger.Warn("Refresh volcengine config cache failed", zap.Uint("companyID", companyID), zap.Error(cerr))
+				}
+			}
+		})
 	}
 
 	var liveService live.Service
@@ -123,9 +144,33 @@ func main() {
 	}
 
 	liveRoomService := live.NewLiveRoomService(app.DB, cloudService)
+	dashboardService := dashboard.NewService(app.DB)
 	pullStreamTaskService := live.NewPullStreamTaskService(app.DB)
+	clipService := live.NewClipService(app.DB)
+	var speechTaskService live.SpeechTaskService
+	if companyVolcengineManager != nil {
+		speechTaskService = live.NewSpeechTaskService(companyVolcengineManager, app.DB)
+	}
 
 	logger.Info("Services initialized")
+
+	// 用户环境变量服务 + 自动任务调度器
+	prefService := pref.NewService(app.DB, app.UserRepo)
+	taskRunner := schedule.NewTaskRunner()
+	schedSvc := schedule.NewScheduler(app.DB, taskRunner)
+
+	// 注入动作变量替换器(动作内容/参数支持 $变量$)
+	app.ActionService.SetVarReplacer(func(ctx context.Context, str string, userID uint) (string, error) {
+		return prefService.ReplaceVariables(ctx, str, userID)
+	})
+	// 注入自动任务执行器(供 list_button 动作「执行全部任务」调用)
+	app.ActionService.SetScheduleRunner(func() (string, error) {
+		return schedule.RunAllEnabled(context.Background(), app.DB, taskRunner)
+	})
+
+	// 启动自动任务调度器(后台)
+	schedSvc.Start()
+	logger.Info("Auto-task scheduler started")
 
 	// 7. 初始化Gin引擎
 	if cfg.App.Mode == "release" {
@@ -141,6 +186,7 @@ func main() {
 		Dict:            app.DictService,
 		Sequence:        app.SequenceService,
 		CRUD:            app.CRUDService,
+		Dashboard:       dashboardService,
 		Action:          app.ActionService,
 		Workflow:        app.WorkflowService,
 		Audit:           app.AuditService,
@@ -149,6 +195,7 @@ func main() {
 		File:            app.FileService,
 		Message:         app.MessageService,
 		Email:           app.EmailService,
+		SMS:             sms.NewService(cfg.SMS, app.RedisClient),
 		Company:         app.CompanyService,
 		Cloud:           cloudService,
 		MultipartUpload: multipartService,
@@ -156,8 +203,12 @@ func main() {
 		Live:            liveService,
 		LiveRoom:        liveRoomService,
 		PullStreamTask:  pullStreamTaskService,
+		SpeechTask:      speechTaskService,
+		ClipService:     clipService,
 		WSManager:       app.WSManager,
 		Language:        app.LanguageService,
+		Pref:            prefService,
+		Schedule:        schedSvc,
 	}
 
 	repos := &router.Repositories{

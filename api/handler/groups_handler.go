@@ -626,3 +626,36 @@ func (h *GroupsHandler) GetUserPermission(c *gin.Context) {
 		},
 	})
 }
+
+// GetPermissionMatrix 获取权限矩阵
+// @Summary 获取权限矩阵
+// @Description 获取所有权限组在各安全目录/表上的权限分布矩阵
+// @Tags 权限组管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /permissions/matrix [get]
+// @Security BearerAuth
+func (h *GroupsHandler) GetPermissionMatrix(c *gin.Context) {
+	matrix, err := h.groupService.GetPermissionMatrix(withCompanyID(c))
+	if err != nil {
+		if appErr, ok := err.(*errors.AppError); ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    appErr.Code,
+				"message": appErr.Message,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    errors.ErrInternal,
+			"message": "获取权限矩阵失败",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    matrix,
+	})
+}

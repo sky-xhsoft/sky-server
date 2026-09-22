@@ -88,6 +88,9 @@ type Service interface {
 
 	// 从Excel导入
 	Import(ctx context.Context, tableName string, file multipart.File, userID uint) (int, error)
+
+	// 生成导入模板Excel
+	ImportTemplate(ctx context.Context, tableName string, userID uint) (*excelize.File, error)
 }
 
 // QueryRequest 查询请求

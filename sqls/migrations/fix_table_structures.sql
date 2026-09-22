@@ -150,27 +150,6 @@ CREATE TABLE IF NOT EXISTS `sys_translation` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='翻译配置表';
 
 -- ==========================================
--- 11. live_push_domain_config - 创建物理表
--- ==========================================
-CREATE TABLE IF NOT EXISTS `live_push_domain_config` (
-  `ID` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `SYS_COMPANY_ID` bigint NOT NULL DEFAULT 1 COMMENT '公司ID',
-  `DOMAIN_NAME` varchar(255) NOT NULL COMMENT '推流域名',
-  `STREAM_KEY` varchar(255) NOT NULL COMMENT '推流密钥',
-  `APP_NAME` varchar(100) NOT NULL DEFAULT 'live' COMMENT '应用名称',
-  `PLAY_DOMAIN` varchar(255) DEFAULT NULL COMMENT '关联的播放域名',
-  `IS_DEFAULT` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否为默认域名',
-  `IS_ACTIVE` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
-  `REMARK` varchar(500) DEFAULT NULL COMMENT '备注说明',
-  `CREATE_BY` varchar(80) DEFAULT NULL COMMENT '创建人',
-  `CREATE_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `UPDATE_BY` varchar(80) DEFAULT NULL COMMENT '更新人',
-  `UPDATE_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`ID`),
-  INDEX `idx_company_id` (`SYS_COMPANY_ID`),
-  UNIQUE INDEX `uk_company_domain` (`SYS_COMPANY_ID`, `DOMAIN_NAME`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='直播推流域名配置表';
-
 -- ==========================================
 -- 12. live_domain - 创建物理表
 -- ==========================================
@@ -303,4 +282,3 @@ SHOW TABLES LIKE 'live_stream';
 SHOW TABLES LIKE 'live_pull';
 SHOW TABLES LIKE 'live_cut';
 SHOW TABLES LIKE 'live_recode';
-SHOW TABLES LIKE 'live_push_domain_config';

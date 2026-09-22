@@ -33,6 +33,8 @@ type SysColumn struct {
 	DisplayCols   int    `gorm:"column:DISPLAY_COLS" json:"displayCols"`
 	DisplayRows   int    `gorm:"column:DISPLAY_ROWS" json:"displayRows"`
 	Props         string `gorm:"column:PROPS;size:2000" json:"props"` // 扩展属性（JSON）
+	IsVirtual     string `gorm:"column:IS_VIRTUAL;size:1;default:N" json:"isVirtual"`   // Y:虚拟字段(只读展示不落库)
+	Expression    string `gorm:"column:EXPRESSION;size:2000" json:"expression"`         // 虚拟字段计算表达式(SQL 伪列/白名单函数)
 	IsShowTitle   string `gorm:"column:IS_SHOW_TITLE;size:3" json:"isShowTitle"`
 	Submethod     string `gorm:"column:SUBMETHOD;size:1" json:"submethod"`
 	HrColumnID    *int   `gorm:"column:HR_COLUMN_ID" json:"hrColumnId"`

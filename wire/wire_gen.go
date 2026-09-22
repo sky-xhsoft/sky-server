@@ -66,6 +66,7 @@ func InitializeApp() (*App, error) {
 	metadataRepository := provideMetadataRepo(db)
 	dictRepository := provideDictRepo(db)
 	sequenceRepository := provideSeqRepo(db)
+	sysCompanyConfRepository := provideSysCompanyConfRepo(db)
 	service := provideSSOService(userRepository, jwt, config)
 	metadataService := provideMetadataService(metadataRepository, userRepository, client, config)
 	dictService := provideDictService(dictRepository, client, config)
@@ -80,7 +81,7 @@ func InitializeApp() (*App, error) {
 	fileService := provideFileService(db, config)
 	messageService := provideMessageService(db, manager)
 	emailService := provideEmailService(config, queue)
-	companyService := provideCompanyService(db)
+	companyService := provideCompanyService(db, sysCompanyConfRepository)
 	languageRepository := provideLangRepo(db)
 	translationRepository := provideTransRepo(db)
 	languageService := provideLanguageService(languageRepository, translationRepository, client, logger, config)
@@ -256,7 +257,9 @@ func provideEmailService(cfg *config.Config, taskQueue queue.Queue) email.Servic
 	return email.NewServiceWithQueue(&cfg.Email, taskQueue)
 }
 
-func provideCompanyService(db *gorm.DB) company.Service { return company.NewService(db) }
+func provideCompanyService(db *gorm.DB, confRepo repository.SysCompanyConfRepository) company.Service {
+	return company.NewService(db, confRepo)
+}
 
 func provideLanguageService(langRepo repository.LanguageRepository, transRepo repository.TranslationRepository,
 	redisClient *redis.Client, log *zap.Logger, cfg *config.Config) language.Service {

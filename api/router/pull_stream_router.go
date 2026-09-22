@@ -5,16 +5,17 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/handler"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
+	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 )
 
 // registerPullStreamRoutes 注册拉流任务路由
-func registerPullStreamRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service, pullStreamTaskService liveService.PullStreamTaskService) {
+func registerPullStreamRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service, pullStreamTaskService liveService.PullStreamTaskService, groupService groups.Service) {
 	pullStreamHandler := handler.NewPullStreamHandler(service, pullStreamTaskService)
 
-	// 拉流任务路由组（需要认证）
+	// 拉流任务路由组（需要认证 + 表权限）
 	pullStream := r.Group("/live/pull-stream")
-	pullStream.Use(middleware.AuthRequired(jwtUtil))
+	pullStream.Use(middleware.AuthRequired(jwtUtil), middleware.TablePermissionRequired(groupService, 39, groups.PermRead))
 	{
 		tasks := pullStream.Group("/tasks")
 		{

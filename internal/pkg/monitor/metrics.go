@@ -11,12 +11,12 @@ import (
 
 // MetricsCollector 指标收集器
 type MetricsCollector struct {
-	mu              sync.RWMutex
-	counters        map[string]int64
-	gauges          map[string]float64
-	histograms      map[string][]time.Duration
+	mu               sync.RWMutex
+	counters         map[string]int64
+	gauges           map[string]float64
+	histograms       map[string][]time.Duration
 	requestDurations map[string][]time.Duration
-	maxSamples      int
+	maxSamples       int
 }
 
 var (
@@ -28,11 +28,11 @@ var (
 func GetMetricsCollector() *MetricsCollector {
 	collectorOnce.Do(func() {
 		collectorInstance = &MetricsCollector{
-			counters:        make(map[string]int64),
-			gauges:          make(map[string]float64),
-			histograms:      make(map[string][]time.Duration),
+			counters:         make(map[string]int64),
+			gauges:           make(map[string]float64),
+			histograms:       make(map[string][]time.Duration),
 			requestDurations: make(map[string][]time.Duration),
-			maxSamples:      1000,
+			maxSamples:       1000,
 		}
 	})
 	return collectorInstance
@@ -175,10 +175,10 @@ func (mc *MetricsCollector) GetAllMetrics() map[string]interface{} {
 	for name := range mc.histograms {
 		min, max, avg, count := mc.GetDurationStats(name)
 		durationStats[name] = map[string]interface{}{
-			"min":    min.Milliseconds(),
-			"max":    max.Milliseconds(),
-			"avg":    avg.Milliseconds(),
-			"count":  count,
+			"min":   min.Milliseconds(),
+			"max":   max.Milliseconds(),
+			"avg":   avg.Milliseconds(),
+			"count": count,
 		}
 	}
 	result["durations"] = durationStats
@@ -264,14 +264,14 @@ func MetricsMiddleware() func(ctx context.Context, next func(ctx context.Context
 
 // RequestStats 请求统计信息
 type RequestStats struct {
-	Path          string
-	Method        string
-	Count         int
-	MinDuration   time.Duration
-	MaxDuration   time.Duration
-	AvgDuration   time.Duration
-	ErrorCount    int
-	SuccessCount  int
+	Path         string
+	Method       string
+	Count        int
+	MinDuration  time.Duration
+	MaxDuration  time.Duration
+	AvgDuration  time.Duration
+	ErrorCount   int
+	SuccessCount int
 }
 
 // GetRequestStatsByPath 获取路径请求统计
@@ -285,6 +285,6 @@ func (mc *MetricsCollector) GetRequestStatsByPath(path string) *RequestStats {
 		MaxDuration:  max,
 		AvgDuration:  avg,
 		ErrorCount:   int(mc.GetCounter(path + ".errors")),
-		SuccessCount: count - int(mc.GetCounter(path + ".errors")),
+		SuccessCount: count - int(mc.GetCounter(path+".errors")),
 	}
 }

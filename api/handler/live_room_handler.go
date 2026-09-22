@@ -87,13 +87,22 @@ func (h *LiveRoomHandler) CreateRoom(c *gin.Context) {
 	}
 
 	// 获取公司ID（从上下文中获取）
-	companyID, _ := c.Get("companyId")
-	userID, _ := c.Get("userId")
+	companyID, _ := c.Get("companyID")
+	username, _ := c.Get("username")
+
+	var cid uint
+	if v, ok := companyID.(uint); ok {
+		cid = v
+	}
+	var uname string
+	if v, ok := username.(string); ok {
+		uname = v
+	}
 
 	room := &entity.LiveRoom{
 		BaseModel: entity.BaseModel{
-			SysCompanyID: companyID.(uint),
-			CreateBy:     userID.(string),
+			SysCompanyID: cid,
+			CreateBy:     uname,
 		},
 		RoomName:         req.RoomName,
 		RoomType:         req.RoomType,
@@ -136,12 +145,16 @@ func (h *LiveRoomHandler) UpdateRoom(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("userId")
+	username, _ := c.Get("username")
+	var uname string
+	if v, ok := username.(string); ok {
+		uname = v
+	}
 
 	room := &entity.LiveRoom{
 		BaseModel: entity.BaseModel{
 			ID:       req.ID,
-			UpdateBy: userID.(string),
+			UpdateBy: uname,
 		},
 		RoomName:         req.RoomName,
 		DisplayMode:      req.DisplayMode,
@@ -247,10 +260,13 @@ func (h *LiveRoomHandler) ListRooms(c *gin.Context) {
 	}
 
 	// 获取公司ID
-	companyID, _ := c.Get("companyId")
+	var cid uint
+	if v, exists := c.Get("companyID"); exists {
+		cid, _ = v.(uint)
+	}
 
 	filter := &live.RoomFilter{
-		CompanyID:     companyID.(uint),
+		CompanyID:     cid,
 		RoomType:      req.RoomType,
 		Status:        req.Status,
 		RoomStage:     req.RoomStage,

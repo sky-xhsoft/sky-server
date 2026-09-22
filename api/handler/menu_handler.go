@@ -51,6 +51,23 @@ func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 	utils.Success(c, menuTree)
 }
 
+// GetSubsystems 获取全部子系统列表（公开接口，供登录/欢迎页渲染系统入口）
+// @Summary 获取全部子系统列表
+// @Description 返回启用的子系统列表（key/name/url），供 Welcome/Login 页动态渲染入口
+// @Tags 菜单管理
+// @Produce json
+// @Success 200 {object} map[string]interface{} "{\"code\":200,\"data\":[...],\"message\":\"success\"}"
+// @Failure 500 {object} map[string]interface{} "{\"code\":500,\"message\":\"服务器错误\"}"
+// @Router /subsystems [get]
+func (h *MenuHandler) GetSubsystems(c *gin.Context) {
+	subsystems, err := h.menuService.GetSubsystems(c.Request.Context())
+	if err != nil {
+		utils.InternalError(c, "获取子系统列表失败: "+err.Error())
+		return
+	}
+	utils.Success(c, subsystems)
+}
+
 // GetUserMenuTree 获取用户菜单树
 // @Summary 获取用户菜单树
 // @Description 获取当前用户权限过滤后的菜单树

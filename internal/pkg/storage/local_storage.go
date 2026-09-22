@@ -12,6 +12,31 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
 
+// 验证路径是否安全
+func (s *LocalStorage) validatePath(path string) error {
+	// 拒绝包含 .. 的路径
+	if strings.Contains(path, "..") {
+		return errors.New(errors.ErrInvalidParam, "path cannot contain '..'")
+	}
+
+	// 拒绝绝对路径。Windows 下 filepath.IsAbs("/x") 可能为 false，需显式检查。
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") || strings.HasPrefix(path, "\\") || filepath.VolumeName(path) != "" {
+		return errors.New(errors.ErrInvalidParam, "path cannot be absolute")
+	}
+
+	// 清理并验证路径是否仍然在基目录内
+	fullPath := filepath.Join(s.basePath, path)
+	cleanPath := filepath.Clean(fullPath)
+	basePathClean := filepath.Clean(s.basePath)
+
+	// 确保清理后的路径仍在基目录下
+	if !strings.HasPrefix(cleanPath, basePathClean) {
+		return errors.New(errors.ErrInvalidParam, "invalid path")
+	}
+
+	return nil
+}
+
 // LocalStorage 本地存储实现
 type LocalStorage struct {
 	basePath string // 基础路径
@@ -44,6 +69,10 @@ func NewLocalStorage(cfg *LocalStorageConfig) (Storage, error) {
 
 // Upload 上传文件
 func (s *LocalStorage) Upload(ctx context.Context, path string, reader io.Reader, contentType string) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
+
 	// 完整文件路径
 	fullPath := filepath.Join(s.basePath, path)
 
@@ -73,6 +102,10 @@ func (s *LocalStorage) Upload(ctx context.Context, path string, reader io.Reader
 
 // Download 下载文件
 func (s *LocalStorage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
+	if err := s.validatePath(path); err != nil {
+		return nil, err
+	}
+
 	fullPath := filepath.Join(s.basePath, path)
 
 	// 打开文件
@@ -89,6 +122,10 @@ func (s *LocalStorage) Download(ctx context.Context, path string) (io.ReadCloser
 
 // Delete 删除文件
 func (s *LocalStorage) Delete(ctx context.Context, path string) error {
+	if err := s.validatePath(path); err != nil {
+		return err
+	}
+
 	fullPath := filepath.Join(s.basePath, path)
 
 	if err := os.Remove(fullPath); err != nil {
@@ -103,6 +140,10 @@ func (s *LocalStorage) Delete(ctx context.Context, path string) error {
 
 // Exists 检查文件是否存在
 func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
+	if err := s.validatePath(path); err != nil {
+		return false, err
+	}
+
 	fullPath := filepath.Join(s.basePath, path)
 
 	_, err := os.Stat(fullPath)
@@ -118,6 +159,10 @@ func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
 
 // GetURL 获取文件访问URL
 func (s *LocalStorage) GetURL(ctx context.Context, path string, expireSeconds int) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
+
 	// 本地存储不支持过期URL，直接返回永久URL
 	url := fmt.Sprintf("%s/%s", s.baseURL, path)
 	return url, nil
@@ -125,6 +170,10 @@ func (s *LocalStorage) GetURL(ctx context.Context, path string, expireSeconds in
 
 // ListObjects 列出对象
 func (s *LocalStorage) ListObjects(ctx context.Context, prefix string, maxKeys int) ([]Object, error) {
+	if err := s.validatePath(prefix); err != nil {
+		return nil, err
+	}
+
 	fullPrefix := filepath.Join(s.basePath, prefix)
 
 	var objects []Object
@@ -172,6 +221,13 @@ func (s *LocalStorage) ListObjects(ctx context.Context, prefix string, maxKeys i
 
 // CopyObject 复制对象
 func (s *LocalStorage) CopyObject(ctx context.Context, srcPath, dstPath string) error {
+	if err := s.validatePath(srcPath); err != nil {
+		return err
+	}
+	if err := s.validatePath(dstPath); err != nil {
+		return err
+	}
+
 	srcFullPath := filepath.Join(s.basePath, srcPath)
 	dstFullPath := filepath.Join(s.basePath, dstPath)
 
@@ -206,6 +262,10 @@ func (s *LocalStorage) CopyObject(ctx context.Context, srcPath, dstPath string) 
 
 // GetObjectInfo 获取对象信息
 func (s *LocalStorage) GetObjectInfo(ctx context.Context, path string) (*ObjectInfo, error) {
+	if err := s.validatePath(path); err != nil {
+		return nil, err
+	}
+
 	fullPath := filepath.Join(s.basePath, path)
 
 	info, err := os.Stat(fullPath)
@@ -229,23 +289,35 @@ func (s *LocalStorage) GetObjectInfo(ctx context.Context, path string) (*ObjectI
 // PresignedUploadURL 获取预签名上传URL（用于前端直传）
 // 本地存储不支持前端直传，返回错误
 func (s *LocalStorage) PresignedUploadURL(ctx context.Context, path string, expireSeconds int, contentType string) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
 	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持前端直传，请使用腾讯云COS等云存储", nil)
 }
 
 // InitiateMultipartUpload 初始化分块上传
 // 本地存储不支持原生分块上传，返回错误
 func (s *LocalStorage) InitiateMultipartUpload(ctx context.Context, path string) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
 	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
 }
 
 // PresignedChunkUploadURL 获取分块预签名上传URL
 // 本地存储不支持原生分块上传，返回错误
 func (s *LocalStorage) PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
 	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
 }
 
 // CompleteMultipartUpload 完成分块上传
 // 本地存储不支持原生分块上传，返回错误
 func (s *LocalStorage) CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
 	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
 }

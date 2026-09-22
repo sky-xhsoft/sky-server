@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
@@ -113,12 +114,12 @@ func (h *LiveStreamHandler) GetHistoryStreams(c *gin.Context) {
 		return
 	}
 	if startTime == "" {
-		utils.BadRequest(c, "开始时间不能为空")
-		return
+		// 默认查询最近7天
+		startTime = time.Now().AddDate(0, 0, -7).UTC().Format("2006-01-02T15:04:05Z")
 	}
 	if endTime == "" {
-		utils.BadRequest(c, "结束时间不能为空")
-		return
+		// 默认当前查询时间
+		endTime = time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	}
 
 	// 转换分页参数
@@ -305,6 +306,44 @@ type ResumeLiveStreamRequest struct {
 	StreamName string `json:"streamName" binding:"required"` // 流名称
 	DomainName string `json:"domainName" binding:"required"` // 推流域名
 	AppName    string `json:"appName" binding:"required"`    // 推流路径
+}
+
+// GetStreamMetrics 获取直播流实时指标
+// @Summary 获取直播流实时指标
+// @Description 获取指定直播流的实时指标（观看人数、码率、帧率等）
+// @Tags Live-Stream
+// @Accept json
+// @Produce json
+// @Param streamName path string true "流名称"
+// @Param domainName query string false "推流域名"
+// @Param appName query string false "应用名称"
+// @Success 200 {object} utils.Response{data=live.StreamMetrics}
+// @Router /api/v1/live/streams/{streamName}/metrics [get]
+func (h *LiveStreamHandler) GetStreamMetrics(c *gin.Context) {
+	streamName := c.Param("streamName")
+	if streamName == "" {
+		utils.BadRequest(c, "流名称不能为空")
+		return
+	}
+
+	domainName := c.DefaultQuery("domainName", "")
+	appName := c.DefaultQuery("appName", "live")
+
+	ctx := withCompanyID(c)
+	metrics, err := h.liveService.GetStreamMetrics(ctx, &live.GetStreamMetricsRequest{
+		StreamName: streamName,
+		DomainName: domainName,
+		AppName:    appName,
+	})
+	if err != nil {
+		zap.L().Error("获取直播流指标失败",
+			zap.String("streamName", streamName),
+			zap.Error(err))
+		utils.InternalError(c, "获取直播流指标失败")
+		return
+	}
+
+	utils.Success(c, metrics)
 }
 
 // ResumeStream 恢复直播推流

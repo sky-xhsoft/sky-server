@@ -15,15 +15,15 @@ import (
 
 // mockSSOService SSO 服务 mock
 type mockSSOService struct {
-	loginResp        *sso.LoginResponse
-	loginErr         error
-	refreshResp      *sso.TokenResponse
-	refreshErr       error
-	logoutErr        error
-	logoutAllErr     error
-	sessions         []*sso.SessionInfo
-	sessionsErr      error
-	kickErr          error
+	loginResp         *sso.LoginResponse
+	loginErr          error
+	refreshResp       *sso.TokenResponse
+	refreshErr        error
+	logoutErr         error
+	logoutAllErr      error
+	sessions          []*sso.SessionInfo
+	sessionsErr       error
+	kickErr           error
 	changePasswordErr error
 }
 
@@ -53,6 +53,10 @@ func (m *mockSSOService) KickDevice(userID uint, deviceID string) error {
 
 func (m *mockSSOService) ChangePassword(userID uint, oldPassword string, newPassword string) error {
 	return m.changePasswordErr
+}
+
+func (m *mockSSOService) GetCurrentUser(userID uint) (*sso.CurrentUserResponse, error) {
+	return nil, nil
 }
 
 // setupAuthHandlerTest 创建测试用 router 和 mock 服务

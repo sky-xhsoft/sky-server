@@ -1,7 +1,11 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"reflect"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -37,6 +41,17 @@ type Config struct {
 	TencentCloud    TencentCloudConfig    `mapstructure:"tencentCloud"`
 	Volcengine      VolcengineConfig      `mapstructure:"volcengine"` // 火山引擎配置
 	Email           EmailConfig           `mapstructure:"email"`
+	SMS             SMSConfig             `mapstructure:"sms"`
+}
+
+// SMSConfig 阿里云短信配置
+type SMSConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`      // 是否启用短信
+	AccessKeyID  string `mapstructure:"accessKeyID"`  // AccessKey ID
+	AccessSecret string `mapstructure:"accessSecret"` // AccessKey Secret
+	SignName     string `mapstructure:"signName"`     // 短信签名
+	TemplateCode string `mapstructure:"templateCode"` // 短信模板
+	VerifyCode   string `mapstructure:"verifyCode"`   // 通用验证码（测试用，任意手机号可绕过）
 }
 
 // EmailConfig 邮件配置
@@ -204,9 +219,16 @@ type SwaggerConfig struct {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	PasswordCost        int      `mapstructure:"passwordCost"`
-	AllowedBashCommands []string `mapstructure:"allowedBashCommands"`
-	BashTimeout         int      `mapstructure:"bashTimeout"`
+	PasswordCost        int                   `mapstructure:"passwordCost"`
+	ScriptExecution     ScriptExecutionConfig `mapstructure:"scriptExecution"`
+	AllowedBashCommands []string              `mapstructure:"allowedBashCommands"`
+	BashTimeout         int                   `mapstructure:"bashTimeout"`
+}
+
+// ScriptExecutionConfig 脚本执行安全配置
+type ScriptExecutionConfig struct {
+	Enabled      bool     `mapstructure:"enabled"`
+	AllowedTypes []string `mapstructure:"allowedTypes"`
 }
 
 // MonitoringConfig 监控配置
@@ -244,8 +266,38 @@ type VolcengineConfig struct {
 	Service         string `mapstructure:"service"`         // 服务名称，如 live
 }
 
+// loadDotEnv 加载 .env 文件到进程环境（仅当变量尚未设置时）
+// 查找顺序：工作目录 .env、./configs/.env
+func loadDotEnv() {
+	for _, path := range []string{".env", "./configs/.env"} {
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			eq := strings.Index(line, "=")
+			if eq <= 0 {
+				continue
+			}
+			key := strings.TrimSpace(line[:eq])
+			val := strings.TrimSpace(line[eq+1:])
+			if _, ok := os.LookupEnv(key); !ok {
+				_ = os.Setenv(key, val)
+			}
+		}
+		_ = f.Close()
+		break // 找到第一个存在的 .env 即停止
+	}
+}
+
 // Load 加载配置文件
 func Load() (*Config, error) {
+	loadDotEnv()
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("./configs")
@@ -264,7 +316,54 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	expandEnvDefaults(&cfg)
 	return &cfg, nil
+}
+
+func expandEnvDefaults(cfg *Config) {
+	expandStringFields(reflect.ValueOf(cfg))
+}
+
+func expandStringFields(v reflect.Value) {
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+	if !v.IsValid() {
+		return
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if v.Field(i).CanSet() || v.Field(i).Kind() == reflect.Struct || v.Field(i).Kind() == reflect.Ptr {
+				expandStringFields(v.Field(i))
+			}
+		}
+	case reflect.String:
+		if v.CanSet() {
+			v.SetString(expandEnvString(v.String()))
+		}
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			expandStringFields(v.Index(i))
+		}
+	}
+}
+
+func expandEnvString(value string) string {
+	return os.Expand(value, func(key string) string {
+		if strings.Contains(key, ":-") {
+			parts := strings.SplitN(key, ":-", 2)
+			if envValue, ok := os.LookupEnv(parts[0]); ok {
+				return envValue
+			}
+			return parts[1]
+		}
+		return os.Getenv(key)
+	})
 }
 
 // GetDSN 获取MySQL DSN连接字符串

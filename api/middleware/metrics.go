@@ -129,7 +129,7 @@ func RecordQuery(duration time.Duration, isSlow bool) {
 // GetDatabaseMetrics 获取数据库指标
 func GetDatabaseMetrics() DatabaseMetrics {
 	return DatabaseMetrics{
-		QueryCount:    dbMetricsLock.GetCounter("db.queries.total"),
+		QueryCount:     dbMetricsLock.GetCounter("db.queries.total"),
 		SlowQueryCount: dbMetricsLock.GetCounter("db.queries.slow"),
 	}
 }
@@ -176,12 +176,12 @@ func HealthCheck() gin.HandlerFunc {
 			"code":    httpStatus,
 			"message": status,
 			"data": gin.H{
-				"status":          status,
-				"total_requests":  totalRequests,
+				"status":           status,
+				"total_requests":   totalRequests,
 				"success_requests": successRequests,
-				"error_requests":  errorRequests,
-				"error_rate":      errorRate,
-				"timestamp":       time.Now().Format(time.RFC3339),
+				"error_requests":   errorRequests,
+				"error_rate":       errorRate,
+				"timestamp":        time.Now().Format(time.RFC3339),
 			},
 		})
 	}

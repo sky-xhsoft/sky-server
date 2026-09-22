@@ -42,6 +42,14 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 		return
 	}
 
+	// 前端字段映射
+	if req.SourceType == "" && req.Platform != "" {
+		req.SourceType = req.Platform
+	}
+	if req.Comment == "" && req.TaskName != "" {
+		req.Comment = req.TaskName
+	}
+
 	// 验证必填字段
 	if req.SourceType == "" {
 		utils.BadRequest(c, "拉流源类型不能为空")
@@ -263,6 +271,11 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
 		return
+	}
+
+	// 前端字段映射
+	if req.Comment == "" && req.TaskName != "" {
+		req.Comment = req.TaskName
 	}
 
 	// 设置任务ID

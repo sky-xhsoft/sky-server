@@ -14,31 +14,31 @@ import (
 
 // RecordingFileEvent 录制文件事件结构
 type RecordingFileEvent struct {
-	EventType   int    `json:"event_type"`
-	StreamID    string `json:"stream_id"`
-	ChannelID   string `json:"channel_id"`
-	EventTime   int64  `json:"event_time"`
-	VideoURL    string `json:"video_url"`
-	FileSize    int64  `json:"file_size"`
-	Duration    int64  `json:"duration"`
-	FileFormat  string `json:"file_format"`
-	StartTime   int64  `json:"start_time"`
-	EndTime     int64  `json:"end_time"`
-	StreamParam string `json:"stream_param"`
-	VideoID     string `json:"video_id"`
+	EventType    int    `json:"event_type"`
+	StreamID     string `json:"stream_id"`
+	ChannelID    string `json:"channel_id"`
+	EventTime    int64  `json:"event_time"`
+	VideoURL     string `json:"video_url"`
+	FileSize     int64  `json:"file_size"`
+	Duration     int64  `json:"duration"`
+	FileFormat   string `json:"file_format"`
+	StartTime    int64  `json:"start_time"`
+	EndTime      int64  `json:"end_time"`
+	StreamParam  string `json:"stream_param"`
+	VideoID      string `json:"video_id"`
 	RecordFileID string `json:"record_file_id"`
-	App         string `json:"app"`
-	AppName     string `json:"appname"`
+	App          string `json:"app"`
+	AppName      string `json:"appname"`
 }
 
 // LiveCallbackEvent 回调事件
 type LiveCallbackEvent struct {
-	ID         int64
-	EventType  string
-	RoomName   string
-	StreamID   string
-	EventTime  int64
-	EventData  string
+	ID        int64
+	EventType string
+	RoomName  string
+	StreamID  string
+	EventTime int64
+	EventData string
 }
 
 // 数据库配置

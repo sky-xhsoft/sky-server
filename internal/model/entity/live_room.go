@@ -27,6 +27,8 @@ type LiveRoom struct {
 	Duration         int        `gorm:"column:DURATION;default:0" json:"duration"`                                             // 直播时长（秒）
 	Description      string     `gorm:"column:DESCRIPTION;type:text" json:"description"`                                       // 直播间描述
 	Props            string     `gorm:"column:PROPS;type:text" json:"props"`                                                   // 扩展属性（JSON）
+	IsRecord         string     `gorm:"column:IS_RECORD;type:char(1);default:'Y'" json:"isRecord"`                             // 是否录制：Y/N
+	IsClip           string     `gorm:"column:IS_CLIP;type:char(1);default:'Y'" json:"isClip"`                                 // 是否切片：Y/N
 }
 
 // TableName 指定表名

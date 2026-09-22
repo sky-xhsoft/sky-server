@@ -19,7 +19,7 @@ func (r *translationRepository) ListTranslations(companyID uint, module string, 
 	var total int64
 
 	query := r.db.
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?) AND IS_ACTIVE = ?", companyID, 0, "Y")
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", companyID, "Y")
 
 	if module != "" {
 		query = query.Where("MODULE = ?", module)
@@ -68,7 +68,7 @@ func (r *translationRepository) GetTranslationByID(id uint) (*entity.SysTranslat
 func (r *translationRepository) GetTranslationByKey(companyID uint, key string, language string) (*entity.SysTranslation, error) {
 	var translation entity.SysTranslation
 	err := r.db.
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?) AND KEY = ? AND LANGUAGE = ? AND IS_ACTIVE = ?", companyID, 0, key, language, "Y").
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND KEY = ? AND LANGUAGE = ? AND IS_ACTIVE = ?", companyID, key, language, "Y").
 		First(&translation).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -82,7 +82,7 @@ func (r *translationRepository) GetTranslationByKey(companyID uint, key string, 
 func (r *translationRepository) GetTranslationsByModule(companyID uint, module string, language string) ([]*entity.SysTranslation, error) {
 	var translations []*entity.SysTranslation
 	query := r.db.
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?) AND IS_ACTIVE = ?", companyID, 0, "Y")
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", companyID, "Y")
 
 	if module != "" {
 		query = query.Where("MODULE = ?", module)

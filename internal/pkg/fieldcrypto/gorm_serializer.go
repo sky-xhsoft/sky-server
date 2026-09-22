@@ -11,11 +11,11 @@ import (
 // EncryptedString GORM 序列化器，自动加密/解密字符串字段
 //
 // 使用方式：
-//   1. 注册序列化器：fieldcrypto.RegisterSerializer(encryptor)
-//   2. 在模型字段上使用 tag：
-//        type User struct {
-//            SSN string `gorm:"column:SSN;serializer:encrypted"`
-//        }
+//  1. 注册序列化器：fieldcrypto.RegisterSerializer(encryptor)
+//  2. 在模型字段上使用 tag：
+//     type User struct {
+//     SSN string `gorm:"column:SSN;serializer:encrypted"`
+//     }
 type EncryptedString struct{}
 
 // 全局加密器（通过 RegisterSerializer 设置）

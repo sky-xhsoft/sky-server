@@ -9,12 +9,12 @@ type ForeignKeyOption struct {
 
 // ForeignKeyQuery 外键查询参数
 type ForeignKeyQuery struct {
-	TableID  uint   `json:"tableId"`
-	ColumnID *uint  `json:"columnId,omitempty"`
-	Search   string `json:"search,omitempty"`
+	TableID  uint                   `json:"tableId"`
+	ColumnID *uint                  `json:"columnId,omitempty"`
+	Search   string                 `json:"search,omitempty"`
 	Filters  map[string]interface{} `json:"filters,omitempty"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"pageSize"`
+	Page     int                    `json:"page"`
+	PageSize int                    `json:"pageSize"`
 }
 
 // ForeignKeyResult 外键查询结果

@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
@@ -52,8 +54,13 @@ func (h *LiveDomainHandler) AddDomain(c *gin.Context) {
 	})
 
 	if err != nil {
-		// 只返回简洁的错误信息，不显示腾讯云SDK的详细错误
-		utils.InternalError(c, "域名添加失败")
+		// 腾讯云业务错误: 域名已存在 -> 明确提示; 其他继续走 500
+		if strings.Contains(err.Error(), "DomainAlreadyExist") {
+			utils.BadRequest(c, fmt.Sprintf("域名 %s 已存在，请勿重复添加", req.DomainName))
+			return
+		}
+		// 返回腾讯云SDK的详细错误信息，便于前端定位
+		utils.InternalError(c, fmt.Sprintf("域名添加失败: %s", err.Error()))
 		return
 	}
 
@@ -241,17 +248,12 @@ func (h *LiveDomainHandler) VerifyDomainOwner(c *gin.Context) {
 		return
 	}
 
-	// 解析验证状态
+	// 解析验证状态（腾讯云文档 80524：Status >= 0 为已验证归属，< 0 为未验证归属权）
 	var statusText string
-	switch result.Status {
-	case 0:
-		statusText = "未验证"
-	case 1:
+	if result.Status >= 0 {
 		statusText = "验证成功"
-	case 2:
-		statusText = "验证失败"
-	default:
-		statusText = "未知状态"
+	} else {
+		statusText = "未验证"
 	}
 
 	utils.Success(c, gin.H{
@@ -259,5 +261,41 @@ func (h *LiveDomainHandler) VerifyDomainOwner(c *gin.Context) {
 		"statusText": statusText,
 		"content":    result.Content,
 		"mainDomain": result.MainDomain,
+	})
+}
+
+// GetDomainAuthKey 查询域名鉴权配置（推流/播放）
+// @Summary 查询域名鉴权配置
+// @Description 按域名类型查询推流或播放鉴权 Key
+// @Tags Live-Domain
+// @Accept json
+// @Produce json
+// @Param domainName path string true "域名"
+// @Param keyType query string false "鉴权类型：push(默认)-推流, play-播放"
+// @Success 200 {object} utils.Response{data=live.AuthKeyInfo}
+// @Router /api/v1/live/domains/{domainName}/auth [get]
+func (h *LiveDomainHandler) GetDomainAuthKey(c *gin.Context) {
+	domainName := c.Param("domainName")
+	if domainName == "" {
+		utils.BadRequest(c, "域名不能为空")
+		return
+	}
+
+	keyType := c.DefaultQuery("keyType", "push")
+
+	ctx := withCompanyID(c)
+	info, err := h.liveService.GetDomainAuthKey(ctx, domainName, keyType)
+	if err != nil {
+		utils.InternalError(c, "获取鉴权配置失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"domainName": info.DomainName,
+		"keyType":    keyType,
+		"enable":     info.Enable,
+		"masterKey":  info.MasterKey,
+		"backupKey":  info.BackupKey,
+		"authDelta":  info.AuthDelta,
 	})
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 )
 
@@ -19,6 +20,14 @@ type fakeCompanyService struct {
 
 func (m *fakeCompanyService) Register(ctx context.Context, req *company.RegisterRequest) error {
 	return m.registerErr
+}
+
+func (m *fakeCompanyService) GetCompanyConfig(ctx context.Context, companyID uint) (*entity.SysCompanyConf, error) {
+	return &entity.SysCompanyConf{}, nil
+}
+
+func (m *fakeCompanyService) UpdateCompanyConfig(ctx context.Context, companyID uint, req *company.UpdateCompanyConfigRequest) (*entity.SysCompanyConf, error) {
+	return &entity.SysCompanyConf{}, nil
 }
 
 func TestCompanyHandler_Register_InvalidBody(t *testing.T) {

@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type Service interface {
 	EnableDomain(ctx context.Context, domainName string) error
 	ForbidDomain(ctx context.Context, domainName string) error
 	AuthenticateDomainOwner(ctx context.Context, domainName string, verifyType string) (*tencentLive.DomainOwnerVerifyResult, error)
+	GetDomainAuthKey(ctx context.Context, domainName, keyType string) (*tencentLive.AuthKeyInfo, error)
 
 	// 流管理
 	DescribeStreamOnlineList(ctx context.Context, req *tencentLive.DescribeStreamOnlineListRequest) (*tencentLive.DescribeStreamOnlineListResponse, error)
@@ -30,6 +32,7 @@ type Service interface {
 	DescribeStreamEventList(ctx context.Context, req *tencentLive.DescribeStreamEventListRequest) (*tencentLive.DescribeStreamEventListResponse, error)
 	DropLiveStream(ctx context.Context, req *tencentLive.DropLiveStreamRequest) error
 	ResumeLiveStream(ctx context.Context, req *tencentLive.ResumeLiveStreamRequest) error
+	GetStreamMetrics(ctx context.Context, req *tencentLive.GetStreamMetricsRequest) (*tencentLive.StreamMetrics, error)
 
 	// 拉流管理
 	CreatePullStreamTask(ctx context.Context, req *tencentLive.CreatePullStreamTaskRequest) (string, error)
@@ -65,8 +68,8 @@ type liveService struct {
 }
 
 const (
-	// 域名列表缓存key
-	domainListCacheKey = "live:domains:list"
+	// 域名列表缓存key前缀
+	domainListCacheKeyPrefix = "live:domains:list:"
 	// 域名详情缓存key前缀
 	domainDetailCacheKeyPrefix = "live:domain:detail:"
 	// 缓存过期时间（5分钟）
@@ -171,7 +174,7 @@ func (s *liveService) DeleteDomain(ctx context.Context, domainName string) error
 func (s *liveService) DescribeDomain(ctx context.Context, domainName string) (*tencentLive.DomainInfo, error) {
 	// 尝试从缓存获取
 	if s.redisClient != nil {
-		cacheKey := domainDetailCacheKeyPrefix + domainName
+		cacheKey := s.domainDetailCacheKey(ctx, domainName)
 		cachedData, err := s.redisClient.Get(ctx, cacheKey).Result()
 		if err == nil && cachedData != "" {
 			var domainInfo tencentLive.DomainInfo
@@ -189,7 +192,7 @@ func (s *liveService) DescribeDomain(ctx context.Context, domainName string) (*t
 
 	// 写入缓存
 	if s.redisClient != nil && domainInfo != nil {
-		cacheKey := domainDetailCacheKeyPrefix + domainName
+		cacheKey := s.domainDetailCacheKey(ctx, domainName)
 		if data, err := json.Marshal(domainInfo); err == nil {
 			s.redisClient.Set(ctx, cacheKey, data, domainCacheExpiration)
 		}
@@ -201,7 +204,7 @@ func (s *liveService) DescribeDomain(ctx context.Context, domainName string) (*t
 func (s *liveService) ListDomains(ctx context.Context, domainType *int64) ([]*tencentLive.DomainInfo, error) {
 	// 尝试从缓存获取
 	if s.redisClient != nil {
-		cachedData, err := s.redisClient.Get(ctx, domainListCacheKey).Result()
+		cachedData, err := s.redisClient.Get(ctx, s.domainListCacheKey(ctx)).Result()
 		if err == nil && cachedData != "" {
 			var domains []*tencentLive.DomainInfo
 			if err := json.Unmarshal([]byte(cachedData), &domains); err == nil {
@@ -234,10 +237,10 @@ func (s *liveService) ListDomains(ctx context.Context, domainType *int64) ([]*te
 		}
 	}
 
-	// 写入缓存（缓存过滤后的域名）
-	if s.redisClient != nil && filteredDomains != nil {
+	if s.redisClient != nil {
+		cacheKey := s.domainListCacheKey(ctx)
 		if data, err := json.Marshal(filteredDomains); err == nil {
-			s.redisClient.Set(ctx, domainListCacheKey, data, domainCacheExpiration)
+			s.redisClient.Set(ctx, cacheKey, data, domainCacheExpiration)
 		}
 	}
 
@@ -277,23 +280,52 @@ func (s *liveService) ForbidDomain(ctx context.Context, domainName string) error
 	return nil
 }
 
-// clearDomainCache 清除域名列表缓存
+// domainListCacheKey 按公司生成域名列表缓存key
+func (s *liveService) domainListCacheKey(ctx context.Context) string {
+	return domainListCacheKeyPrefix + s.companyID(ctx)
+}
+
+// domainDetailCacheKey 按公司+域名生成详情缓存key
+func (s *liveService) domainDetailCacheKey(ctx context.Context, domainName string) string {
+	return domainDetailCacheKeyPrefix + s.companyID(ctx) + ":" + domainName
+}
+
+// companyID 从context中提取公司ID，未取到用1
+func (s *liveService) companyID(ctx context.Context) string {
+	if v := ctx.Value(contextutil.CompanyIDKey); v != nil {
+		if id, ok := v.(uint); ok && id != 0 {
+			return strconv.FormatUint(uint64(id), 10)
+		}
+	}
+	return "1"
+}
+
+// clearDomainCache 清除当前公司域名列表缓存
 func (s *liveService) clearDomainCache(ctx context.Context) {
 	if s.redisClient != nil {
-		s.redisClient.Del(ctx, domainListCacheKey)
+		s.redisClient.Del(ctx, s.domainListCacheKey(ctx))
 	}
 }
 
-// clearDomainDetailCache 清除域名详情缓存
+// clearDomainDetailCache 清除当前公司指定域名详情缓存
 func (s *liveService) clearDomainDetailCache(ctx context.Context, domainName string) {
 	if s.redisClient != nil {
-		cacheKey := domainDetailCacheKeyPrefix + domainName
+		cacheKey := s.domainDetailCacheKey(ctx, domainName)
 		s.redisClient.Del(ctx, cacheKey)
 	}
 }
 
 func (s *liveService) AuthenticateDomainOwner(ctx context.Context, domainName string, verifyType string) (*tencentLive.DomainOwnerVerifyResult, error) {
 	return s.getDomainManager(ctx).AuthenticateDomainOwner(ctx, domainName, verifyType)
+}
+
+func (s *liveService) GetDomainAuthKey(ctx context.Context, domainName, keyType string) (*tencentLive.AuthKeyInfo, error) {
+	mgr := s.getDomainManager(ctx)
+	// keyType: push-推流鉴权, play-播放鉴权
+	if keyType == "play" {
+		return mgr.GetPlayAuthKey(ctx, domainName)
+	}
+	return mgr.GetPushAuthKey(ctx, domainName)
 }
 
 // 流管理实现
@@ -315,6 +347,10 @@ func (s *liveService) DropLiveStream(ctx context.Context, req *tencentLive.DropL
 
 func (s *liveService) ResumeLiveStream(ctx context.Context, req *tencentLive.ResumeLiveStreamRequest) error {
 	return s.getStreamManager(ctx).ResumeLiveStream(ctx, req)
+}
+
+func (s *liveService) GetStreamMetrics(ctx context.Context, req *tencentLive.GetStreamMetricsRequest) (*tencentLive.StreamMetrics, error) {
+	return s.getStreamManager(ctx).GetStreamMetrics(ctx, req)
 }
 
 // 拉流管理实现

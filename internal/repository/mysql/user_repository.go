@@ -25,6 +25,17 @@ func (r *userRepository) GetUserByUsername(username string) (*entity.SysUser, er
 	return &user, nil
 }
 
+// GetUserByPhone 按手机号查用户（手机号登录）。手机号唯一，多个命中时取最新。
+func (r *userRepository) GetUserByPhone(phone string) (*entity.SysUser, error) {
+	var user entity.SysUser
+	err := r.db.Where("PHONE = ? AND IS_ACTIVE = ?", phone, "Y").
+		Order("ID DESC").First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (r *userRepository) GetUserByID(id uint) (*entity.SysUser, error) {
 	var user entity.SysUser
 	err := r.db.Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&user).Error

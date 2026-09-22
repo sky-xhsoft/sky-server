@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/contextutil"
 	"gorm.io/gorm"
 )
 
@@ -88,6 +89,11 @@ func (s *pullStreamTaskService) CreatePullStreamTask(ctx context.Context, task *
 		task.IsActive = "Y"
 	}
 
+	// 从context提取公司ID
+	if companyID, ok := ctx.Value(contextutil.CompanyIDKey).(uint); ok {
+		task.SysCompanyID = companyID
+	}
+
 	return s.db.WithContext(ctx).Create(task).Error
 }
 
@@ -98,15 +104,16 @@ func (s *pullStreamTaskService) UpdatePullStreamTask(ctx context.Context, task *
 	}
 
 	// 检查任务是否存在
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
 	var existingTask entity.PullStreamTask
-	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND IS_ACTIVE = ?", task.TaskID, "Y").First(&existingTask).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", task.TaskID, companyID, "Y").First(&existingTask).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("拉流任务不存在")
 		}
 		return err
 	}
 
-	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ?", task.TaskID).Updates(task).Error
+	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", task.TaskID, companyID).Updates(task).Error
 }
 
 // DeletePullStreamTask 删除拉流任务
@@ -115,8 +122,9 @@ func (s *pullStreamTaskService) DeletePullStreamTask(ctx context.Context, taskID
 		return errors.New("任务ID不能为空")
 	}
 
-	// 直接删除
-	return s.db.WithContext(ctx).Where("TASK_ID = ?", taskID).Delete(&entity.PullStreamTask{}).Error
+	// 直接删除（限本公司或公用）
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
+	return s.db.WithContext(ctx).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", taskID, companyID).Delete(&entity.PullStreamTask{}).Error
 }
 
 // GetPullStreamTask 获取拉流任务详情
@@ -126,7 +134,8 @@ func (s *pullStreamTaskService) GetPullStreamTask(ctx context.Context, taskID st
 	}
 
 	var task entity.PullStreamTask
-	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND IS_ACTIVE = ?", taskID, "Y").First(&task).Error; err != nil {
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
+	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", taskID, companyID, "Y").First(&task).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("拉流任务不存在")
 		}
@@ -139,6 +148,10 @@ func (s *pullStreamTaskService) GetPullStreamTask(ctx context.Context, taskID st
 // ListPullStreamTasks 查询拉流任务列表
 func (s *pullStreamTaskService) ListPullStreamTasks(ctx context.Context, filter *PullStreamTaskFilter) ([]*entity.PullStreamTask, int64, error) {
 	query := s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("IS_ACTIVE = ?", "Y")
+
+	// 公司过滤（0/-1为公用）
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
+	query = query.Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", companyID)
 
 	// 应用过滤条件
 	if filter.Region != "" {
@@ -193,7 +206,8 @@ func (s *pullStreamTaskService) DisablePullStreamTask(ctx context.Context, taskI
 
 	// 检查任务是否存在
 	var task entity.PullStreamTask
-	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND IS_ACTIVE = ?", taskID, "Y").First(&task).Error; err != nil {
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
+	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", taskID, companyID, "Y").First(&task).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("拉流任务不存在")
 		}
@@ -201,7 +215,7 @@ func (s *pullStreamTaskService) DisablePullStreamTask(ctx context.Context, taskI
 	}
 
 	// 更新状态为禁用
-	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ?", taskID).Updates(map[string]interface{}{
+	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", taskID, companyID).Updates(map[string]interface{}{
 		"STATUS":    "pause",
 		"IS_ACTIVE": "N",
 	}).Error
@@ -215,7 +229,8 @@ func (s *pullStreamTaskService) EnablePullStreamTask(ctx context.Context, taskID
 
 	// 检查任务是否存在
 	var task entity.PullStreamTask
-	if err := s.db.WithContext(ctx).Where("TASK_ID = ?", taskID).First(&task).Error; err != nil {
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
+	if err := s.db.WithContext(ctx).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", taskID, companyID).First(&task).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("拉流任务不存在")
 		}
@@ -223,7 +238,7 @@ func (s *pullStreamTaskService) EnablePullStreamTask(ctx context.Context, taskID
 	}
 
 	// 更新状态为启用
-	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ?", taskID).Updates(map[string]interface{}{
+	return s.db.WithContext(ctx).Model(&entity.PullStreamTask{}).Where("TASK_ID = ? AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", taskID, companyID).Updates(map[string]interface{}{
 		"STATUS":    "enable",
 		"IS_ACTIVE": "Y",
 	}).Error

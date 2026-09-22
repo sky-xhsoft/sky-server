@@ -65,8 +65,8 @@ func (s *service) Submit(ctx context.Context, tableName string, id uint, userID 
 
 		if hasStatusField {
 			if err := tx.Table(tableName).Where("ID = ?", id).Updates(map[string]interface{}{
-				"STATUS":    "submitted",
-				"UPDATE_BY": userID,
+				"STATUS":      "submitted",
+				"UPDATE_BY":   userID,
 				"UPDATE_TIME": time.Now(),
 			}).Error; err != nil {
 				return errors.Wrap(errors.ErrDatabase, "更新记录状态失败", err)
@@ -137,8 +137,8 @@ func (s *service) Unsubmit(ctx context.Context, tableName string, id uint, userI
 
 		if hasStatusField {
 			if err := tx.Table(tableName).Where("ID = ?", id).Updates(map[string]interface{}{
-				"STATUS":    "draft",
-				"UPDATE_BY": userID,
+				"STATUS":      "draft",
+				"UPDATE_BY":   userID,
 				"UPDATE_TIME": time.Now(),
 			}).Error; err != nil {
 				return errors.Wrap(errors.ErrDatabase, "更新记录状态失败", err)

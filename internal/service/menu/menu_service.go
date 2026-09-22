@@ -16,6 +16,9 @@ type Service interface {
 
 	// GetUserMenuTree 获取用户权限过滤后的菜单树
 	GetUserMenuTree(ctx context.Context, userID, companyID uint, systemType string) ([]*entity.MenuNode, error)
+
+	// GetSubsystems 获取全部启用的子系统列表（用于登录页动态渲染系统入口）
+	GetSubsystems(ctx context.Context) ([]*entity.SysSubsystem, error)
 }
 
 type service struct {
@@ -36,11 +39,14 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 	query := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ?", "Y")
 
-	// 如果指定了系统类型，则过滤子系统（包含通用子系统 KEY=NULL）
-	if systemType != "" {
-		query = query.Where("`KEY` = ? OR `KEY` IS NULL", systemType)
+	// 三个系统单独区分：live → 视频直播；cloud → 云存储；system → 系统管理（KEY 为 NULL）
+	// 后台管理类通用子系统（KEY=NULL）只归属「系统中心」，不随其他系统菜单混入
+	if systemType == "system" {
+		query = query.Where("`KEY` IS NULL")
+	} else if systemType == "live" || systemType == "cloud" {
+		query = query.Where("`KEY` = ?", systemType)
 	} else {
-		// 如果没有指定系统类型，返回所有子系统（包括系统管理等通用子系统）
+		// 未指定系统类型，返回所有子系统
 		query = query.Where("1=1")
 	}
 
@@ -63,14 +69,30 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 	var tables []entity.SysTable
 	if err := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ? AND IS_MENU = ?", "Y", "Y").
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0)", companyID).
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", companyID).
 		Order("ORDERNO ASC, ID ASC").
 		Find(&tables).Error; err != nil {
 		return nil, fmt.Errorf("查询菜单表失败: %w", err)
 	}
 
-	// 4. 构建树形结构
-	return s.buildMenuTree(subsystems, categories, tables), nil
+	// 4. 构建树形结构（两层：表类别 → 表，nil 表示不限制子系统）
+	subsystemIDs := make(map[uint]bool)
+	for _, sub := range subsystems {
+		subsystemIDs[sub.ID] = true
+	}
+	return s.buildMenuTree(subsystemIDs, categories, tables), nil
+}
+
+// GetSubsystems 获取全部启用的子系统列表
+func (s *service) GetSubsystems(ctx context.Context) ([]*entity.SysSubsystem, error) {
+	var subsystems []*entity.SysSubsystem
+	if err := s.db.WithContext(ctx).
+		Where("IS_ACTIVE = ?", "Y").
+		Order("ORDERNO ASC, ID ASC").
+		Find(&subsystems).Error; err != nil {
+		return nil, fmt.Errorf("查询子系统失败: %w", err)
+	}
+	return subsystems, nil
 }
 
 // GetUserMenuTree 获取用户权限过滤后的菜单树
@@ -150,7 +172,7 @@ func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint, s
 	var tables []entity.SysTable
 	query := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ? AND IS_MENU = ?", "Y", "Y").
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0)", companyID)
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", companyID)
 
 	if len(allowedTableIDs) > 0 {
 		query = query.Where("ID IN ?", allowedTableIDs)
@@ -163,13 +185,18 @@ func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint, s
 		return nil, fmt.Errorf("查询菜单表失败: %w", err)
 	}
 
-	// 7. 构建树形结构（会自动过滤空分支）
-	return s.buildMenuTree(subsystems, categories, tables), nil
+	// 7. 构建树形结构（两层：表类别 → 表，会自动过滤空分支）
+	subsystemIDs := make(map[uint]bool)
+	for _, sub := range subsystems {
+		subsystemIDs[sub.ID] = true
+	}
+	return s.buildMenuTree(subsystemIDs, categories, tables), nil
 }
 
-// buildMenuTree 构建三级菜单树
+// buildMenuTree 构建两级菜单树（表类别 → 表）
+// subsystemIDs 是允许的子系统 ID 集合（用于 systemType 过滤），nil 表示不限制
 func (s *service) buildMenuTree(
-	subsystems []entity.SysSubsystem,
+	subsystemIDs map[uint]bool,
 	categories []entity.SysTableCategory,
 	tables []entity.SysTable,
 ) []*entity.MenuNode {
@@ -191,10 +218,14 @@ func (s *service) buildMenuTree(
 		}
 	}
 
-	// 2. 将 categories 按 subsystem 分组，并添加子节点
-	categoriesBySubsystem := make(map[uint][]*entity.MenuNode)
+	// 2. 表类别提升为顶层分组（含子表），并按 subsystem 过滤
+	var result []*entity.MenuNode
 	for _, category := range categories {
-		// 只添加有子菜单的分类
+		// systemType 过滤：category 的子系统不在允许集合内则跳过（nil 表示不限制）
+		if subsystemIDs != nil && !subsystemIDs[category.SysSubsystemID] {
+			continue
+		}
+		// 只添加有子菜单的类别
 		if children, exists := tablesByCategory[category.ID]; exists && len(children) > 0 {
 			// 排序子菜单
 			sort.Slice(children, func(i, j int) bool {
@@ -204,49 +235,20 @@ func (s *service) buildMenuTree(
 				return children[i].ID < children[j].ID
 			})
 
-			categoriesBySubsystem[category.SysSubsystemID] = append(
-				categoriesBySubsystem[category.SysSubsystemID],
-				&entity.MenuNode{
-					ID:       category.ID,
-					Name:     category.Name,
-					EName:    category.EName,
-					Icon:     category.Icon,
-					URL:      category.URL,
-					OrderNo:  category.OrderNo,
-					Type:     "category",
-					Children: children,
-				},
-			)
-		}
-	}
-
-	// 3. 构建最终的树形结构
-	var result []*entity.MenuNode
-	for _, subsystem := range subsystems {
-		// 只添加有子菜单的子系统
-		if children, exists := categoriesBySubsystem[subsystem.ID]; exists && len(children) > 0 {
-			// 排序分类
-			sort.Slice(children, func(i, j int) bool {
-				if children[i].OrderNo != children[j].OrderNo {
-					return children[i].OrderNo < children[j].OrderNo
-				}
-				return children[i].ID < children[j].ID
-			})
-
 			result = append(result, &entity.MenuNode{
-				ID:       subsystem.ID,
-				Name:     subsystem.Name,
-				EName:    subsystem.EName,
-				Icon:     subsystem.Icon,
-				URL:      subsystem.URL,
-				OrderNo:  subsystem.OrderNo,
-				Type:     "subsystem",
+				ID:       category.ID,
+				Name:     category.Name,
+				EName:    category.EName,
+				Icon:     category.Icon,
+				URL:      category.URL,
+				OrderNo:  category.OrderNo,
+				Type:     "category",
 				Children: children,
 			})
 		}
 	}
 
-	// 4. 排序子系统
+	// 3. 排序顶层分组
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].OrderNo != result[j].OrderNo {
 			return result[i].OrderNo < result[j].OrderNo

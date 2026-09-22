@@ -56,7 +56,7 @@ func (m *mockMetadataService) GetMetadataVersion() string {
 }
 
 func (m *mockMetadataService) GetForeignKeyOptions(
-	tableID uint, columnID *uint, search string, page, pageSize int, userID uint,
+	tableID uint, columnID *uint, search string, filters map[string]string, page, pageSize int, userID uint,
 ) ([]map[string]interface{}, int64, string, error) {
 	return m.fkOptions, int64(len(m.fkOptions)), "N", m.fkOptionsErr
 }
@@ -65,6 +65,20 @@ func (m *mockMetadataService) GetForeignKeyDisplayValue(
 	tableID uint, value string, columnID *uint, userID uint,
 ) (string, error) {
 	return m.fkDisplay, m.fkDisplayErr
+}
+
+func (m *mockMetadataService) ResolveDisplayColumn(tableID uint, columnID *uint) (*entity.SysColumn, error) {
+	if m.columnsErr != nil {
+		return nil, m.columnsErr
+	}
+	if len(m.columns) > 0 {
+		return m.columns[0], nil
+	}
+	return nil, nil
+}
+
+func (m *mockMetadataService) ResolveInputColumn(tableID uint, columnID *uint) (*entity.SysColumn, error) {
+	return m.ResolveDisplayColumn(tableID, columnID)
 }
 
 // mockDictRepoForMeta mock DictRepository for metadata tests

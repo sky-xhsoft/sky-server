@@ -91,21 +91,21 @@ func (CloudQuota) TableName() string {
 // CloudUploadSession 云盘上传会话（用于分片上传和断点续传）
 type CloudUploadSession struct {
 	BaseModel
-	FileID         string     `gorm:"column:FILE_ID;size:64;not null;index" json:"fileId"`                   // 文件唯一标识（MD5）
-	UserID         uint       `gorm:"column:USER_ID;index;not null" json:"userId"`                           // 用户ID
-	FileName       string     `gorm:"column:FILE_NAME;size:255;not null" json:"fileName"`                    // 文件名
-	FileSize       int64      `gorm:"column:FILE_SIZE;not null" json:"fileSize"`                             // 文件总大小（字节）
-	FileType       string     `gorm:"column:FILE_TYPE;size:100" json:"fileType"`                             // 文件MIME类型
-	FolderID       *uint      `gorm:"column:FOLDER_ID;index" json:"folderId"`                                // 目标文件夹ID
-	ChunkSize      int        `gorm:"column:CHUNK_SIZE;not null;default:5242880" json:"chunkSize"`           // 分片大小（默认5MB）
-	TotalChunks    int        `gorm:"column:TOTAL_CHUNKS;not null" json:"totalChunks"`                       // 总分片数
-	UploadedChunks string     `gorm:"column:UPLOADED_CHUNKS;type:text" json:"uploadedChunks"`                // 已上传的分片索引（JSON数组）
-	Status         string     `gorm:"column:STATUS;size:20;not null;default:uploading;index" json:"status"`  // 状态：uploading,paused,completed,failed
-	StorageType    string     `gorm:"column:STORAGE_TYPE;size:20;not null;default:local" json:"storageType"` // 存储类型：local,oss
-	StoragePath    string     `gorm:"column:STORAGE_PATH;size:500" json:"storagePath"`                       // 临时存储路径
-	StorageUploadID string    `gorm:"column:STORAGE_UPLOAD_ID;size:200" json:"storageUploadId"`              // 存储端原生分块上传的UploadID（用于COS/OSS原生分块上传）
-	ExpireTime     *time.Time `gorm:"column:EXPIRE_TIME;not null;index" json:"expireTime"`                   // 过期时间
-	ErrorMessage   string     `gorm:"column:ERROR_MESSAGE;type:text" json:"errorMessage"`                    // 错误信息
+	FileID          string     `gorm:"column:FILE_ID;size:64;not null;index" json:"fileId"`                   // 文件唯一标识（MD5）
+	UserID          uint       `gorm:"column:USER_ID;index;not null" json:"userId"`                           // 用户ID
+	FileName        string     `gorm:"column:FILE_NAME;size:255;not null" json:"fileName"`                    // 文件名
+	FileSize        int64      `gorm:"column:FILE_SIZE;not null" json:"fileSize"`                             // 文件总大小（字节）
+	FileType        string     `gorm:"column:FILE_TYPE;size:100" json:"fileType"`                             // 文件MIME类型
+	FolderID        *uint      `gorm:"column:FOLDER_ID;index" json:"folderId"`                                // 目标文件夹ID
+	ChunkSize       int        `gorm:"column:CHUNK_SIZE;not null;default:5242880" json:"chunkSize"`           // 分片大小（默认5MB）
+	TotalChunks     int        `gorm:"column:TOTAL_CHUNKS;not null" json:"totalChunks"`                       // 总分片数
+	UploadedChunks  string     `gorm:"column:UPLOADED_CHUNKS;type:text" json:"uploadedChunks"`                // 已上传的分片索引（JSON数组）
+	Status          string     `gorm:"column:STATUS;size:20;not null;default:uploading;index" json:"status"`  // 状态：uploading,paused,completed,failed
+	StorageType     string     `gorm:"column:STORAGE_TYPE;size:20;not null;default:local" json:"storageType"` // 存储类型：local,oss
+	StoragePath     string     `gorm:"column:STORAGE_PATH;size:500" json:"storagePath"`                       // 临时存储路径
+	StorageUploadID string     `gorm:"column:STORAGE_UPLOAD_ID;size:200" json:"storageUploadId"`              // 存储端原生分块上传的UploadID（用于COS/OSS原生分块上传）
+	ExpireTime      *time.Time `gorm:"column:EXPIRE_TIME;not null;index" json:"expireTime"`                   // 过期时间
+	ErrorMessage    string     `gorm:"column:ERROR_MESSAGE;type:text" json:"errorMessage"`                    // 错误信息
 }
 
 // TableName 指定表名

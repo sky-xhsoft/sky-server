@@ -440,3 +440,29 @@ func (m *StreamManager) ResumeLiveStream(ctx context.Context, req *ResumeLiveStr
 
 	return nil
 }
+
+// StreamMetrics 直播流实时指标（当前为模拟数据，后续可接入腾讯云 API）
+type StreamMetrics struct {
+	StreamName string `json:"streamName"`
+	DomainName string `json:"domainName"`
+	AppName    string `json:"appName"`
+	Viewers    int64  `json:"viewers"`
+	Bitrate    int64  `json:"bitrate"`
+	Fps        int64  `json:"fps"`
+	Resolution string `json:"resolution"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
+// GetStreamMetricsRequest 获取流指标请求
+type GetStreamMetricsRequest struct {
+	DomainName string
+	AppName    string
+	StreamName string
+}
+
+// GetStreamMetrics 获取直播流实时指标
+func (m *StreamManager) GetStreamMetrics(ctx context.Context, req *GetStreamMetricsRequest) (*StreamMetrics, error) {
+	// 真实在线统计需调用腾讯云实时流统计接口（如 DescribeLiveStreamPlayInfoList）。
+	// 当前尚未接入，禁止返回模拟数据误导用户，改为明确拒绝。
+	return nil, fmt.Errorf("直播流实时指标尚未接入腾讯云统计，无法提供真实数据")
+}

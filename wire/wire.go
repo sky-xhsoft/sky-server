@@ -48,10 +48,10 @@ type App struct {
 	WSManager   *ws.Manager
 
 	// 仓储
-	UserRepo    repository.UserRepository
+	UserRepo     repository.UserRepository
 	MetadataRepo repository.MetadataRepository
-	DictRepo    repository.DictRepository
-	SeqRepo     repository.SequenceRepository
+	DictRepo     repository.DictRepository
+	SeqRepo      repository.SequenceRepository
 
 	// 核心服务
 	SSOService      sso.Service
@@ -74,7 +74,7 @@ type App struct {
 
 // --- 基础设施 ---
 
-func provideConfig() (*config.Config, error)      { return config.Load() }
+func provideConfig() (*config.Config, error)                { return config.Load() }
 func provideLogger(cfg *config.Config) (*zap.Logger, error) { return logger.Init(&cfg.Log) }
 func provideDB(cfg *config.Config, log *zap.Logger) (*gorm.DB, error) {
 	return mysqlRepo.Init(&cfg.Database.MySQL, log)
@@ -93,14 +93,26 @@ func provideTaskQueue(redisClient *redis.Client, log *zap.Logger) queue.Queue {
 
 // --- 仓储 ---
 
-func provideUserRepo(db *gorm.DB) repository.UserRepository               { return mysqlRepo.NewUserRepository(db) }
-func provideMetadataRepo(db *gorm.DB) repository.MetadataRepository        { return mysqlRepo.NewMetadataRepository(db) }
-func provideDictRepo(db *gorm.DB) repository.DictRepository                { return mysqlRepo.NewDictRepository(db) }
-func provideSeqRepo(db *gorm.DB) repository.SequenceRepository             { return mysqlRepo.NewSequenceRepository(db) }
-func provideCloudStorageConfigRepo(db *gorm.DB) repository.CloudStorageConfigRepository { return mysqlRepo.NewCloudStorageConfigRepository(db) }
-func provideSysCompanyConfRepo(db *gorm.DB) repository.SysCompanyConfRepository           { return mysqlRepo.NewSysCompanyConfRepository(db) }
-func provideLangRepo(db *gorm.DB) repository.LanguageRepository              { return mysqlRepo.NewLanguageRepository(db) }
-func provideTransRepo(db *gorm.DB) repository.TranslationRepository          { return mysqlRepo.NewTranslationRepository(db) }
+func provideUserRepo(db *gorm.DB) repository.UserRepository { return mysqlRepo.NewUserRepository(db) }
+func provideMetadataRepo(db *gorm.DB) repository.MetadataRepository {
+	return mysqlRepo.NewMetadataRepository(db)
+}
+func provideDictRepo(db *gorm.DB) repository.DictRepository { return mysqlRepo.NewDictRepository(db) }
+func provideSeqRepo(db *gorm.DB) repository.SequenceRepository {
+	return mysqlRepo.NewSequenceRepository(db)
+}
+func provideCloudStorageConfigRepo(db *gorm.DB) repository.CloudStorageConfigRepository {
+	return mysqlRepo.NewCloudStorageConfigRepository(db)
+}
+func provideSysCompanyConfRepo(db *gorm.DB) repository.SysCompanyConfRepository {
+	return mysqlRepo.NewSysCompanyConfRepository(db)
+}
+func provideLangRepo(db *gorm.DB) repository.LanguageRepository {
+	return mysqlRepo.NewLanguageRepository(db)
+}
+func provideTransRepo(db *gorm.DB) repository.TranslationRepository {
+	return mysqlRepo.NewTranslationRepository(db)
+}
 
 // --- 服务 ---
 
@@ -130,8 +142,8 @@ func provideActionService(db *gorm.DB, metadataService metadata.Service, groupsS
 func provideWorkflowService(db *gorm.DB, actionService action.Service) workflow.Service {
 	return workflow.NewService(db, actionService)
 }
-func provideAuditService(db *gorm.DB) audit.Service                 { return audit.NewService(db) }
-func provideMenuService(db *gorm.DB) menu.Service                   { return menu.NewService(db) }
+func provideAuditService(db *gorm.DB) audit.Service { return audit.NewService(db) }
+func provideMenuService(db *gorm.DB) menu.Service   { return menu.NewService(db) }
 func provideFileService(db *gorm.DB, cfg *config.Config) file.Service {
 	return file.NewService(db, &file.Config{UploadDir: cfg.File.UploadDir, MaxFileSize: cfg.File.MaxFileSize, AllowedExts: cfg.File.AllowedExts})
 }
@@ -141,7 +153,9 @@ func provideMessageService(db *gorm.DB, wsManager *ws.Manager) message.Service {
 func provideEmailService(cfg *config.Config, taskQueue queue.Queue) emailSvc.Service {
 	return emailSvc.NewServiceWithQueue(&cfg.Email, taskQueue)
 }
-func provideCompanyService(db *gorm.DB) company.Service { return company.NewService(db) }
+func provideCompanyService(db *gorm.DB, confRepo repository.SysCompanyConfRepository) company.Service {
+	return company.NewService(db, confRepo)
+}
 func provideLanguageService(langRepo repository.LanguageRepository, transRepo repository.TranslationRepository,
 	redisClient *redis.Client, log *zap.Logger, cfg *config.Config) language.Service {
 	return language.NewService(langRepo, transRepo, redisClient, log, cfg.Cache.LanguageTTL)
@@ -153,7 +167,7 @@ func InitializeApp() (*App, error) {
 		provideConfig, provideLogger, provideDB, provideRedis, provideJWT, provideDBMonitor,
 		provideWSManager, provideTaskQueue,
 		provideUserRepo, provideMetadataRepo, provideDictRepo, provideSeqRepo,
-		provideLangRepo, provideTransRepo,
+		provideLangRepo, provideTransRepo, provideSysCompanyConfRepo,
 		provideSSOService, provideMetadataService, provideDictService, provideSequenceService,
 		provideGroupsService, provideIDGenService, provideCRUDService, provideActionService,
 		provideWorkflowService, provideAuditService, provideMenuService, provideFileService,

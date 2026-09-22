@@ -80,6 +80,9 @@ func (m *fakeCrudService) Export(ctx context.Context, tableName string, filters 
 func (m *fakeCrudService) Import(ctx context.Context, tableName string, file multipart.File, userID uint) (int, error) {
 	return m.importCount, m.importErr
 }
+func (m *fakeCrudService) ImportTemplate(ctx context.Context, tableName string, userID uint) (*excelize.File, error) {
+	return excelize.NewFile(), nil
+}
 
 func TestCrudHandler_GetOne_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)

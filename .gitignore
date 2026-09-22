@@ -26,6 +26,7 @@ go.work.sum
 
 # env file
 .env
+.env.bak
 
 # Local configuration (contains secrets)
 configs/config.yaml
@@ -48,3 +49,5 @@ session.json
 
 
 .venv
+# Large DB export snapshots
+sqls/skyserver_full_export_*.sql

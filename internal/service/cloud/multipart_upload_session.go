@@ -155,7 +155,7 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		TotalChunks:     totalChunks,
 		UploadedChunks:  "[]",
 		Status:          "uploading",
-		StorageType:     storageType, // 使用公司配置的正确存储类型，而不是前端请求的
+		StorageType:     storageType,      // 使用公司配置的正确存储类型，而不是前端请求的
 		StoragePath:     finalStoragePath, // 使用最终路径而不是临时路径，原生分块直接上传到最终位置
 		StorageUploadID: "",
 		ExpireTime:      &expireTime,

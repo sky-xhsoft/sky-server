@@ -65,7 +65,9 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 	// 收集所有需要的字典ID
 	dictIDs := make(map[uint]bool)
 	for _, col := range columns {
-		if col.SetValueType == "select" && col.SysDictID != "" {
+		// 只要字段配置了字典(SYS_DICT_ID非空)就装配dictData，不依赖SET_VALUE_TYPE
+		// 这样 select/radio/tag/combobox 等任何字典控件的前端下拉与列表显示都能稳定取到字典项
+		if col.SysDictID != "" {
 			// SysDictID 是字符串，需要转换为uint
 			dictID, err := strconv.ParseUint(col.SysDictID, 10, 32)
 			if err != nil {
@@ -113,7 +115,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 			// 收集子表的字典ID
 			childDictIDs := make(map[uint]bool)
 			for _, col := range childColumns {
-				if col.SetValueType == "select" && col.SysDictID != "" {
+				if col.SysDictID != "" {
 					dictID, err := strconv.ParseUint(col.SysDictID, 10, 32)
 					if err != nil {
 						logger.Warn("Invalid dict ID format for child column", zap.String("column", col.DbName), zap.String("dictId", col.SysDictID))
@@ -323,6 +325,8 @@ func (h *MetadataHandler) GetForeignKeyOptions(c *gin.Context) {
 	}
 
 	search := c.Query("search")
+	// 多查询条件：filters[key]=value，解析为 map 传给 service 做等值过滤
+	filters := c.QueryMap("filters")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "100"))
 
@@ -333,7 +337,7 @@ func (h *MetadataHandler) GetForeignKeyOptions(c *gin.Context) {
 		return
 	}
 
-	options, total, isDropdown, err := h.metadataService.GetForeignKeyOptions(uint(tableID), columnID, search, page, pageSize, userID.(uint))
+	options, total, isDropdown, err := h.metadataService.GetForeignKeyOptions(uint(tableID), columnID, search, filters, page, pageSize, userID.(uint))
 	if err != nil {
 		utils.InternalError(c, "获取外键选项失败: "+err.Error())
 		return

@@ -7,10 +7,51 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 )
+
+// 默认安全的环境变量前缀
+var allowedEnvPrefixes = []string{
+	"PATH", "HOME", "TEMP", "TMP", "LANG", "LC_", "TERM",
+}
+
+// 验证脚本类型是否被允许
+func ValidateScriptType(scriptType ScriptType, allowedTypes []ScriptType) bool {
+	if len(allowedTypes) == 0 {
+		return false
+	}
+	for _, t := range allowedTypes {
+		if t == scriptType {
+			return true
+		}
+	}
+	return false
+}
+
+// 过滤环境变量，只保留安全的
+func filterEnvVars(env []string) []string {
+	var filtered []string
+	for _, e := range env {
+		// 检查是否有允许的变量名或变量名前缀
+		for _, prefix := range allowedEnvPrefixes {
+			if strings.HasSuffix(prefix, "_") {
+				if strings.HasPrefix(e, prefix) {
+					filtered = append(filtered, e)
+					break
+				}
+				continue
+			}
+			if strings.HasPrefix(e, prefix+"=") {
+				filtered = append(filtered, e)
+				break
+			}
+		}
+	}
+	return filtered
+}
 
 // ScriptExecutor 脚本执行器接口
 type ScriptExecutor interface {
@@ -80,7 +121,7 @@ func (e *bashExecutor) Execute(ctx context.Context, script string, params map[st
 	cmd.Stderr = &stderr
 
 	// 设置环境变量
-	cmd.Env = os.Environ()
+	cmd.Env = filterEnvVars(os.Environ())
 	for key, value := range params {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%v", key, value))
 	}
@@ -157,7 +198,7 @@ func (e *pythonExecutor) Execute(ctx context.Context, script string, params map[
 	cmd.Stderr = &stderr
 
 	// 设置环境变量
-	cmd.Env = os.Environ()
+	cmd.Env = filterEnvVars(os.Environ())
 	for key, value := range params {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%v", key, value))
 	}
@@ -241,7 +282,7 @@ func (e *jsExecutor) Execute(ctx context.Context, script string, params map[stri
 	cmd.Stderr = &stderr
 
 	// 设置环境变量
-	cmd.Env = os.Environ()
+	cmd.Env = filterEnvVars(os.Environ())
 	for key, value := range params {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%v", key, value))
 	}

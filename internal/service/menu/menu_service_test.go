@@ -147,13 +147,9 @@ func TestBuildMenuTree_PreservesOrder(t *testing.T) {
 	db := setupMenuTestDB(t)
 	s := &service{db: db}
 
-	subsystems := []entity.SysSubsystem{
-		{BaseModel: entity.BaseModel{ID: 2}, Name: "Second", OrderNo: 20},
-		{BaseModel: entity.BaseModel{ID: 1}, Name: "First", OrderNo: 10},
-	}
 	categories := []entity.SysTableCategory{
 		{BaseModel: entity.BaseModel{ID: 1}, SysSubsystemID: 1, Name: "Cat1", OrderNo: 10},
-		{BaseModel: entity.BaseModel{ID: 2}, SysSubsystemID: 2, Name: "Cat2", OrderNo: 10},
+		{BaseModel: entity.BaseModel{ID: 2}, SysSubsystemID: 2, Name: "Cat2", OrderNo: 20},
 	}
 	cat1ID := uint(1)
 	cat2ID := uint(2)
@@ -162,13 +158,24 @@ func TestBuildMenuTree_PreservesOrder(t *testing.T) {
 		{BaseModel: entity.BaseModel{ID: 2}, Name: "tbl2", SysTableCategoryID: &cat2ID, IsMenu: "Y", OrderNo: 10},
 	}
 
-	tree := s.buildMenuTree(subsystems, categories, tables)
+	// 允许的子系统集合（含 1、2）
+	subsystemIDs := map[uint]bool{1: true, 2: true}
+	tree := s.buildMenuTree(subsystemIDs, categories, tables)
 	if len(tree) != 2 {
 		t.Fatalf("Expected 2 root nodes, got %d", len(tree))
 	}
-	// 按 OrderNo 升序：First (10) 在前
-	if tree[0].Name != "First" {
-		t.Errorf("Expected First in front, got %s", tree[0].Name)
+	// 顶层现在是表类别，按 OrderNo 升序：Cat1 (10) 在前
+	if tree[0].Name != "Cat1" {
+		t.Errorf("Expected Cat1 in front, got %s", tree[0].Name)
+	}
+	// 验证子节点
+	if len(tree[0].Children) != 1 || tree[0].Children[0].Name != "tbl1" {
+		t.Errorf("Expected Cat1 to have tbl1 child")
+	}
+	// 验证过滤：子系统 3 不在集合内，其类别应被过滤
+	filtered := s.buildMenuTree(map[uint]bool{1: true}, categories, tables)
+	if len(filtered) != 1 || filtered[0].Name != "Cat1" {
+		t.Errorf("Expected only Cat1 after filtering to subsystem 1, got %d nodes", len(filtered))
 	}
 }
 
@@ -176,16 +183,13 @@ func TestBuildMenuTree_FiltersEmptyBranches(t *testing.T) {
 	db := setupMenuTestDB(t)
 	s := &service{db: db}
 
-	// 子系统、分类都有，但没有表 - 应被过滤
-	subsystems := []entity.SysSubsystem{
-		{BaseModel: entity.BaseModel{ID: 1}, Name: "Empty Sys"},
-	}
+	// 分类有但没有表 - 应被过滤
 	categories := []entity.SysTableCategory{
 		{BaseModel: entity.BaseModel{ID: 1}, SysSubsystemID: 1, Name: "Empty Cat"},
 	}
 	tables := []entity.SysTable{} // 无表
 
-	tree := s.buildMenuTree(subsystems, categories, tables)
+	tree := s.buildMenuTree(map[uint]bool{1: true}, categories, tables)
 	if len(tree) != 0 {
 		t.Errorf("Empty branches should be filtered, got %d nodes", len(tree))
 	}

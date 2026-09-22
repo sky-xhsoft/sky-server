@@ -2,8 +2,8 @@ package handler
 
 import (
 	"bytes"
-	stderrors "errors"
 	"encoding/json"
+	stderrors "errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,13 +14,13 @@ import (
 
 // fakeSequenceService 实现 sequence.Service 接口
 type fakeSequenceService struct {
-	nextValue        string
-	nextErr          error
-	currentValue     string
-	currentErr       error
-	resetErr         error
-	previewValue     string
-	previewErr       error
+	nextValue    string
+	nextErr      error
+	currentValue string
+	currentErr   error
+	resetErr     error
+	previewValue string
+	previewErr   error
 }
 
 func (m *fakeSequenceService) NextValue(seqName string) (string, error) {

@@ -25,12 +25,12 @@ type Stats struct {
 
 // Monitor 数据库监控器
 type Monitor struct {
-	db         *gorm.DB
-	interval   time.Duration
-	mu         sync.RWMutex
-	lastStats  *Stats
-	stopCh     chan struct{}
-	running    bool
+	db        *gorm.DB
+	interval  time.Duration
+	mu        sync.RWMutex
+	lastStats *Stats
+	stopCh    chan struct{}
+	running   bool
 }
 
 // NewMonitor 创建数据库监控器

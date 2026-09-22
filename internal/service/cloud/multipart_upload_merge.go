@@ -151,9 +151,10 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 
 						newFile := &entity.CloudItem{
 							BaseModel: entity.BaseModel{
-								CreateBy: s.getUsernameByID(ctx, userID),
-								UpdateBy: s.getUsernameByID(ctx, userID),
-								IsActive: "Y",
+								CreateBy:     s.getUsernameByID(ctx, userID),
+								UpdateBy:     s.getUsernameByID(ctx, userID),
+								IsActive:     "Y",
+								SysCompanyID: s.cloudService.GetUserCompanyID(ctx, userID),
 							},
 							ItemType:    "file",
 							Name:        session.FileName,
@@ -208,9 +209,10 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 
 					file := &entity.CloudItem{
 						BaseModel: entity.BaseModel{
-							CreateBy: s.getUsernameByID(ctx, userID),
-							UpdateBy: s.getUsernameByID(ctx, userID),
-							IsActive: "Y",
+							CreateBy:     s.getUsernameByID(ctx, userID),
+							UpdateBy:     s.getUsernameByID(ctx, userID),
+							IsActive:     "Y",
+							SysCompanyID: s.cloudService.GetUserCompanyID(ctx, userID),
 						},
 						ItemType:    "file",
 						Name:        session.FileName,
@@ -292,9 +294,10 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 
 		newFile := &entity.CloudItem{
 			BaseModel: entity.BaseModel{
-				CreateBy: s.getUsernameByID(ctx, userID),
-				UpdateBy: s.getUsernameByID(ctx, userID),
-				IsActive: "Y",
+				CreateBy:     s.getUsernameByID(ctx, userID),
+				UpdateBy:     s.getUsernameByID(ctx, userID),
+				IsActive:     "Y",
+				SysCompanyID: s.cloudService.GetUserCompanyID(ctx, userID),
 			},
 			ItemType:    "file",
 			Name:        session.FileName,
@@ -419,9 +422,10 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 	// 7. 创建文件记录
 	file := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
-			CreateBy: s.getUsernameByID(ctx, userID),
-			UpdateBy: s.getUsernameByID(ctx, userID),
-			IsActive: "Y",
+			CreateBy:     s.getUsernameByID(ctx, userID),
+			UpdateBy:     s.getUsernameByID(ctx, userID),
+			IsActive:     "Y",
+			SysCompanyID: s.cloudService.GetUserCompanyID(ctx, userID),
 		},
 		ItemType:    "file",
 		Name:        session.FileName,
@@ -505,9 +509,10 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 
 		newFile := &entity.CloudItem{
 			BaseModel: entity.BaseModel{
-				CreateBy: s.getUsernameByID(ctx, userID),
-				UpdateBy: s.getUsernameByID(ctx, userID),
-				IsActive: "Y",
+				CreateBy:     s.getUsernameByID(ctx, userID),
+				UpdateBy:     s.getUsernameByID(ctx, userID),
+				IsActive:     "Y",
+				SysCompanyID: s.cloudService.GetUserCompanyID(ctx, userID),
 			},
 			ItemType:    "file",
 			Name:        session.FileName,
@@ -653,9 +658,10 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 	// 8. 创建文件记录
 	file := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
-			CreateBy: s.getUsernameByID(ctx, userID),
-			UpdateBy: s.getUsernameByID(ctx, userID),
-			IsActive: "Y",
+			CreateBy:     s.getUsernameByID(ctx, userID),
+			UpdateBy:     s.getUsernameByID(ctx, userID),
+			IsActive:     "Y",
+			SysCompanyID: s.cloudService.GetUserCompanyID(ctx, userID),
 		},
 		ItemType:    "file",
 		Name:        session.FileName,

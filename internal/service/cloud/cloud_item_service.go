@@ -14,28 +14,39 @@ import (
 
 // CloudItem 相关方法
 
-// CreateItem 创建项目（文件或文件夹）
+// CreateItem 创建项目（文件或文件夹）— 写入公司归属 (SysCompanyID)
 func (s *service) CreateItem(ctx context.Context, item *entity.CloudItem) error {
+	if item.OwnerID != 0 {
+		item.SysCompanyID = s.getUserCompanyID(ctx, item.OwnerID)
+	} else if item.SysCompanyID == 0 {
+		item.SysCompanyID = 0 // 无属主则公用
+	}
 	return s.db.WithContext(ctx).Create(item).Error
 }
 
-// GetItem 获取项目（文件或文件夹）
+// GetItem 获取项目（文件或文件夹）— 公司隔离 + 用户权限判定
 func (s *service) GetItem(ctx context.Context, itemID uint, userID uint) (*entity.CloudItem, error) {
+	companyID := s.getUserCompanyID(ctx, userID)
 	var item entity.CloudItem
 	err := s.db.WithContext(ctx).
-		Where("ID = ? AND OWNER_ID = ? AND IS_ACTIVE = ?", itemID, userID, "Y").
+		Where("ID = ? AND IS_ACTIVE = ?", itemID, "Y").
 		First(&item).Error
 	if err != nil {
 		return nil, err
 	}
+	// 权限判定：所有者 或 权限表命中读，且满足公司范围
+	if !s.canAccessRead(ctx, &item, userID, companyID) {
+		return nil, errors.PermissionDenied
+	}
 	return &item, nil
 }
 
-// ListItems 列出项目（文件+文件夹）
+// ListItems 列出项目（文件+文件夹）— 公司隔离 + 用户权限过滤
 func (s *service) ListItems(ctx context.Context, parentID *uint, userID uint) ([]*entity.CloudItem, error) {
-	var items []*entity.CloudItem
+	companyID := s.getUserCompanyID(ctx, userID)
+	var allItems []*entity.CloudItem
 	query := s.db.WithContext(ctx).
-		Where("OWNER_ID = ? AND IS_ACTIVE = ?", userID, "Y")
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", companyID, "Y")
 
 	if parentID == nil {
 		query = query.Where("PARENT_ID IS NULL")
@@ -43,26 +54,44 @@ func (s *service) ListItems(ctx context.Context, parentID *uint, userID uint) ([
 		query = query.Where("PARENT_ID = ?", *parentID)
 	}
 
-	err := query.Order("ITEM_TYPE DESC, NAME ASC").Find(&items).Error // 文件夹优先
-	if err != nil {
+	if err := query.Order("ITEM_TYPE DESC, NAME ASC").Find(&allItems).Error; err != nil {
 		return nil, err
+	}
+
+	// 过滤：所有者 或 权限表命中读
+	items := make([]*entity.CloudItem, 0, len(allItems))
+	for _, it := range allItems {
+		if s.canAccessRead(ctx, it, userID, companyID) {
+			items = append(items, it)
+		}
 	}
 	return items, nil
 }
 
-// UpdateItem 更新项目
+// UpdateItem 更新项目 — 写权限判定
 func (s *service) UpdateItem(ctx context.Context, item *entity.CloudItem) error {
+	// 写权限判定（item.OwnerID 为操作者）
+	hasWrite, err := s.HasItemWritePermission(ctx, item.ID, item.OwnerID)
+	if err != nil || !hasWrite {
+		return errors.PermissionDenied
+	}
 	return s.db.WithContext(ctx).
-		Where("ID = ? AND OWNER_ID = ? AND IS_ACTIVE = ?", item.ID, item.OwnerID, "Y").
+		Where("ID = ? AND IS_ACTIVE = ?", item.ID, "Y").
 		Updates(item).Error
 }
 
 // DeleteItem 删除项目（软删除）
 func (s *service) DeleteItem(ctx context.Context, itemID uint, userID uint) error {
-	// 先获取项目信息
+	// 先获取项目信息（会做读权限判定）
 	item, err := s.GetItem(ctx, itemID, userID)
 	if err != nil {
 		return err
+	}
+
+	// 写权限判定：所有者或权限表命中写
+	hasWrite, err := s.HasItemWritePermission(ctx, itemID, userID)
+	if err != nil || !hasWrite {
+		return errors.PermissionDenied
 	}
 
 	// 如果是文件，删除物理存储
@@ -71,15 +100,15 @@ func (s *service) DeleteItem(ctx context.Context, itemID uint, userID uint) erro
 		storageInstance, err := s.getCompanyStorage(ctx, userID)
 		if err == nil {
 			if err := storageInstance.Delete(ctx, *item.StoragePath); err != nil {
-		logger.Warn("Storage delete failed for item", zap.Uint("itemId", item.ID), zap.Error(err))
-	}
+				logger.Warn("Storage delete failed for item", zap.Uint("itemId", item.ID), zap.Error(err))
+			}
 		}
 	}
 
 	// 软删除数据库记录
 	return s.db.WithContext(ctx).
 		Model(&entity.CloudItem{}).
-		Where("ID = ? AND OWNER_ID = ?", itemID, userID).
+		Where("ID = ? AND IS_ACTIVE = ?", itemID, "Y").
 		Update("IS_ACTIVE", "N").Error
 }
 
@@ -108,8 +137,8 @@ func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, user
 				storageInstance, err := s.getCompanyStorage(ctx, userID)
 				if err == nil {
 					if err := storageInstance.Delete(ctx, *child.StoragePath); err != nil {
-		logger.Warn("Storage delete failed for child item", zap.Uint("itemId", child.ID), zap.Error(err))
-	}
+						logger.Warn("Storage delete failed for child item", zap.Uint("itemId", child.ID), zap.Error(err))
+					}
 				}
 			}
 		}
@@ -136,10 +165,16 @@ func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, user
 
 // MoveItem 移动项目到新的父文件夹
 func (s *service) MoveItem(ctx context.Context, itemID uint, targetParentID *uint, userID uint) error {
-	// 检查项目是否存在
+	// 检查项目是否存在（含读权限判定）
 	item, err := s.GetItem(ctx, itemID, userID)
 	if err != nil {
 		return errors.ResourceNotFound
+	}
+
+	// 写权限判定
+	hasWrite, err := s.HasItemWritePermission(ctx, itemID, userID)
+	if err != nil || !hasWrite {
+		return errors.PermissionDenied
 	}
 
 	// 检查目标文件夹是否存在（如果不是根目录）
@@ -207,6 +242,12 @@ func (s *service) RenameItem(ctx context.Context, itemID uint, newName string, u
 	item, err := s.GetItem(ctx, itemID, userID)
 	if err != nil {
 		return errors.ResourceNotFound
+	}
+
+	// 写权限判定
+	hasWrite, err := s.HasItemWritePermission(ctx, itemID, userID)
+	if err != nil || !hasWrite {
+		return errors.PermissionDenied
 	}
 
 	// 检查同级是否已存在同名项目

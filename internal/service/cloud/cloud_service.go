@@ -30,6 +30,13 @@ type Service interface {
 	MoveItem(ctx context.Context, itemID uint, targetParentID *uint, userID uint) error
 	RenameItem(ctx context.Context, itemID uint, newName string, userID uint) error
 
+	// 云盘项目权限管理
+	SetItemPermission(ctx context.Context, itemID uint, req *SetItemPermissionRequest, userID uint) error
+	ListItemPermissions(ctx context.Context, itemID uint, userID uint) ([]*entity.CloudItemPermission, error)
+	RemoveItemPermission(ctx context.Context, itemID uint, permID uint, userID uint) error
+	HasItemWritePermission(ctx context.Context, itemID uint, userID uint) (bool, error)
+	GetUserCompanyID(ctx context.Context, userID uint) uint
+
 	// 文件夹管理
 	CreateFolder(ctx context.Context, req *CreateFolderRequest, userID uint) (*entity.CloudFolder, error)
 	ListFolders(ctx context.Context, parentID *uint, userID uint) ([]*entity.CloudFolder, error)
@@ -185,9 +192,10 @@ func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, us
 	username := s.getUsernameByID(ctx, userID)
 	item := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
-			CreateBy: username,
-			UpdateBy: username,
-			IsActive: "Y",
+			CreateBy:     username,
+			UpdateBy:     username,
+			IsActive:     "Y",
+			SysCompanyID: s.getUserCompanyID(ctx, userID),
 		},
 		ItemType:    "folder",
 		Name:        req.Name,
@@ -425,9 +433,10 @@ func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID
 	fileType := req.FileType
 	item := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
-			CreateBy: username,
-			UpdateBy: username,
-			IsActive: "Y",
+			CreateBy:     username,
+			UpdateBy:     username,
+			IsActive:     "Y",
+			SysCompanyID: s.getUserCompanyID(ctx, userID),
 		},
 		ItemType: "file",
 		Name:     req.FileName,

@@ -27,16 +27,16 @@ func TestSanitizeIdentifier_Valid(t *testing.T) {
 
 func TestSanitizeIdentifier_Invalid(t *testing.T) {
 	invalid := []string{
-		"",                  // 空
-		"1table",            // 数字开头
-		"my-table",          // 含横线
-		"my table",          // 含空格
-		"my;table",          // SQL 注入字符
-		"table'name",        // 引号
-		"DROP TABLE users",  // SQL 注入
-		"table/*comment*/",  // 注释字符
-		"my.table",          // 含点
-		"my(table)",         // 含括号
+		"",                 // 空
+		"1table",           // 数字开头
+		"my-table",         // 含横线
+		"my table",         // 含空格
+		"my;table",         // SQL 注入字符
+		"table'name",       // 引号
+		"DROP TABLE users", // SQL 注入
+		"table/*comment*/", // 注释字符
+		"my.table",         // 含点
+		"my(table)",        // 含括号
 	}
 
 	for _, name := range invalid {

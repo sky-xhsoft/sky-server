@@ -36,6 +36,9 @@ type Service interface {
 
 	// 修改密码
 	ChangePassword(userID uint, oldPassword string, newPassword string) error
+
+	// 获取当前登录用户信息
+	GetCurrentUser(userID uint) (*CurrentUserResponse, error)
 }
 
 // LoginRequest 登录请求
@@ -66,11 +69,23 @@ type TokenResponse struct {
 	ExpiresIn int    `json:"expiresIn"`
 }
 
+// CurrentUserResponse 当前登录用户信息响应
+type CurrentUserResponse struct {
+	User        *UserInfo              `json:"user"`
+	Company     *entity.SysCompany     `json:"company"`
+	CompanyConf *entity.SysCompanyConf `json:"companyConf"`
+}
+
 // UserInfo 用户信息
 type UserInfo struct {
 	ID        uint   `json:"id"`
 	Username  string `json:"username"`
 	TrueName  string `json:"trueName"`
+	Phone     string `json:"phone"`
+	Email     string `json:"email"`
+	Language  string `json:"language"`
+	Timezone  string `json:"timezone"`
+	Currency  string `json:"currency"`
 	IsAdmin   string `json:"isAdmin"`
 	CompanyID uint   `json:"companyId"`
 }
@@ -104,16 +119,35 @@ func NewService(userRepo repository.UserRepository, jwtUtil *jwt.JWT, accessToke
 	}
 }
 
-// Login 登录
+// isPhone 判断登录输入是否为手机号（中国大陆 11 位纯数字）
+func isPhone(s string) bool {
+	if len(s) != 11 {
+		return false
+	}
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// Login 登录。支持用户名或手机号登录，自动定位所属公司。
 func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
-	// 查询用户
 	user, err := s.userRepo.GetUserByUsername(req.Username)
 	if err != nil {
-		return nil, errors.InvalidCredentials
+		if isPhone(req.Username) {
+			user, err = s.userRepo.GetUserByPhone(req.Username)
+			if err != nil {
+				return nil, errors.InvalidCredentials
+			}
+		} else {
+			return nil, errors.InvalidCredentials
+		}
 	}
 
-	// 验证公司ID（如果提供了，且公司已配置域名）
-	if req.CompanyID != nil && user.SysCompanyID != *req.CompanyID {
+	// 验证公司ID（仅用户名登录时校验；手机号登录唯一标识用户，跳过域名强制校验）
+	if req.CompanyID != nil && user.SysCompanyID != *req.CompanyID && !isPhone(req.Username) {
 		// 检查公司是否配置了域名，未配置则不校验
 		company, _ := s.userRepo.GetCompanyByID(user.SysCompanyID)
 		if company != nil && company.Domain != nil && *company.Domain != "" {
@@ -213,6 +247,11 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 			ID:        user.ID,
 			Username:  user.Username,
 			TrueName:  user.TrueName,
+			Phone:     user.Phone,
+			Email:     user.Email,
+			Language:  user.Language,
+			Timezone:  user.Timezone,
+			Currency:  user.Currency,
 			IsAdmin:   user.IsAdmin,
 			CompanyID: user.SysCompanyID,
 		},
@@ -374,6 +413,54 @@ func (s *service) ChangePassword(userID uint, oldPassword string, newPassword st
 	}
 
 	return nil
+}
+
+// GetCurrentUser 获取当前登录用户信息
+func (s *service) GetCurrentUser(userID uint) (*CurrentUserResponse, error) {
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrResourceNotFound, "用户不存在", err)
+	}
+
+	resp := &CurrentUserResponse{
+		User: &UserInfo{
+			ID:        user.ID,
+			Username:  user.Username,
+			TrueName:  user.TrueName,
+			Phone:     user.Phone,
+			Email:     user.Email,
+			Language:  user.Language,
+			Timezone:  user.Timezone,
+			Currency:  user.Currency,
+			IsAdmin:   user.IsAdmin,
+			CompanyID: user.SysCompanyID,
+		},
+	}
+
+	// 查询公司信息及配置
+	if user.SysCompanyID != 0 {
+		company, err := s.userRepo.GetCompanyByID(user.SysCompanyID)
+		if err != nil {
+			logger.Warn("Failed to get company info for current user",
+				zap.Uint("userId", user.ID),
+				zap.Uint("companyId", user.SysCompanyID),
+				zap.Error(err))
+		} else if company != nil {
+			resp.Company = company
+
+			companyConf, err := s.userRepo.GetCompanyConfByCompanyID(user.SysCompanyID)
+			if err != nil {
+				logger.Warn("Failed to get company config for current user",
+					zap.Uint("userId", user.ID),
+					zap.Uint("companyId", user.SysCompanyID),
+					zap.Error(err))
+			} else if companyConf != nil {
+				resp.CompanyConf = companyConf
+			}
+		}
+	}
+
+	return resp, nil
 }
 
 var (

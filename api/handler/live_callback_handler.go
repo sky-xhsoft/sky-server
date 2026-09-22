@@ -22,9 +22,9 @@ import (
 // LiveCallbackHandler 直播回调处理器
 type LiveCallbackHandler struct {
 	db           *gorm.DB
-	cfg          *config.Config    // 应用配置
-	callbackKey  string        // 回调密钥，用于验证签名
-	cloudService cloud.Service // 云盘服务
+	cfg          *config.Config // 应用配置
+	callbackKey  string         // 回调密钥，用于验证签名
+	cloudService cloud.Service  // 云盘服务
 }
 
 // NewLiveCallbackHandler 创建直播回调处理器
@@ -367,12 +367,18 @@ type MonitorEvent struct {
 	StreamName  string `json:"stream_name"`  // 流名称
 }
 
+// callbackSignValidityWindow 回调签名有效窗口（秒），与注释声明的默认有效期一致
+const callbackSignValidityWindow = 10 * time.Minute
+
 // verifySign 验证回调签名
 func (h *LiveCallbackHandler) verifySign(t int64, sign string) bool {
-	// 检查时间戳是否过期（默认10分钟有效期）
+	// 时间戳(t 为未来到期时间)必须落在有效窗口内：
+	//   - 已过期: t <= now
+	//   - 超出有效窗口: t > now + 10分钟（防止签发远期永久有效签名）
 	now := time.Now().Unix()
-	if now > t {
-		logger.Warn("回调签名已过期",
+	window := int64(callbackSignValidityWindow / time.Second)
+	if now > t || t > now+window {
+		logger.Warn("回调签名时间戳超出有效窗口",
 			zap.Int64("t", t),
 			zap.Int64("now", now))
 		return false

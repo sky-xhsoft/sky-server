@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/contextutil"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -56,6 +57,9 @@ type Service interface {
 	GetUserDirectoryPermission(ctx context.Context, userID uint, directoryID uint) (int, error)
 	CheckUserTablePermission(ctx context.Context, userID uint, tableID uint, permission int) (bool, error)
 	GetUserDataFilter(ctx context.Context, userID uint, directoryID uint) (map[string]interface{}, error)
+
+	// 权限矩阵
+	GetPermissionMatrix(ctx context.Context) (*PermissionMatrix, error)
 }
 
 // ListGroupsRequest 查询权限组请求
@@ -85,6 +89,31 @@ type GroupPermission struct {
 type DirectoryNode struct {
 	*entity.SysDirectory
 	Children []*DirectoryNode `json:"children"`
+}
+
+// PermissionBitInfo 权限位信息
+type PermissionBitInfo struct {
+	Bit            int    `json:"bit"`
+	Label          string `json:"label"`
+	AssignedGroups []uint `json:"assignedGroups"`
+}
+
+// PermissionMatrixModule 权限矩阵模块节点
+type PermissionMatrixModule struct {
+	ID          uint                      `json:"id"`
+	Name        string                    `json:"name"`
+	DisplayName string                    `json:"displayName"`
+	Type        string                    `json:"type"`
+	TableID     *uint                     `json:"tableId,omitempty"`
+	DirectoryID uint                      `json:"directoryId"`
+	Permissions []*PermissionBitInfo      `json:"permissions"`
+	Children    []*PermissionMatrixModule `json:"children,omitempty"`
+}
+
+// PermissionMatrix 权限矩阵
+type PermissionMatrix struct {
+	Groups  []*entity.SysGroups       `json:"groups"`
+	Modules []*PermissionMatrixModule `json:"modules"`
 }
 
 // service 权限组服务实现
@@ -605,4 +634,158 @@ func (s *service) GetUserDataFilter(ctx context.Context, userID uint, directoryI
 	}
 
 	return filter, nil
+}
+
+// companyIDFromContext 从上下文中获取公司ID
+func companyIDFromContext(ctx context.Context) uint {
+	if companyID, ok := ctx.Value(contextutil.CompanyIDKey).(uint); ok {
+		return companyID
+	}
+	return 0
+}
+
+// GetPermissionMatrix 获取权限矩阵
+func (s *service) GetPermissionMatrix(ctx context.Context) (*PermissionMatrix, error) {
+	companyID := companyIDFromContext(ctx)
+
+	// 查询权限组列表
+	groups, _, err := s.ListGroups(ctx, &ListGroupsRequest{Page: 1, PageSize: 1000})
+	if err != nil {
+		return nil, err
+	}
+
+	// 过滤当前公司的权限组（若上下文存在公司ID）
+	var filteredGroups []*entity.SysGroups
+	for _, g := range groups {
+		if companyID == 0 || g.SysCompanyID == companyID {
+			filteredGroups = append(filteredGroups, g)
+		}
+	}
+
+	// 查询所有有效目录
+	var dirs []*entity.SysDirectory
+	query := s.db.WithContext(ctx).Where("IS_ACTIVE = ?", "Y").Order("ORDERNO ASC")
+	if companyID > 0 {
+		query = query.Where("SYS_COMPANY_ID = ?", companyID)
+	}
+	if err := query.Find(&dirs).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "查询安全目录失败", err)
+	}
+
+	// 查询所有有效权限组明细
+	var premList []*entity.SysGroupPrem
+	premQuery := s.db.WithContext(ctx).Where("IS_ACTIVE = ?", "Y")
+	if companyID > 0 {
+		premQuery = premQuery.Where("SYS_COMPANY_ID = ?", companyID)
+	}
+	if err := premQuery.Find(&premList).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "查询权限组明细失败", err)
+	}
+
+	// 构建目录权限映射：directoryID -> bit -> groupID列表
+	dirPermMap := make(map[uint]map[int][]uint)
+	for _, prem := range premList {
+		if _, ok := dirPermMap[prem.SysDirectoryID]; !ok {
+			dirPermMap[prem.SysDirectoryID] = make(map[int][]uint)
+		}
+		for _, bit := range permissionBits() {
+			if (prem.Permission & bit) == bit {
+				dirPermMap[prem.SysDirectoryID][bit] = append(dirPermMap[prem.SysDirectoryID][bit], prem.SysGroupsID)
+			}
+		}
+	}
+
+	// 构建模块树
+	modules := s.buildPermissionMatrixTree(dirs, dirPermMap, 0)
+
+	return &PermissionMatrix{
+		Groups:  filteredGroups,
+		Modules: modules,
+	}, nil
+}
+
+// permissionBits 返回支持的权限位列表
+func permissionBits() []int {
+	return []int{PermRead, PermCreate, PermUpdate, PermDelete, PermSubmit, PermUnsubmit, PermExport, PermImport}
+}
+
+// permissionBitLabel 返回权限位标签
+func permissionBitLabel(bit int) string {
+	switch bit {
+	case PermRead:
+		return "read"
+	case PermCreate:
+		return "create"
+	case PermUpdate:
+		return "update"
+	case PermDelete:
+		return "delete"
+	case PermSubmit:
+		return "submit"
+	case PermUnsubmit:
+		return "unsubmit"
+	case PermExport:
+		return "export"
+	case PermImport:
+		return "import"
+	default:
+		return "unknown"
+	}
+}
+
+// buildPermissionMatrixTree 构建权限矩阵目录树
+func (s *service) buildPermissionMatrixTree(dirs []*entity.SysDirectory, dirPermMap map[uint]map[int][]uint, parentID uint) []*PermissionMatrixModule {
+	dirMap := make(map[uint]*PermissionMatrixModule)
+	for _, dir := range dirs {
+		nodeType := "directory"
+		if dir.SysTableID != nil && *dir.SysTableID > 0 {
+			nodeType = "table"
+		}
+		permissions := make([]*PermissionBitInfo, 0, len(permissionBits()))
+		for _, bit := range permissionBits() {
+			assigned := []uint{}
+			if groups, ok := dirPermMap[dir.ID][bit]; ok {
+				assigned = groups
+			}
+			permissions = append(permissions, &PermissionBitInfo{
+				Bit:            bit,
+				Label:          permissionBitLabel(bit),
+				AssignedGroups: assigned,
+			})
+		}
+		node := &PermissionMatrixModule{
+			ID:          dir.ID,
+			Name:        dir.Name,
+			Type:        nodeType,
+			TableID:     dir.SysTableID,
+			DirectoryID: dir.ID,
+			Permissions: permissions,
+			Children:    make([]*PermissionMatrixModule, 0),
+		}
+		dirMap[dir.ID] = node
+	}
+
+	var tree []*PermissionMatrixModule
+	for _, node := range dirMap {
+		parent := uint(0)
+		if nodeParent := findDirectoryParent(dirs, node.ID); nodeParent != nil {
+			parent = *nodeParent
+		}
+		if parent == parentID || parent == 0 {
+			tree = append(tree, node)
+		} else if parentNode, exists := dirMap[parent]; exists {
+			parentNode.Children = append(parentNode.Children, node)
+		}
+	}
+	return tree
+}
+
+// findDirectoryParent 查找目录的父ID
+func findDirectoryParent(dirs []*entity.SysDirectory, id uint) *uint {
+	for _, dir := range dirs {
+		if dir.ID == id {
+			return dir.ParentID
+		}
+	}
+	return nil
 }

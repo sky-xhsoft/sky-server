@@ -71,6 +71,8 @@ type CreatePullStreamTaskRequest struct {
 	EndTime    string   // 结束时间，格式：yyyy-mm-dd HH:MM:SS
 	Operator   string   // 操作者
 	Comment    string   // 任务描述
+	TaskName   string   // 任务名称（前端字段，映射到 Comment）
+	Platform   string   // 目标平台（前端字段，映射到 SourceType）
 	Region     string   // 任务创建所在地域
 	PushArgs   string   // 推流参数，格式：key1=value1&key2=value2
 	RoomID     string   // 直播间ID
@@ -179,6 +181,8 @@ type PullStreamTaskInfo struct {
 	UpdateTime            string   `json:"updateTime,omitempty"`
 	CreateBy              string   `json:"createBy,omitempty"`
 	UpdateBy              string   `json:"updateBy,omitempty"`
+	TaskName              string   `json:"taskName,omitempty"` // 任务名称（同 Comment）
+	Platform              string   `json:"platform,omitempty"` // 目标平台（同 SourceType）
 	CallbackUrl           string   `json:"callbackUrl,omitempty"`
 	CallbackEvents        []string `json:"callbackEvents,omitempty"`
 	CallbackInfo          string   `json:"callbackInfo,omitempty"`
@@ -299,6 +303,8 @@ func (m *PullStreamManager) DescribePullStreamTasks(ctx context.Context, req *De
 		if task.Comment != nil {
 			info.Comment = *task.Comment
 		}
+		info.TaskName = info.Comment
+		info.Platform = info.SourceType
 		if task.BackupSourceType != nil {
 			info.BackupSourceType = *task.BackupSourceType
 		}
@@ -401,6 +407,8 @@ type UpdatePullStreamTaskRequest struct {
 	EndTime    string   // 结束时间
 	Operator   string   // 操作者
 	Comment    string   // 任务描述
+	TaskName   string   // 任务名称（前端字段，映射到 Comment）
+	Platform   string   // 目标平台（前端字段，映射到 SourceType）
 	Status     string   // 任务状态：enable-启用，pause-暂停
 	RoomID     string   // 直播间ID
 	RoomName   string   // 直播间名称

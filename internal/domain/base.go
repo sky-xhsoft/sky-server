@@ -9,13 +9,13 @@ import (
 
 // Entity 领域实体基类
 type Entity struct {
-	ID         uint           `gorm:"primaryKey"`
-	SysCompanyID uint        `gorm:"column:sys_company_id;comment:公司ID"`
-	CreateBy   string        `gorm:"column:create_by;comment:创建人"`
-	CreateTime time.Time     `gorm:"column:create_time;comment:创建时间;autoCreateTime"`
-	UpdateBy   string        `gorm:"column:update_by;comment:更新人"`
-	UpdateTime time.Time     `gorm:"column:update_time;comment:更新时间;autoUpdateTime"`
-	IsActive   string        `gorm:"column:is_active;comment:是否有效;default:Y"`
+	ID           uint      `gorm:"primaryKey"`
+	SysCompanyID uint      `gorm:"column:sys_company_id;comment:公司ID"`
+	CreateBy     string    `gorm:"column:create_by;comment:创建人"`
+	CreateTime   time.Time `gorm:"column:create_time;comment:创建时间;autoCreateTime"`
+	UpdateBy     string    `gorm:"column:update_by;comment:更新人"`
+	UpdateTime   time.Time `gorm:"column:update_time;comment:更新时间;autoUpdateTime"`
+	IsActive     string    `gorm:"column:is_active;comment:是否有效;default:Y"`
 }
 
 // BaseDomainService 领域服务基类
@@ -36,13 +36,13 @@ type DomainRepository interface {
 
 // DomainEvent 领域事件基类
 type DomainEvent struct {
-	EventID     string        `json:"event_id"`
-	EventType   string        `json:"event_type"`
-	SourceID    string        `json:"source_id"`
-	SourceType  string        `json:"source_type"`
-	Data        interface{}   `json:"data"`
-	Timestamp   time.Time     `json:"timestamp"`
-	Version     int           `json:"version"`
+	EventID    string      `json:"event_id"`
+	EventType  string      `json:"event_type"`
+	SourceID   string      `json:"source_id"`
+	SourceType string      `json:"source_type"`
+	Data       interface{} `json:"data"`
+	Timestamp  time.Time   `json:"timestamp"`
+	Version    int         `json:"version"`
 }
 
 // EventHandler 事件处理接口

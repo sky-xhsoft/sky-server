@@ -17,7 +17,7 @@ func NewLanguageRepository(db *gorm.DB) repository.LanguageRepository {
 func (r *languageRepository) ListLanguages(companyID uint) ([]*entity.SysLanguage, error) {
 	var languages []*entity.SysLanguage
 	err := r.db.
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?) AND IS_ACTIVE = ?", companyID, 0, "Y").
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", companyID, "Y").
 		Order("CASE WHEN IS_DEFAULT = 'Y' THEN 0 ELSE 1 END, CODE").
 		Find(&languages).Error
 	return languages, err
@@ -38,7 +38,7 @@ func (r *languageRepository) GetLanguageByID(id uint) (*entity.SysLanguage, erro
 func (r *languageRepository) GetLanguageByCode(companyID uint, code string) (*entity.SysLanguage, error) {
 	var language entity.SysLanguage
 	err := r.db.
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?) AND CODE = ? AND IS_ACTIVE = ?", companyID, 0, code, "Y").
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND CODE = ? AND IS_ACTIVE = ?", companyID, code, "Y").
 		First(&language).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -64,7 +64,7 @@ func (r *languageRepository) DeleteLanguage(id uint) error {
 func (r *languageRepository) GetDefaultLanguage(companyID uint) (*entity.SysLanguage, error) {
 	var language entity.SysLanguage
 	err := r.db.
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?) AND IS_DEFAULT = ? AND IS_ACTIVE = ?", companyID, 0, "Y", "Y").
+		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_DEFAULT = ? AND IS_ACTIVE = ?", companyID, "Y", "Y").
 		First(&language).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -84,7 +84,7 @@ func (r *languageRepository) SetDefaultLanguage(id, companyID uint) error {
 
 	if err := tx.
 		Model(&entity.SysLanguage{}).
-		Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = ?", companyID, 0).
+		Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", companyID).
 		Update("IS_DEFAULT", "N").Error; err != nil {
 		tx.Rollback()
 		return err

@@ -40,10 +40,6 @@ VALUES ('pull_stream_task', '拉流任务', 'Pull Stream Task', 'N', 1, 'Y', 'AM
 ON DUPLICATE KEY UPDATE DISPLAY_NAME='拉流任务', ENAME='Pull Stream Task';
 
 INSERT INTO sys_table (NAME, DISPLAY_NAME, ENAME, IS_BIG, ORDERNO, IS_ACTIVE, MASK)
-VALUES ('live_push_domain_config', '推流域名配置', 'Push Domain Config', 'N', 1, 'Y', 'AMDQ')
-ON DUPLICATE KEY UPDATE DISPLAY_NAME='推流域名配置', ENAME='Push Domain Config';
-
-INSERT INTO sys_table (NAME, DISPLAY_NAME, ENAME, IS_BIG, ORDERNO, IS_ACTIVE, MASK)
 VALUES ('cloud_storage_config', '存储配置', 'Storage Config', 'N', 1, 'Y', 'AMDQ')
 ON DUPLICATE KEY UPDATE DISPLAY_NAME='存储配置', ENAME='Storage Config';
 

@@ -189,13 +189,24 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	// 例如：filters: { IS_ACTIVE: 'Y' }
 
 	// 添加公司过滤（如果表有 SYS_COMPANY_ID 字段）
-	for _, col := range columns {
-		if col.DbName == "SYS_COMPANY_ID" {
-			user, userErr := s.userRepo.GetUserByID(userID)
-			if userErr == nil && user != nil {
-				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0", user.SysCompanyID)
-			}
+	// 豁免：附属配置/子表（如 SYS_COMPANY_CONF 公司配置）不按当前用户公司隔离，
+	// 其可见性由所在公司的详情页上下文决定（外部已按外键过滤）
+	skipCompanyScope := false
+	for _, rt := range []string{"SYS_COMPANY_CONF"} {
+		if strings.EqualFold(table.Name, rt) {
+			skipCompanyScope = true
 			break
+		}
+	}
+	if !skipCompanyScope {
+		for _, col := range columns {
+			if col.DbName == "SYS_COMPANY_ID" {
+				user, userErr := s.userRepo.GetUserByID(userID)
+				if userErr == nil && user != nil {
+					query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", user.SysCompanyID)
+				}
+				break
+			}
 		}
 	}
 
@@ -356,7 +367,7 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 		if col.DbName == "SYS_COMPANY_ID" {
 			user, userErr := s.userRepo.GetUserByID(userID)
 			if userErr == nil && user != nil {
-				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0", user.SysCompanyID)
+				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", user.SysCompanyID)
 			}
 			break
 		}

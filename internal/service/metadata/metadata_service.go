@@ -40,10 +40,16 @@ type Service interface {
 	GetMetadataVersion() string
 
 	// 获取外键选项列表
-	GetForeignKeyOptions(tableID uint, columnID *uint, search string, page, pageSize int, userID uint) ([]map[string]interface{}, int64, string, error)
+	GetForeignKeyOptions(tableID uint, columnID *uint, search string, filters map[string]string, page, pageSize int, userID uint) ([]map[string]interface{}, int64, string, error)
 
 	// 获取外键显示值
 	GetForeignKeyDisplayValue(tableID uint, value string, columnID *uint, userID uint) (string, error)
+
+	// ResolveDisplayColumn 解析外键显示字段（指定列→DK→ID）
+	ResolveDisplayColumn(tableID uint, columnID *uint) (*entity.SysColumn, error)
+
+	// ResolveInputColumn 解析外键输入字段（AK→DK→指定列→ID）
+	ResolveInputColumn(tableID uint, columnID *uint) (*entity.SysColumn, error)
 }
 
 // service 元数据服务实现
@@ -249,53 +255,174 @@ func (s *service) GetMetadataVersion() string {
 	return s.metaVersion
 }
 
+// syncTableDkAk 懒回填系统表单的 DK_COLUMN_ID / AK_COLUMN_ID
+// dkID>0 时更新显示键；akID>0 时更新输入键。
+func (s *service) syncTableDkAk(tableID uint, dkID, akID uint) {
+	var sets []string
+	var args []interface{}
+	if dkID > 0 {
+		sets = append(sets, "DK_COLUMN_ID = ?")
+		args = append(args, dkID)
+	}
+	if akID > 0 {
+		sets = append(sets, "AK_COLUMN_ID = ?")
+		args = append(args, akID)
+	}
+	if len(sets) == 0 {
+		return
+	}
+	args = append(args, tableID)
+	sql := "UPDATE sys_table SET " + strings.Join(sets, ", ") + " WHERE ID = ?"
+	if err := s.repo.Exec(sql, args...); err != nil {
+		// 静默失败：懒回填是优化，失败不影响主流程
+		_ = err
+	}
+	// 使缓存失效，避免读到旧表配置
+	s.redisClient.Del(context.Background(), fmt.Sprintf("metadata:table:id:%d", tableID))
+}
+
+// ResolveDisplayColumn 解析外键显示字段（判定：DK列ID→指定列→DK→ID）
+// 优先读取系统表单缓存好的 DK_COLUMN_ID（O(1)），未设置再遍历回退。
+func (s *service) ResolveDisplayColumn(tableID uint, columnID *uint) (*entity.SysColumn, error) {
+	columns, err := s.GetColumns(tableID)
+	if err != nil {
+		return nil, err
+	}
+
+	isPkLike := func(col *entity.SysColumn) bool {
+		return col.SetValueType == "pk" || strings.EqualFold(col.DbName, "ID") || strings.EqualFold(col.DbName, "PK")
+	}
+
+	lookup := func(id uint) (*entity.SysColumn, bool) {
+		for _, col := range columns {
+			if col.ID == id {
+				return col, true
+			}
+		}
+		return nil, false
+	}
+
+	// 0. 优先使用系统表单缓存的 DK_COLUMN_ID（查询更快，不必逐列判断 IS_DK）
+	if t, err := s.GetTableByID(tableID); err == nil && t != nil && t.DkColumnID != nil && uint64(*t.DkColumnID) > 0 {
+		if col, ok := lookup(uint(*t.DkColumnID)); ok && !isPkLike(col) {
+			return col, nil
+		}
+	}
+
+	// 1. 其次优先使用指定的显示列（排除主键/ID 列，避免 FK 指向 ID 时把数字当名称显示）
+	if columnID != nil {
+		for _, col := range columns {
+			if col.ID == *columnID {
+				if !isPkLike(col) {
+					return col, nil
+				}
+				break
+			}
+		}
+	}
+
+	// 2. 再次使用 DK 字段（显示键，排除主键/ID 列——DK 常常标在 ID 列上）
+	for _, col := range columns {
+		if col.IsDK == "Y" && !isPkLike(col) {
+			// 懒回填：系统表单 DK_COLUMN_ID 为空时，自动写入（字段页设过 IS_DK 无需再手改系统表单）
+			if t, err := s.GetTableByID(tableID); err == nil && t != nil && t.DkColumnID == nil {
+				s.syncTableDkAk(tableID, col.ID, 0)
+			}
+			return col, nil
+		}
+	}
+
+	// 3. 最后默认显示 ID 字段
+	for _, col := range columns {
+		if strings.EqualFold(col.DbName, "ID") {
+			return col, nil
+		}
+	}
+
+	return nil, errors.New(errors.ErrResourceNotFound, "未找到显示字段")
+}
+
+// ResolveInputColumn 解析外键输入字段（判定：AK列ID→AK→DK→指定列→ID）
+// 优先读取系统表单缓存的 AK_COLUMN_ID（查询更快），未设置再遍历回退。
+func (s *service) ResolveInputColumn(tableID uint, columnID *uint) (*entity.SysColumn, error) {
+	columns, err := s.GetColumns(tableID)
+	if err != nil {
+		return nil, err
+	}
+
+	isPkLike := func(col *entity.SysColumn) bool {
+		return col.SetValueType == "pk" || strings.EqualFold(col.DbName, "ID") || strings.EqualFold(col.DbName, "PK")
+	}
+
+	lookup := func(id uint) (*entity.SysColumn, bool) {
+		for _, col := range columns {
+			if col.ID == id {
+				return col, true
+			}
+		}
+		return nil, false
+	}
+
+	// 0. 优先使用系统表单缓存的 AK_COLUMN_ID（查询更快）
+	if t, err := s.GetTableByID(tableID); err == nil && t != nil && t.AkColumnID != nil && *t.AkColumnID > 0 {
+		if col, ok := lookup(uint(*t.AkColumnID)); ok && !isPkLike(col) {
+			return col, nil
+		}
+	}
+
+	// 1. 优先使用 AK 字段（输入键）
+	for _, col := range columns {
+		if col.IsAK == "Y" && !isPkLike(col) {
+			// 懒回填：系统表单 AK_COLUMN_ID 为空时自动写入
+			if t, err := s.GetTableByID(tableID); err == nil && t != nil && t.AkColumnID == nil {
+				s.syncTableDkAk(tableID, 0, col.ID)
+			}
+			return col, nil
+		}
+	}
+
+	// 2. 其次 DK 字段
+	for _, col := range columns {
+		if col.IsDK == "Y" && !isPkLike(col) {
+			return col, nil
+		}
+	}
+
+	// 3. 指定列（非主键/ID）
+	if columnID != nil {
+		for _, col := range columns {
+			if col.ID == *columnID && !isPkLike(col) {
+				return col, nil
+			}
+		}
+	}
+
+	// 4. 默认 ID 字段
+	for _, col := range columns {
+		if strings.EqualFold(col.DbName, "ID") {
+			return col, nil
+		}
+	}
+
+	return nil, errors.New(errors.ErrResourceNotFound, "未找到输入字段")
+}
+
 // GetForeignKeyOptions 获取外键选项列表
-func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search string, page, pageSize int, userID uint) ([]map[string]interface{}, int64, string, error) {
+func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search string, filters map[string]string, page, pageSize int, userID uint) ([]map[string]interface{}, int64, string, error) {
 	// 1. 获取目标表的元数据
 	table, err := s.GetTableByID(tableID)
 	if err != nil {
 		return nil, 0, "", errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
 	}
 
-	// 2. 确定显示字段
-	var displayColumn *entity.SysColumn
+	// 2. 确定输入字段（统一判定：AK→DK→指定列→ID）——下拉选项用目标表单 AK 字段值，交由用户输入校验
 	columns, err := s.GetColumns(tableID)
 	if err != nil {
 		return nil, 0, "", err
 	}
-
-	if columnID != nil {
-		// 使用指定的字段
-		for _, col := range columns {
-			if col.ID == *columnID {
-				displayColumn = col
-				break
-			}
-		}
-	}
-
-	// 如果没有找到指定字段，使用 DK 字段
-	if displayColumn == nil {
-		for _, col := range columns {
-			if col.IsDK == "Y" {
-				displayColumn = col
-				break
-			}
-		}
-	}
-
-	// 如果没有 DK 字段，使用第一个 VARCHAR 类型的字段
-	if displayColumn == nil {
-		for _, col := range columns {
-			if col.ColType == "varchar" || col.ColType == "char" {
-				displayColumn = col
-				break
-			}
-		}
-	}
-
-	if displayColumn == nil {
-		return nil, 0, "", errors.New(errors.ErrResourceNotFound, "未找到显示字段")
+	displayColumn, err := s.ResolveInputColumn(tableID, columnID)
+	if err != nil {
+		return nil, 0, "", err
 	}
 
 	// 3. 获取用户信息以获取公司ID
@@ -332,13 +459,36 @@ func (s *service) GetForeignKeyOptions(tableID uint, columnID *uint, search stri
 		}
 		// 如果目标表有 SYS_COMPANY_ID 字段，添加公司过滤
 		if hasCompanyColumn {
-			baseWhere += " AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID = 0)"
+			baseWhere += " AND (SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))"
 			whereParams = append(whereParams, user.SysCompanyID)
 			logger.Debug("Added SYS_COMPANY_ID filter with global fallback")
 		}
 	}
 
 	logger.Debug("GetForeignKeyOptions SQL", zap.String("baseWhere", baseWhere), zap.Any("whereParams", whereParams))
+
+	// 多条件过滤：查询弹窗的用户输入，按目标表真实列名等值匹配（白名单防注入）
+	columnNames := make(map[string]bool)
+	for _, col := range columns {
+		columnNames[strings.ToUpper(col.DbName)] = true
+	}
+	for key, val := range filters {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			continue
+		}
+		upperKey := strings.ToUpper(strings.TrimSpace(key))
+		if !columnNames[upperKey] {
+			continue // 非真实列名，忽略
+		}
+		filterCol, _ := sqlutils.SanitizeIdentifier(upperKey)
+		if filterCol == "" {
+			filterCol = upperKey
+		}
+		// 查询条件用模糊匹配（输入部分关键字可命中，如 姓"张"匹配"张伟"）
+		baseWhere += " AND " + filterCol + " LIKE ?"
+		whereParams = append(whereParams, "%"+val+"%")
+	}
 
 	safeCol, _ := sqlutils.SanitizeIdentifier(displayColumn.DbName)
 	if safeCol == "" {
@@ -403,45 +553,14 @@ func (s *service) GetForeignKeyDisplayValue(tableID uint, value string, columnID
 		return "", errors.Wrap(errors.ErrResourceNotFound, "表不存在", err)
 	}
 
-	// 2. 确定显示字段（逻辑同上）
-	var displayColumn *entity.SysColumn
+	// 2. 确定显示字段（统一判定）
 	columns, err := s.GetColumns(tableID)
 	if err != nil {
 		return "", err
 	}
-
-	if columnID != nil {
-		// 使用指定的字段
-		for _, col := range columns {
-			if col.ID == *columnID {
-				displayColumn = col
-				break
-			}
-		}
-	}
-
-	// 如果没有找到指定字段，使用 DK 字段
-	if displayColumn == nil {
-		for _, col := range columns {
-			if col.IsDK == "Y" {
-				displayColumn = col
-				break
-			}
-		}
-	}
-
-	// 如果没有 DK 字段，使用第一个 VARCHAR 类型的字段
-	if displayColumn == nil {
-		for _, col := range columns {
-			if col.ColType == "varchar" || col.ColType == "char" {
-				displayColumn = col
-				break
-			}
-		}
-	}
-
-	if displayColumn == nil {
-		return "", errors.New(errors.ErrResourceNotFound, "未找到显示字段")
+	displayColumn, err := s.ResolveDisplayColumn(tableID, columnID)
+	if err != nil {
+		return "", err
 	}
 
 	// 3. 获取用户信息以获取公司ID
@@ -469,9 +588,9 @@ func (s *service) GetForeignKeyDisplayValue(tableID uint, value string, columnID
 				break
 			}
 		}
-		// 如果目标表有 SYS_COMPANY_ID 字段，添加公司过滤
+		// 如果目标表有 SYS_COMPANY_ID 字段，添加公司过滤(全局记录 company_id=0 或 -1，或当前用户公司)
 		if hasCompanyColumn {
-			baseWhere += " AND SYS_COMPANY_ID = ?"
+			baseWhere += " AND (SYS_COMPANY_ID = 0 OR SYS_COMPANY_ID = -1 OR SYS_COMPANY_ID = ?)"
 			queryParams = append(queryParams, user.SysCompanyID)
 		}
 	}

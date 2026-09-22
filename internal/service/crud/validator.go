@@ -63,38 +63,10 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 		if err != nil || refTable == nil {
 			continue
 		}
-		refColumns, err := s.metadataService.GetColumns(key.RefTableID)
-		if err != nil {
-			continue
-		}
 
-		// 确定显示列
-		var displayCol *entity.SysColumn
-		if key.RefColumnID != nil {
-			for _, col := range refColumns {
-				if col.ID == *key.RefColumnID {
-					displayCol = col
-					break
-				}
-			}
-		}
-		if displayCol == nil {
-			for _, col := range refColumns {
-				if col.IsDK == "Y" {
-					displayCol = col
-					break
-				}
-			}
-		}
-		if displayCol == nil {
-			for _, col := range refColumns {
-				if col.ColType == "varchar" || col.ColType == "char" {
-					displayCol = col
-					break
-				}
-			}
-		}
-		if displayCol == nil {
+		// 确定显示列（统一判定）
+		displayCol, err := s.metadataService.ResolveDisplayColumn(key.RefTableID, key.RefColumnID)
+		if err != nil {
 			continue
 		}
 

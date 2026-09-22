@@ -35,8 +35,16 @@ func NewSigner(accessKeyId, accessKeySecret, region, service string) *Signer {
 func (s *Signer) SignRequest(req *http.Request, body []byte) error {
 	now := time.Now().UTC()
 
+	// 先设置参与签名的头（Host、X-Date、X-Content-Sha256），再构建CanonicalRequest
+	req.Header.Set("X-Date", now.Format("20060102T150405Z"))
+	if len(body) > 0 {
+		hash := sha256.Sum256(body)
+		req.Header.Set("X-Content-Sha256", hex.EncodeToString(hash[:]))
+	}
+
 	// 步骤1: 创建CanonicalRequest
 	canonicalRequest := s.buildCanonicalRequest(req, body)
+	_, signedHeaders := s.getCanonicalHeaders(req)
 
 	// 步骤2: 创建StringToSign
 	stringToSign := s.buildStringToSign(canonicalRequest, now)
@@ -44,17 +52,14 @@ func (s *Signer) SignRequest(req *http.Request, body []byte) error {
 	// 步骤3: 计算签名
 	signature := s.calculateSignature(stringToSign, now)
 
-	// 步骤4: 添加Authorization头
-	authorization := s.buildAuthorization(signature, now)
+	// 步骤4: 添加Authorization头（SignedHeaders 用实际参与签名的头）
+	authorization := fmt.Sprintf("HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		s.AccessKeyId, s.getCredentialScope(now), signedHeaders, signature)
 	req.Header.Set("Authorization", authorization)
 
-	// 添加X-Date头
-	req.Header.Set("X-Date", now.Format("20060102T150405Z"))
-
-	// 添加X-Content-Sha256头（如果有body）
-	if len(body) > 0 {
-		hash := sha256.Sum256(body)
-		req.Header.Set("X-Content-Sha256", hex.EncodeToString(hash[:]))
+	// 把 host 头也写到请求头中（便于 Go http 发送时保持一致）
+	if req.Header.Get("Host") == "" && req.Host != "" {
+		req.Header.Set("Host", req.Host)
 	}
 
 	return nil
@@ -101,8 +106,13 @@ func (s *Signer) getCanonicalURI(u *url.URL) string {
 	if u.Path == "" {
 		return "/"
 	}
-	// 双重编码
-	return url.QueryEscape(u.Path)
+	// 火山引擎规范：对 path 做 RFC3986 编码，保留 "/"（对每段分别编码后拼接）
+	segments := strings.Split(u.Path, "/")
+	encoded := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		encoded = append(encoded, url.PathEscape(seg))
+	}
+	return strings.Join(encoded, "/")
 }
 
 // getCanonicalQueryString 获取规范查询字符串
@@ -127,27 +137,34 @@ func (s *Signer) getCanonicalQueryString(u *url.URL) string {
 
 // getCanonicalHeaders 获取规范请求头
 func (s *Signer) getCanonicalHeaders(req *http.Request) (canonicalHeaders, signedHeaders string) {
-	var headers []string
+	// host 头：Go 的 Host 在 req.Host 字段，需单独并入
+	host := req.Host
+	if host == "" {
+		host = req.URL.Host
+	}
 	headerMap := make(map[string][]string)
+	headerMap["host"] = []string{host}
 
-	// 收集需要签名的请求头
 	for k, v := range req.Header {
 		key := strings.ToLower(k)
 		// 只签名以下类型的请求头
-		if key == "host" || key == "content-type" ||
+		if key == "content-type" ||
 			strings.HasPrefix(key, "x-") {
-			headers = append(headers, key)
 			headerMap[key] = v
 		}
 	}
 
+	// headers 按小写 ASCII 排序
+	var headers []string
+	for k := range headerMap {
+		headers = append(headers, k)
+	}
 	sort.Strings(headers)
 
 	var buf bytes.Buffer
 	for _, k := range headers {
 		buf.WriteString(k)
 		buf.WriteString(":")
-		// 对每个值，去除前导和尾随空白，多个值之间用逗号分隔
 		vals := headerMap[k]
 		for i, v := range vals {
 			if i > 0 {
@@ -191,8 +208,8 @@ func (s *Signer) getCredentialScope(t time.Time) string {
 
 // calculateSignature 计算签名
 func (s *Signer) calculateSignature(stringToSign string, t time.Time) string {
-	// 步骤1: 计算kDate
-	kDate := hmacSHA256([]byte("VOLC"+s.AccessKeySecret), []byte(t.Format("20060102")))
+	// 步骤1: 计算kDate，火山引擎 kSecret 即为 Secret Access Key 本身
+	kDate := hmacSHA256([]byte(s.AccessKeySecret), []byte(t.Format("20060102")))
 
 	// 步骤2: 计算kRegion
 	kRegion := hmacSHA256(kDate, []byte(s.Region))
@@ -207,20 +224,6 @@ func (s *Signer) calculateSignature(stringToSign string, t time.Time) string {
 	signature := hmacSHA256(kSigning, []byte(stringToSign))
 
 	return hex.EncodeToString(signature)
-}
-
-// buildAuthorization 构建Authorization头
-func (s *Signer) buildAuthorization(signature string, t time.Time) string {
-	return fmt.Sprintf("HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
-		s.AccessKeyId,
-		s.getCredentialScope(t),
-		s.getSignedHeaders(),
-		signature)
-}
-
-// getSignedHeaders 获取需要签名的请求头
-func (s *Signer) getSignedHeaders() string {
-	return "content-type;host;x-content-sha256;x-date"
 }
 
 // hmacSHA256 计算HMAC-SHA256

@@ -6,35 +6,38 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
+	"github.com/sky-xhsoft/sky-server/internal/service/groups"
 	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 )
 
 // registerLiveDomainRoutes 注册直播域名路由
-func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service, cfg *config.Config) {
+func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service liveService.Service, cfg *config.Config, groupService groups.Service, roomService liveService.LiveRoomService) {
 	domainHandler := handler.NewLiveDomainHandler(service)
 
 	// 创建推流地址生成服务和处理器
 	pushURLService := liveService.NewPushURLService()
-	pushURLHandler := handler.NewLivePushURLHandler(pushURLService)
+	pushURLHandler := handler.NewLivePushURLHandler(pushURLService, service, roomService)
 
 	// 直播域名路由组（需要认证）
 	domains := r.Group("/live/domains")
-	domains.Use(middleware.AuthRequired(jwtUtil))
+	domains.Use(middleware.AuthRequired(jwtUtil), middleware.TablePermissionRequired(groupService, 35, groups.PermRead))
 	{
-		domains.POST("", domainHandler.AddDomain)                       // 添加域名
-		domains.GET("", domainHandler.ListDomains)                      // 查询域名列表
-		domains.GET("/verify", domainHandler.VerifyDomainOwner)         // 验证域名归属
-		domains.GET("/:domainName", domainHandler.GetDomain)            // 查询域名信息
-		domains.DELETE("/:domainName", domainHandler.DeleteDomain)      // 删除域名
-		domains.POST("/:domainName/enable", domainHandler.EnableDomain) // 启用域名
-		domains.POST("/:domainName/forbid", domainHandler.ForbidDomain) // 禁用域名
+		domains.POST("", domainHandler.AddDomain)                        // 添加域名
+		domains.GET("", domainHandler.ListDomains)                       // 查询域名列表
+		domains.GET("/verify", domainHandler.VerifyDomainOwner)          // 验证域名归属
+		domains.GET("/:domainName/auth", domainHandler.GetDomainAuthKey) // 查询域名鉴权配置
+		domains.GET("/:domainName", domainHandler.GetDomain)             // 查询域名信息
+		domains.DELETE("/:domainName", domainHandler.DeleteDomain)       // 删除域名
+		domains.POST("/:domainName/enable", domainHandler.EnableDomain)  // 启用域名
+		domains.POST("/:domainName/forbid", domainHandler.ForbidDomain)  // 禁用域名
 	}
 
 	// 推流地址生成路由组（需要认证）
 	push := r.Group("/live")
 	push.Use(middleware.AuthRequired(jwtUtil))
 	{
-		push.POST("/push-url/generate", pushURLHandler.GeneratePushURL) // 生成推流地址
-		push.POST("/play-url/generate", pushURLHandler.GeneratePlayURL) // 生成播放地址
+		push.POST("/push-url/generate", pushURLHandler.GeneratePushURL)   // 生成推流地址
+		push.POST("/push-url/by-room", pushURLHandler.GeneratePushURLByRoom) // 根据直播间ID生成推流地址
+		push.POST("/play-url/generate", pushURLHandler.GeneratePlayURL)   // 生成播放地址
 	}
 }

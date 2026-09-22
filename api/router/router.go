@@ -1,6 +1,9 @@
 package router
 
 import (
+	"context"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/api/handler"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
@@ -14,6 +17,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/crud"
+	"github.com/sky-xhsoft/sky-server/internal/service/dashboard"
 	"github.com/sky-xhsoft/sky-server/internal/service/dict"
 	"github.com/sky-xhsoft/sky-server/internal/service/email"
 	"github.com/sky-xhsoft/sky-server/internal/service/file"
@@ -23,7 +27,10 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/menu"
 	"github.com/sky-xhsoft/sky-server/internal/service/message"
 	"github.com/sky-xhsoft/sky-server/internal/service/metadata"
+	"github.com/sky-xhsoft/sky-server/internal/service/pref"
+	"github.com/sky-xhsoft/sky-server/internal/service/schedule"
 	"github.com/sky-xhsoft/sky-server/internal/service/sequence"
+	"github.com/sky-xhsoft/sky-server/internal/service/sms"
 	"github.com/sky-xhsoft/sky-server/internal/service/sso"
 	"github.com/sky-xhsoft/sky-server/internal/service/workflow"
 	swaggerFiles "github.com/swaggo/files"
@@ -39,6 +46,7 @@ type Services struct {
 	Dict            dict.Service
 	Sequence        sequence.Service
 	CRUD            crud.Service
+	Dashboard       dashboard.Service
 	Action          action.Service
 	Workflow        workflow.Service
 	Audit           audit.Service
@@ -54,8 +62,13 @@ type Services struct {
 	Live            live.Service
 	LiveRoom        live.LiveRoomService
 	PullStreamTask  live.PullStreamTaskService
+	SpeechTask      live.SpeechTaskService
+	ClipService     live.ClipService
 	WSManager       *ws.Manager
 	Language        language.Service // 语言管理服务
+	SMS             sms.Service
+	Pref            pref.Service           // 用户环境变量
+	Schedule        *schedule.Scheduler    // 自动任务调度器
 }
 
 // Repositories 仓储集合
@@ -100,6 +113,9 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 注册认证路由
 		registerAuthRoutes(v1, jwtUtil, services.SSO)
 
+		// 注册 Dashboard 路由
+		registerDashboardRoutes(v1, jwtUtil, services.Dashboard)
+
 		// 注册元数据路由
 		registerMetadataRoutes(v1, jwtUtil, services.Metadata, repos.DictRepo)
 
@@ -115,6 +131,12 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 注册动作路由
 		registerActionRoutes(v1, jwtUtil, services.Action)
 
+		// 注册用户环境变量路由
+		registerPrefRoutes(v1, jwtUtil, services.Pref)
+
+		// 注册自动任务路由
+		registerScheduleRoutes(v1, jwtUtil, services.Schedule, db)
+
 		// 注册工作流路由
 		registerWorkflowRoutes(v1, jwtUtil, services.Workflow)
 
@@ -124,7 +146,8 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		// 注册权限组管理路由
 		registerGroupsRoutes(v1, jwtUtil, services.Groups)
 		registerEmailRoutes(v1, services.Email)
-		registerCompanyRoutes(v1, services.Company)
+		registerSmsRoutes(v1, services.SMS)
+		registerCompanyRoutes(v1, jwtUtil, services.Company, services.SMS)
 
 		// 注册安全目录管理路由
 		registerDirectoryRoutes(v1, jwtUtil, services.Groups)
@@ -142,11 +165,15 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerCloudRoutes(v1, jwtUtil, services)
 
 		// 注册直播路由
-		registerLiveDomainRoutes(v1, jwtUtil, services.Live, cfg)
-		registerLiveStreamRoutes(v1, jwtUtil, services.Live)
-		registerPullStreamRoutes(v1, jwtUtil, services.Live, services.PullStreamTask)
+		registerLiveDomainRoutes(v1, jwtUtil, services.Live, cfg, services.Groups, services.LiveRoom)
+		registerLiveStreamRoutes(v1, jwtUtil, services.Live, services.Groups)
+		registerPullStreamRoutes(v1, jwtUtil, services.Live, services.PullStreamTask, services.Groups)
+		if services.SpeechTask != nil {
+			registerSpeechTaskRoutes(v1, jwtUtil, services.SpeechTask, services.Groups)
+		}
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg, services)
-		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom)
+		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom, services.Groups)
+		registerLiveClipRoutes(v1, jwtUtil, services.ClipService, services.Groups)
 
 		// 注册WebSocket路由
 		registerWebSocketRoutes(v1, jwtUtil, services.WSManager, logger)
@@ -197,7 +224,22 @@ func registerAuthRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, ssoService sso.Se
 			authenticated.GET("/sessions", authHandler.GetActiveSessions)
 			authenticated.POST("/kick-device", authHandler.KickDevice)
 			authenticated.POST("/change-password", authHandler.ChangePassword)
+			authenticated.GET("/me", authHandler.GetCurrentUser)
 		}
+	}
+}
+
+// registerDashboardRoutes 注册 Dashboard 路由
+func registerDashboardRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, dashboardService dashboard.Service) {
+	dashboardHandler := handler.NewDashboardHandler(dashboardService)
+
+	dashboard := rg.Group("/dashboard")
+	dashboard.Use(middleware.AuthRequired(jwtUtil))
+	{
+		dashboard.GET("/stats", dashboardHandler.GetStats)
+		dashboard.GET("/trend", dashboardHandler.GetTrend)
+		dashboard.GET("/recent-rooms", dashboardHandler.GetRecentRooms)
+		dashboard.GET("/activities", dashboardHandler.GetActivities)
 	}
 }
 
@@ -278,8 +320,44 @@ func registerCRUDRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, crudService crud.
 		// 导入导出
 		data.GET("/:tableName/export", crudHandler.Export)
 		data.POST("/:tableName/import", crudHandler.Import)
+		data.GET("/:tableName/import-template", crudHandler.ImportTemplate)
 		// 批量修改
 		data.PUT("/:tableName/batch-update", crudHandler.BatchUpdate)
+	}
+}
+
+// registerPrefRoutes 注册用户环境变量路由
+func registerPrefRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, prefService pref.Service) {
+	prefHandler := handler.NewPrefHandler(prefService)
+	prefs := rg.Group("/user-prefs")
+	prefs.Use(middleware.AuthRequired(jwtUtil))
+	{
+		prefs.GET("", prefHandler.Get)
+		prefs.GET("/all", prefHandler.GetAll)
+		prefs.GET("/list", prefHandler.List)
+		prefs.PUT("", prefHandler.Set)
+		prefs.DELETE("", prefHandler.Delete)
+	}
+}
+
+// registerScheduleRoutes 注册自动任务路由
+func registerScheduleRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, sched *schedule.Scheduler, db *gorm.DB) {
+	if sched == nil {
+		return
+	}
+	runner := func(id uint) (string, error) {
+		return sched.RunNow(context.Background(), id)
+	}
+	cronNext := func(expr string) (time.Time, error) {
+		return schedule.NextRunAfter(expr, time.Now())
+	}
+	scheduleHandler := handler.NewScheduleHandler(db, runner, cronNext)
+	sr := rg.Group("/schedule")
+	sr.Use(middleware.AuthRequired(jwtUtil))
+	{
+		sr.POST("/:id/run", scheduleHandler.Run)
+		sr.POST("/cron-verify", scheduleHandler.CronVerify)
+		sr.GET("/:id/logs", scheduleHandler.Logs)
 	}
 }
 
@@ -392,6 +470,7 @@ func registerGroupsRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, groupService gr
 	{
 		perms.POST("/check", groupHandler.CheckPermission)
 		perms.GET("/user", groupHandler.GetUserPermission)
+		perms.GET("/matrix", groupHandler.GetPermissionMatrix)
 	}
 }
 
@@ -414,6 +493,9 @@ func registerDirectoryRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, groupService
 // registerMenuRoutes 注册菜单路由
 func registerMenuRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, menuService menu.Service) {
 	menuHandler := handler.NewMenuHandler(menuService)
+
+	// 子系统列表（公开接口，供登录/欢迎页未登录时渲染系统入口，无需鉴权）
+	rg.GET("/subsystems", menuHandler.GetSubsystems)
 
 	menus := rg.Group("/menus")
 	menus.Use(middleware.AuthRequired(jwtUtil))
@@ -521,6 +603,9 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 			items.DELETE("/:id", cloudItemHandler.DeleteItem)
 			items.PUT("/:id/rename", cloudItemHandler.RenameItem)
 			items.PUT("/:id/move", cloudItemHandler.MoveItem)
+			items.GET("/:id/permissions", cloudItemHandler.ListItemPermissions)
+			items.POST("/:id/permissions", cloudItemHandler.SetItemPermission)
+			items.DELETE("/:id/permissions/:permissionId", cloudItemHandler.RemoveItemPermission)
 			items.POST("/batch/delete", cloudItemHandler.BatchDelete)
 			items.POST("/batch/move", cloudItemHandler.BatchMove)
 		}
@@ -626,11 +711,6 @@ func registerWebSocketRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, wsManager *w
 	}
 }
 
-// registerLiveStreamRoutes 注册直播流路由
-func registerLiveStreamRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service live.Service) {
-	SetupLiveStreamRoutes(rg.Group("/live"), service)
-}
-
 // registerLiveCallbackRoutes 注册直播回调路由
 func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB, cfg *config.Config, services *Services) {
 	// 从配置中获取回调密钥
@@ -642,11 +722,11 @@ func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.
 }
 
 // registerLiveRoomRoutes 注册直播间管理路由
-func registerLiveRoomRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service live.LiveRoomService) {
+func registerLiveRoomRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, service live.LiveRoomService, groupService groups.Service) {
 	roomHandler := handler.NewLiveRoomHandler(service)
 
 	rooms := rg.Group("/live/rooms")
-	rooms.Use(middleware.AuthRequired(jwtUtil))
+	rooms.Use(middleware.AuthRequired(jwtUtil), middleware.TablePermissionRequired(groupService, 54, groups.PermRead))
 	{
 		// 列表
 		rooms.GET("", roomHandler.ListRooms)

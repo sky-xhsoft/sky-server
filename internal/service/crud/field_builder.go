@@ -50,6 +50,17 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 			continue
 		}
 
+		// C4: 虚拟字段 → 用表达式生成计算列(仅合法白名单表达式)
+		if col.IsVirtual == "Y" {
+			if expr, ok := sanitizeVirtualExpr(col.Expression); ok && expr != "" {
+				fields = append(fields, fmt.Sprintf("%s AS `%s`", expr, col.DbName))
+			} else if col.IsAK != "Y" {
+				// 无有效表达式则不输出该列
+				continue
+			}
+			continue
+		}
+
 		isPrimaryKey := col.IsAK == "Y" || col.SetValueType == "pk"
 		isStandardField := standardFields[col.DbName]
 		isForeignKey := col.SetValueType == "fk"
@@ -90,6 +101,11 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 	for _, col := range columns {
 		// 跳过UI-only字段
 		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
+			continue
+		}
+
+		// C4: 跳过虚拟字段(只读展示不落库)
+		if col.IsVirtual == "Y" {
 			continue
 		}
 
@@ -246,6 +262,12 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
 			continue
 		}
+
+		// C4: 跳过虚拟字段(只读展示不落库)
+		if col.IsVirtual == "Y" {
+			continue
+		}
+
 		value, exists := data[col.DbName]
 
 		if col.RegExpression != "" && exists && value != nil {
@@ -340,4 +362,53 @@ func parseDictID(s string) uint {
 		return 0
 	}
 	return uint(id)
+}
+
+// sanitizeVirtualExpr 校验虚拟字段表达式语法安全。
+// 仅允许白名单函数 + 标识符/DIGIT/括号/逗号/单引号/运算符,返回规范化表达式。
+// 非法或含空格外的危险字符则返回 ok=false(调用方跳过该列,不拼入 SQL)。
+var virtualFnWhitelist = map[string]bool{
+	"CONCAT": true, "UPPER": true, "LOWER": true, "TRIM": true, "LEN": true,
+	"ROUND": true, "CEIL": true, "FLOOR": true, "ABS": true,
+	"DATE_FORMAT": true, "YEAR": true, "MONTH": true, "DAY": true,
+	"NOW": true, "CURDATE": true, "IFNULL": true, "COALESCE": true, "CAST": true,
+}
+
+var virtualTokRe = regexp.MustCompile(`^[A-Za-z0-9_ 	(),.'+-]+$`)
+
+func sanitizeVirtualExpr(expr string) (string, bool) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return "", true
+	}
+	if len(expr) > 500 {
+		return "", false
+	}
+	if !virtualTokRe.MatchString(expr) {
+		return "", false
+	}
+	// 逐个 token 校验:标识符(列名)、数字、函数名(白名单)、括号/逗号/运算符
+	reTok := regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*|\d+(\.\d+)?|[-+*/&=<>(),' ]`)
+	for _, tok := range reTok.FindAllString(expr, -1) {
+		t := strings.TrimSpace(tok)
+		if t == "" {
+			continue
+		}
+		if reNum.MatchString(t) || t == "(" || t == ")" || t == "," || t == "'" ||
+			t == "+" || t == "-" || t == "*" || t == "/" || t == "=" || t == "<" || t == ">" {
+			continue
+		}
+		// 函数:必须白名单;否则视为列名(仅字母数字下划线)
+		if strings.HasSuffix(t, "(") {
+			fn := strings.TrimSuffix(strings.ToUpper(t), "(")
+			if !virtualFnWhitelist[fn] {
+				return "", false
+			}
+			continue
+		}
+		if !virtualTokRe.MatchString(t) {
+			return "", false
+		}
+	}
+	return expr, true
 }

@@ -266,6 +266,36 @@ type KickDeviceRequest struct {
 	DeviceID string `json:"deviceId" binding:"required"`
 }
 
+// GetCurrentUser 获取当前登录用户
+// @Summary 获取当前登录用户
+// @Description 获取当前登录用户、公司及配置信息
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Success 200 {object} sso.CurrentUserResponse
+// @Router /api/v1/auth/me [get]
+func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
+	// 获取当前用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	// 调用SSO服务获取当前用户信息
+	resp, err := h.ssoService.GetCurrentUser(userID.(uint))
+	if err != nil {
+		if errors.Is(err, errors.ResourceNotFound) {
+			utils.NotFound(c, "用户不存在")
+			return
+		}
+		utils.InternalError(c, "获取用户信息失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, resp)
+}
+
 // ChangePasswordRequest 修改密码请求
 type ChangePasswordRequest struct {
 	OldPassword string `json:"oldPassword" binding:"required"`

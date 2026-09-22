@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,10 @@ import (
 
 // DomainTenant 域名多租户中间件
 // 根据请求的 Host 头自动识别公司并设置上下文
+// 支持两种域名识别方式：
+//   1. {companyId}.zhibo.skyzhou.cn  —— 子域第一段为数字公司ID，如 1.zhibo.skyzhou.cn → 1、46.zhibo.skyzhou.cn → 46
+//   2. DB 中 sys_company.DOMAIN 精确匹配
+// 若都未识别，默认公司 1
 func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取请求的 Host（包含域名和端口）
@@ -27,7 +32,15 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 查询数据库，根据域名找到对应的公司
+		// 优先：解析 {companyId}.zhibo.skyzhou.cn 子域
+		if companyID, ok := parseSubdomainCompanyID(host); ok {
+			c.Set("companyID", companyID)
+			c.Set("companyDomain", host)
+			c.Next()
+			return
+		}
+
+		// 其次：查询数据库，根据域名找到对应的公司
 		var company entity.SysCompany
 		err := db.Where("DOMAIN = ? AND IS_ACTIVE = ?", host, "Y").First(&company).Error
 
@@ -43,6 +56,28 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// subdomainBase 域名基线：{companyId} 等子域都挂在这个域下
+const subdomainBase = ".zhibo.skyzhou.cn"
+
+// parseSubdomainCompanyID 尝试解析 {companyId} + subdomainBase 形式的子域。
+// 例：1.zhibo.skyzhou.cn → (1, true)；46.zhibo.skyzhou.cn → (46, true)；其它 → (0, false)
+func parseSubdomainCompanyID(host string) (uint, bool) {
+	if !strings.HasSuffix(host, subdomainBase) {
+		return 0, false
+	}
+	firstPart := strings.TrimSuffix(host, subdomainBase)
+	// 仅允许形如 "46" 的纯数字第一段；若带额外子域（如 a.1.zhibo.skyzhou.cn）则不支持
+	if firstPart == "" || strings.Contains(firstPart, ".") {
+		return 0, false
+	}
+	var id uint
+	n, err := fmt.Sscanf(firstPart, "%d", &id)
+	if err != nil || n != 1 || id == 0 {
+		return 0, false
+	}
+	return id, true
 }
 
 // GetCompanyID 从上下文中获取公司 ID

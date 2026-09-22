@@ -53,7 +53,7 @@ func setupCompanyTestDB(t *testing.T) *gorm.DB {
 
 func TestCompanyService_Register_PasswordMismatch(t *testing.T) {
 	db := setupCompanyTestDB(t)
-	svc := NewService(db)
+	svc := NewService(db, nil)
 
 	err := svc.Register(context.Background(), &RegisterRequest{
 		Name:            "Test Co",
@@ -71,7 +71,7 @@ func TestCompanyService_Register_PasswordMismatch(t *testing.T) {
 
 func TestCompanyService_Register_Success(t *testing.T) {
 	db := setupCompanyTestDB(t)
-	svc := NewService(db)
+	svc := NewService(db, nil)
 
 	err := svc.Register(context.Background(), &RegisterRequest{
 		Name:            "Test Co",

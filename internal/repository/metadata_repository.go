@@ -49,6 +49,9 @@ type MetadataRepository interface {
 	// 执行原生查询
 	RawQuery(sql string, args ...interface{}) *gorm.DB
 
+	// 执行写操作（INSERT/UPDATE/DELETE）
+	Exec(sql string, args ...interface{}) error
+
 	// 执行原生计数查询
 	CountBySql(sql string, args ...interface{}) *gorm.DB
 }

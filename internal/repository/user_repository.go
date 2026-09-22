@@ -7,6 +7,9 @@ type UserRepository interface {
 	// 根据用户名获取用户
 	GetUserByUsername(username string) (*entity.SysUser, error)
 
+	// 根据手机号获取用户（手机号登录，手机号唯一）
+	GetUserByPhone(phone string) (*entity.SysUser, error)
+
 	// 根据ID获取用户
 	GetUserByID(id uint) (*entity.SysUser, error)
 

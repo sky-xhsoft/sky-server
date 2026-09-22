@@ -123,6 +123,10 @@ func (r *metadataRepository) RawQuery(sql string, args ...interface{}) *gorm.DB 
 	return r.db.Raw(sql, args...)
 }
 
+func (r *metadataRepository) Exec(sql string, args ...interface{}) error {
+	return r.db.Exec(sql, args...).Error
+}
+
 func (r *metadataRepository) CountBySql(sql string, args ...interface{}) *gorm.DB {
 	return r.db.Raw(sql, args...)
 }

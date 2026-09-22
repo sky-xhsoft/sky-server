@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -499,6 +500,16 @@ func (h *CrudHandler) Export(c *gin.Context) {
 	if err := c.ShouldBindQuery(&req); err != nil {
 		req = crud.QueryRequest{TableName: tableName}
 	}
+	// gin 的 ShouldBindQuery 无法将 ?filters={...}(JSON) 绑定到 map 字段，
+	// 这里手动解析 filters 查询参数, 确保「带筛选条件的导出」只导出匹配行。
+	if req.Filters == nil {
+		if raw := c.Query("filters"); raw != "" {
+			var fm map[string]interface{}
+			if err := json.Unmarshal([]byte(raw), &fm); err == nil && len(fm) > 0 {
+				req.Filters = fm
+			}
+		}
+	}
 
 	f, err := h.crudService.Export(c.Request.Context(), tableName, req.Filters, userID.(uint))
 	if err != nil {
@@ -531,14 +542,36 @@ func (h *CrudHandler) Import(c *gin.Context) {
 	}
 	defer f.Close()
 	count, err := h.crudService.Import(c.Request.Context(), tableName, f, userID.(uint))
-	if err != nil {
+	if err != nil && count == 0 {
 		utils.InternalError(c, "导入失败: "+err.Error())
+		return
+	}
+	if err != nil {
+		// 部分成功：返回导入数量 + 失败提示（不走500，前端可直接展示）
+		utils.Success(c, gin.H{"imported": count, "message": err.Error()})
 		return
 	}
 	utils.Success(c, gin.H{"imported": count})
 }
 
-// BatchUpdate 批量修改记录
+// ImportTemplate 导出导入模板Excel（供「下载导入模板」使用）
+func (h *CrudHandler) ImportTemplate(c *gin.Context) {
+	tableName := c.Param("tableName")
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	f, err := h.crudService.ImportTemplate(c.Request.Context(), tableName, userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "获取模板失败: "+err.Error())
+		return
+	}
+	buf, _ := f.WriteToBuffer()
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_import_template.xlsx"`, tableName))
+	c.Data(200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
+}
 func (h *CrudHandler) BatchUpdate(c *gin.Context) {
 	tableName := c.Param("tableName")
 	var req struct {

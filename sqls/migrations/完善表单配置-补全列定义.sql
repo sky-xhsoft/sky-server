@@ -100,24 +100,8 @@ INSERT IGNORE INTO sys_column (SYS_TABLE_ID, DB_NAME, FULL_NAME, DISPLAY_NAME, D
 ON DUPLICATE KEY UPDATE DISPLAY_NAME=VALUES(DISPLAY_NAME), ORDERNO=VALUES(ORDERNO);
 
 -- ============================================================
--- live_push_domain_config 列定义 (13 columns)
+-- live_push_domain_config 列定义 (已废弃删除, 配置改从 live:domains:list 缓存获取推流域名)
 -- ============================================================
-SET @lpdc_id = (SELECT ID FROM sys_table WHERE NAME='live_push_domain_config');
-INSERT IGNORE INTO sys_column (SYS_TABLE_ID, DB_NAME, FULL_NAME, DISPLAY_NAME, DISPLAY_TYPE, COL_TYPE, COL_LENGTH, NULL_ABLE, ORDERNO, MASK, SET_VALUE_TYPE, IS_ACTIVE) VALUES
-(@lpdc_id, 'ID', 'ID', 'ID', 'text', 'bigint', 20, 'N', 1, '0000000000', 'pk', 'Y'),
-(@lpdc_id, 'SYS_COMPANY_ID', '公司ID', '公司ID', 'fk', 'bigint', 20, 'N', 8, '1111111111', 'fk', 'Y'),
-(@lpdc_id, 'DOMAIN_NAME', '域名', '域名', 'text', 'varchar', 255, 'N', 9, '1111111111', 'byPage', 'Y'),
-(@lpdc_id, 'STREAM_KEY', '推流密钥', '推流密钥', 'text', 'varchar', 255, 'N', 10, '1111111111', 'password', 'Y'),
-(@lpdc_id, 'APP_NAME', '应用名', '应用名', 'text', 'varchar', 100, 'N', 11, '1111111111', 'byPage', 'Y'),
-(@lpdc_id, 'PLAY_DOMAIN', '播放域名', '播放域名', 'text', 'varchar', 255, 'Y', 12, '1111111111', 'byPage', 'Y'),
-(@lpdc_id, 'IS_DEFAULT', '是否默认', '是否默认', 'select', 'tinyint', 1, 'N', 13, '1111111111', 'select', 'Y'),
-(@lpdc_id, 'IS_ACTIVE', '是否有效', '是否有效', 'select', 'tinyint', 1, 'N', 14, '1111111111', 'select', 'Y'),
-(@lpdc_id, 'REMARK', '备注', '备注', 'textarea', 'varchar', 500, 'Y', 15, '1111111111', 'byPage', 'Y'),
-(@lpdc_id, 'CREATED_AT', '创建时间', '创建时间', 'datetime', 'datetime', 0, 'N', 16, '0000000000', 'sysdate', 'Y'),
-(@lpdc_id, 'UPDATED_AT', '更新时间', '更新时间', 'datetime', 'datetime', 0, 'N', 17, '0000000000', 'sysdate', 'Y'),
-(@lpdc_id, 'CREATED_BY', '创建人', '创建人', 'text', 'bigint', 20, 'Y', 18, '0000000000', 'createBy', 'Y'),
-(@lpdc_id, 'UPDATED_BY', '修改人', '修改人', 'text', 'bigint', 20, 'Y', 19, '0000000000', 'operator', 'Y')
-ON DUPLICATE KEY UPDATE DISPLAY_NAME=VALUES(DISPLAY_NAME), ORDERNO=VALUES(ORDERNO);
 
 -- ============================================================
 -- cloud_storage_config 列定义 (21 columns)

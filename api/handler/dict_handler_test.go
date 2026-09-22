@@ -14,10 +14,10 @@ import (
 
 // mockDictService mock 字典服务
 type mockDictService struct {
-	items     []*entity.SysDictItem
-	itemsErr  error
-	defValue  string
-	defErr    error
+	items      []*entity.SysDictItem
+	itemsErr   error
+	defValue   string
+	defErr     error
 	refreshErr error
 }
 

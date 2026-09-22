@@ -12,11 +12,11 @@ import (
 
 // mockDictRepository mock 字典仓储
 type mockDictRepository struct {
-	items     []*entity.SysDictItem
-	itemsErr  error
-	dict      *entity.SysDict
-	dictErr   error
-	allDicts  []*entity.SysDict
+	items    []*entity.SysDictItem
+	itemsErr error
+	dict     *entity.SysDict
+	dictErr  error
+	allDicts []*entity.SysDict
 }
 
 func (m *mockDictRepository) GetAllDicts() ([]*entity.SysDict, error) {

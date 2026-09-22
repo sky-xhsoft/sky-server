@@ -172,7 +172,7 @@ func (s *liveRoomService) ListRooms(ctx context.Context, filter *RoomFilter) ([]
 
 	// 应用过滤条件
 	if filter.CompanyID > 0 {
-		query = query.Where("SYS_COMPANY_ID = ?", filter.CompanyID)
+		query = query.Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1))", filter.CompanyID)
 	}
 	if filter.RoomType != "" {
 		query = query.Where("ROOM_TYPE = ?", filter.RoomType)

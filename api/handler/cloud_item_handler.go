@@ -301,8 +301,8 @@ func (h *CloudItemHandler) BatchDelete(c *gin.Context) {
 	// 批量删除完成后，重新计算配额
 	if successCount > 0 {
 		if err := h.cloudService.RecalculateQuota(c.Request.Context(), uid); err != nil {
-		logger.Warn("RecalculateQuota failed", zap.Uint("userId", uid), zap.Error(err))
-	}
+			logger.Warn("RecalculateQuota failed", zap.Uint("userId", uid), zap.Error(err))
+		}
 	}
 
 	utils.Success(c, BatchDeleteResponse{
@@ -388,4 +388,108 @@ type BatchDeleteResponse struct {
 	SuccessCount int      `json:"successCount"`
 	FailedCount  int      `json:"failedCount"`
 	FailedItems  []string `json:"failedItems"`
+}
+
+// SetItemPermission 设置项目权限
+// @Summary 设置云盘项目权限
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param id path int true "项目ID"
+// @Param request body cloud.SetItemPermissionRequest true "权限设置"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/{id}/permissions [post]
+func (h *CloudItemHandler) SetItemPermission(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+
+	var req cloud.SetItemPermissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	if err := h.cloudService.SetItemPermission(c.Request.Context(), uint(id), &req, userID.(uint)); err != nil {
+		utils.InternalError(c, "设置权限失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "权限设置成功"})
+}
+
+// ListItemPermissions 列出项目权限
+// @Summary 列出云盘项目权限
+// @Tags cloud
+// @Produce json
+// @Param id path int true "项目ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/{id}/permissions [get]
+func (h *CloudItemHandler) ListItemPermissions(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	perms, err := h.cloudService.ListItemPermissions(c.Request.Context(), uint(id), userID.(uint))
+	if err != nil {
+		utils.InternalError(c, "查询权限失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"permissions": perms})
+}
+
+// RemoveItemPermission 删除项目权限
+// @Summary 删除云盘项目权限
+// @Tags cloud
+// @Accept json
+// @Produce json
+// @Param id path int true "项目ID"
+// @Param permissionId path int true "权限ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/cloud/items/{id}/permissions/{permissionId} [delete]
+func (h *CloudItemHandler) RemoveItemPermission(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+	permStr := c.Param("permissionId")
+	permID, err := strconv.ParseUint(permStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "权限ID格式错误")
+		return
+	}
+
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+
+	if err := h.cloudService.RemoveItemPermission(c.Request.Context(), uint(id), uint(permID), userID.(uint)); err != nil {
+		utils.InternalError(c, "删除权限失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "权限删除成功"})
 }

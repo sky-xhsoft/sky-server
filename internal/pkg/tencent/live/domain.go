@@ -241,3 +241,88 @@ func (m *DomainManager) AuthenticateDomainOwner(ctx context.Context, domainName 
 
 	return result, nil
 }
+
+// AuthKeyInfo 域名鉴权配置信息
+type AuthKeyInfo struct {
+	Enable     int64   // 是否启用：0-关闭，1-启用
+	MasterKey  string  // 主鉴权 Key
+	BackupKey  string  // 备鉴权 Key
+	AuthDelta  *uint64 // 有效时间（秒）
+	DomainName string
+}
+
+// GetPushAuthKey 查询推流鉴权配置
+func (m *DomainManager) GetPushAuthKey(ctx context.Context, domainName string) (*AuthKeyInfo, error) {
+	request := live.NewDescribeLivePushAuthKeyRequest()
+	request.DomainName = common.StringPtr(domainName)
+
+	response, err := m.client.DescribeLivePushAuthKey(request)
+	if err != nil {
+		logger.Error("Failed to describe push auth key",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("failed to describe push auth key: %w", err)
+	}
+
+	if response.Response.PushAuthKeyInfo == nil {
+		return &AuthKeyInfo{DomainName: domainName}, nil
+	}
+
+	info := &AuthKeyInfo{
+		DomainName: domainName,
+	}
+	if response.Response.PushAuthKeyInfo.Enable != nil {
+		info.Enable = *response.Response.PushAuthKeyInfo.Enable
+	}
+	if response.Response.PushAuthKeyInfo.MasterAuthKey != nil {
+		info.MasterKey = *response.Response.PushAuthKeyInfo.MasterAuthKey
+	}
+	if response.Response.PushAuthKeyInfo.BackupAuthKey != nil {
+		info.BackupKey = *response.Response.PushAuthKeyInfo.BackupAuthKey
+	}
+	if response.Response.PushAuthKeyInfo.AuthDelta != nil {
+		d := *response.Response.PushAuthKeyInfo.AuthDelta
+		info.AuthDelta = &d
+	}
+
+	return info, nil
+}
+
+// GetPlayAuthKey 查询播放鉴权配置
+func (m *DomainManager) GetPlayAuthKey(ctx context.Context, domainName string) (*AuthKeyInfo, error) {
+	request := live.NewDescribeLivePlayAuthKeyRequest()
+	request.DomainName = common.StringPtr(domainName)
+
+	response, err := m.client.DescribeLivePlayAuthKey(request)
+	if err != nil {
+		logger.Error("Failed to describe play auth key",
+			zap.String("domainName", domainName),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("failed to describe play auth key: %w", err)
+	}
+
+	if response.Response.PlayAuthKeyInfo == nil {
+		return &AuthKeyInfo{DomainName: domainName}, nil
+	}
+
+	info := &AuthKeyInfo{
+		DomainName: domainName,
+	}
+	if response.Response.PlayAuthKeyInfo.Enable != nil {
+		info.Enable = *response.Response.PlayAuthKeyInfo.Enable
+	}
+	if response.Response.PlayAuthKeyInfo.AuthKey != nil {
+		info.MasterKey = *response.Response.PlayAuthKeyInfo.AuthKey
+	}
+	if response.Response.PlayAuthKeyInfo.AuthBackKey != nil {
+		info.BackupKey = *response.Response.PlayAuthKeyInfo.AuthBackKey
+	}
+	if response.Response.PlayAuthKeyInfo.AuthDelta != nil {
+		d := *response.Response.PlayAuthKeyInfo.AuthDelta
+		info.AuthDelta = &d
+	}
+
+	return info, nil
+}

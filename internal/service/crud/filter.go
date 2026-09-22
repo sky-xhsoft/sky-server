@@ -25,13 +25,13 @@ func (s *service) applyDataFilter(query *gorm.DB, filterJSON string, columns []*
 }
 
 // applyFilters 应用过滤条件
-// 对于 text 类型字段使用 LIKE 模糊匹配，其他类型使用精确匹配
+// 使用智能转换:字符串字段默认 LIKE、支持 =精确/*通配;NUMBER 支持 =/>/</→/区间;DATE 支持日期范围(仿 Bos toSQLClause)
 func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, columns []*entity.SysColumn) *gorm.DB {
-	// 构建字段类型映射，方便快速查找
-	columnTypeMap := make(map[string]string)
+	// 构建字段→(显示类型,DB列类型) 映射
+	colInfo := make(map[string]*entity.SysColumn)
 	if columns != nil {
 		for _, col := range columns {
-			columnTypeMap[col.DbName] = col.DisplayType
+			colInfo[col.DbName] = col
 		}
 	}
 
@@ -50,37 +50,38 @@ func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, c
 			continue
 		}
 
-		// 获取字段的显示类型
-		displayType := columnTypeMap[safeField]
-
-		// 对于 text 类型字段（text, textarea），使用 LIKE 模糊查询
-		if displayType == "text" || displayType == "textarea" || displayType == "clob" {
-			// 转换为字符串并添加通配符
-			if strValue, ok := value.(string); ok && strValue != "" {
-				query = query.Where(fmt.Sprintf("`%s` LIKE ?", safeField), "%"+strValue+"%")
-			}
-		} else {
-			// 其他类型使用精确匹配
-			// 如果值是逗号分隔的字符串，使用 IN 查询
-			if strValue, ok := value.(string); ok && strings.Contains(strValue, ",") {
-				parts := strings.Split(strValue, ",")
-				var values []interface{}
-				for _, p := range parts {
-					p = strings.TrimSpace(p)
-					if p != "" {
-						values = append(values, p)
-					}
-				}
-				if len(values) > 0 {
-					placeholders := strings.Repeat("?,", len(values))
-					placeholders = placeholders[:len(placeholders)-1]
-					query = query.Where(fmt.Sprintf("`%s` IN (%s)", safeField, placeholders), values...)
-				}
-			} else {
-				query = query.Where(fmt.Sprintf("`%s` = ?", safeField), value)
-			}
+		col := colInfo[safeField]
+		// 非字符串类型(如 FK 下拉选值、bool)仍走精确匹配
+		if _, isStr := value.(string); !isStr || col == nil {
+			query = query.Where(fmt.Sprintf("`%s` = ?", safeField), value)
+			continue
 		}
+
+		// 字符串 → 推断 db 类型并智能转换
+		dbType := inferDBType(col)
+		sqlClause, args := toSQLClause(safeField, value.(string), dbType)
+		query = query.Where(sqlClause, args...)
 	}
 
 	return query
+}
+
+// inferDBType 由列定义推断 MySQL 语义类型(string/number/date/text)
+func inferDBType(col *entity.SysColumn) string {
+	if col == nil {
+		return "string"
+	}
+	ct := strings.ToUpper(col.ColType)
+	ct = strings.TrimSpace(strings.SplitN(ct, "(", 2)[0])
+	switch {
+	case strings.Contains(ct, "INT"), strings.Contains(ct, "DECIMAL"), strings.Contains(ct, "NUMERIC"),
+		strings.Contains(ct, "FLOAT"), strings.Contains(ct, "DOUBLE"), strings.Contains(ct, "BIGINT"):
+		return "number"
+	case strings.Contains(ct, "DATE"), strings.Contains(ct, "TIME"), strings.Contains(ct, "YEAR"):
+		return "date"
+	case strings.Contains(ct, "TEXT"), strings.Contains(ct, "BLOB"), strings.Contains(ct, "CLOB"):
+		return "text"
+	default:
+		return "string"
+	}
 }

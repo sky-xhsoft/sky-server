@@ -108,6 +108,31 @@ func (c *Client) DoAPIRequest(ctx context.Context, method, url string, requestBo
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		// 尝试解析火山引擎错误信息以便透传具体原因
+		var errResp struct {
+			ResponseMetadata struct {
+				Error struct {
+					Code    string `json:"Code"`
+					CodeN   int    `json:"CodeN"`
+					Message string `json:"Message"`
+				} `json:"Error"`
+			} `json:"ResponseMetadata"`
+			Result *struct {
+				Code    int    `json:"Code"`
+				Message string `json:"Message"`
+			} `json:"Result"`
+		}
+		detail := ""
+		if err := json.Unmarshal(respBody, &errResp); err == nil {
+			if errResp.ResponseMetadata.Error.Message != "" {
+				detail = errResp.ResponseMetadata.Error.Message
+			} else if errResp.Result != nil && errResp.Result.Message != "" {
+				detail = errResp.Result.Message
+			}
+		}
+		if detail != "" {
+			return fmt.Errorf("API request failed with status %d: %s (detail: %s)", resp.StatusCode, string(respBody), detail)
+		}
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 

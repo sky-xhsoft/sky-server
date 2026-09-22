@@ -10,30 +10,30 @@ import (
 
 // QueryOptions 查询选项
 type QueryOptions struct {
-	Fields     []string      // 查询字段列表
-	OrderBy    string        // 排序字段
-	Order      string        // 排序方向: "asc" or "desc"
-	Preloads   []string      // 预加载关系
-	WithCount  bool          // 是否返回总数 (用于分页)
-	Distinct   bool          // 是否去重
+	Fields    []string // 查询字段列表
+	OrderBy   string   // 排序字段
+	Order     string   // 排序方向: "asc" or "desc"
+	Preloads  []string // 预加载关系
+	WithCount bool     // 是否返回总数 (用于分页)
+	Distinct  bool     // 是否去重
 }
 
 // PageQuery 分页查询参数
 type PageQuery struct {
-	Page      int         `json:"page" binding:"required,min=1"`           // 页码
-	PageSize  int         `json:"pageSize" binding:"required,min=1,max=100"` // 每页大小
-	Keyword   string      `json:"keyword"`                                // 搜索关键字
-	OrderBy   string      `json:"orderBy"`                                // 排序字段
-	Order     string      `json:"order"`                                  // 排序方向: "asc" or "desc"
-	Filters   interface{} `json:"filters"`                                // 筛选条件
+	Page     int         `json:"page" binding:"required,min=1"`             // 页码
+	PageSize int         `json:"pageSize" binding:"required,min=1,max=100"` // 每页大小
+	Keyword  string      `json:"keyword"`                                   // 搜索关键字
+	OrderBy  string      `json:"orderBy"`                                   // 排序字段
+	Order    string      `json:"order"`                                     // 排序方向: "asc" or "desc"
+	Filters  interface{} `json:"filters"`                                   // 筛选条件
 }
 
 // PageResult 统一分页查询结果
 type PageResult struct {
-	Total    int64       `json:"total"`                                    // 总数量
-	Page     int         `json:"page"`                                     // 当前页码
-	PageSize int         `json:"pageSize"`                                 // 每页大小
-	Data     interface{} `json:"data"`                                     // 数据列表
+	Total    int64       `json:"total"`    // 总数量
+	Page     int         `json:"page"`     // 当前页码
+	PageSize int         `json:"pageSize"` // 每页大小
+	Data     interface{} `json:"data"`     // 数据列表
 }
 
 // BaseRepository 基础Repository接口
@@ -112,10 +112,10 @@ func (l *NoopLogger) Error(ctx context.Context, format string, args ...interface
 // NoopCache 空缓存实现
 type NoopCache struct{}
 
-func (c *NoopCache) Get(key string, obj interface{}) error          { return gorm.ErrRecordNotFound }
+func (c *NoopCache) Get(key string, obj interface{}) error                    { return gorm.ErrRecordNotFound }
 func (c *NoopCache) Set(key string, obj interface{}, ttl time.Duration) error { return nil }
-func (c *NoopCache) Delete(key string) error                        { return nil }
-func (c *NoopCache) Exists(key string) (bool, error)                 { return false, nil }
+func (c *NoopCache) Delete(key string) error                                  { return nil }
+func (c *NoopCache) Exists(key string) (bool, error)                          { return false, nil }
 
 // GetDB 获取数据库实例
 func (r *BaseRepositoryImpl) GetDB() *gorm.DB {

@@ -9,31 +9,31 @@ import (
 
 // SSO领域事件类型
 const (
-	EventUserLoggedIn    = "user.logged_in"    // 用户登录
-	EventUserLoggedOut   = "user.logged_out"   // 用户登出
-	EventTokenRefreshed  = "token.refreshed"   // Token刷新
-	EventSessionKicked   = "session.kicked"    // 会话被踢出
-	EventSessionExpired  = "session.expired"   // 会话过期
+	EventUserLoggedIn   = "user.logged_in"  // 用户登录
+	EventUserLoggedOut  = "user.logged_out" // 用户登出
+	EventTokenRefreshed = "token.refreshed" // Token刷新
+	EventSessionKicked  = "session.kicked"  // 会话被踢出
+	EventSessionExpired = "session.expired" // 会话过期
 )
 
 // SSO领域实体
 
 // Session 会话实体
 type Session struct {
-	ID              uint             `json:"id"`
-	UserID          uint             `json:"user_id"`
-	CompanyID       uint             `json:"company_id"`
-	Token           string           `json:"token"`
-	RefreshToken    string           `json:"refresh_token"`
-	ClientType      string           `json:"client_type"` // web, mobile, desktop
-	DeviceID        string           `json:"device_id"`
-	DeviceName      string           `json:"device_name"`
-	IPAddress       string           `json:"ip_address"`
-	UserAgent       string           `json:"user_agent"`
-	LoginTime       time.Time        `json:"login_time"`
-	LastActiveTime  time.Time        `json:"last_active_time"`
-	ExpireTime      time.Time        `json:"expire_time"`
-	IsActive        string           `json:"is_active"`
+	ID             uint      `json:"id"`
+	UserID         uint      `json:"user_id"`
+	CompanyID      uint      `json:"company_id"`
+	Token          string    `json:"token"`
+	RefreshToken   string    `json:"refresh_token"`
+	ClientType     string    `json:"client_type"` // web, mobile, desktop
+	DeviceID       string    `json:"device_id"`
+	DeviceName     string    `json:"device_name"`
+	IPAddress      string    `json:"ip_address"`
+	UserAgent      string    `json:"user_agent"`
+	LoginTime      time.Time `json:"login_time"`
+	LastActiveTime time.Time `json:"last_active_time"`
+	ExpireTime     time.Time `json:"expire_time"`
+	IsActive       string    `json:"is_active"`
 }
 
 // SSO领域服务接口
@@ -73,12 +73,12 @@ type LoginRequest struct {
 
 // LoginResult 登录结果
 type LoginResult struct {
-	Token         string               `json:"token"`
-	RefreshToken  string               `json:"refresh_token"`
-	ExpiresIn     int                  `json:"expires_in"`
-	User          *UserInfo            `json:"user"`
-	Company       *entity.SysCompany     `json:"company"`
-	CompanyConf   *entity.SysCompanyConf `json:"company_conf"`
+	Token        string                 `json:"token"`
+	RefreshToken string                 `json:"refresh_token"`
+	ExpiresIn    int                    `json:"expires_in"`
+	User         *UserInfo              `json:"user"`
+	Company      *entity.SysCompany     `json:"company"`
+	CompanyConf  *entity.SysCompanyConf `json:"company_conf"`
 }
 
 // TokenResult Token响应
@@ -124,29 +124,29 @@ type SSORepository interface {
 
 // LoginEventData 登录事件数据
 type LoginEventData struct {
-	UserID    uint
-	Username  string
-	CompanyID uint
+	UserID     uint
+	Username   string
+	CompanyID  uint
 	ClientType string
-	DeviceID  string
-	IPAddress string
-	LoginTime time.Time
+	DeviceID   string
+	IPAddress  string
+	LoginTime  time.Time
 }
 
 // LogoutEventData 登出事件数据
 type LogoutEventData struct {
-	UserID    uint
-	Username  string
-	CompanyID uint
-	DeviceID  string
+	UserID     uint
+	Username   string
+	CompanyID  uint
+	DeviceID   string
 	LogoutTime time.Time
 }
 
 // TokenRefreshEventData Token刷新事件数据
 type TokenRefreshEventData struct {
-	UserID    uint
-	Username  string
-	CompanyID uint
-	DeviceID  string
+	UserID      uint
+	Username    string
+	CompanyID   uint
+	DeviceID    string
 	RefreshTime time.Time
 }
