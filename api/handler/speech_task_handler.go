@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -72,6 +73,11 @@ func (h *SpeechTaskHandler) CreateSpeechTask(c *gin.Context) {
 	if req.Rule.EndTime == "" {
 		utils.BadRequest(c, "结束时间不能为空")
 		return
+	}
+
+	// 临时调试日志：确认后端实际收到的 Pipe 类型与完整请求
+	if b, err := json.Marshal(&req); err == nil {
+		zap.L().Info("CreateSpeechTask 收到请求", zap.String("pipe", req.Rule.Pipe), zap.ByteString("body", b))
 	}
 
 	taskID, err := h.speechTaskService.CreateSpeechTask(c.Request.Context(), companyID, &req)

@@ -39,5 +39,6 @@ func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service live
 		push.POST("/push-url/generate", pushURLHandler.GeneratePushURL)   // 生成推流地址
 		push.POST("/push-url/by-room", pushURLHandler.GeneratePushURLByRoom) // 根据直播间ID生成推流地址
 		push.POST("/play-url/generate", pushURLHandler.GeneratePlayURL)   // 生成播放地址
+		push.POST("/pull-url/by-room", pushURLHandler.GeneratePlayURLByRoom) // 根据直播间ID生成播放地址
 	}
 }

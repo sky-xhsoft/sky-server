@@ -3,6 +3,7 @@ package handler
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
@@ -117,10 +118,12 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 	streamName := req.RoomID
 	appName := "live"
 
-	// expireTime 用直播间开始时间（Unix秒）；为空则后端默认24小时后
+	// expireTime 用直播间结束时间（Unix秒）；已过期则默认7天后，保证推流鉴权 txTime 在有效期内
 	var expireTime int64
-	if room.StartTime != nil {
-		expireTime = room.StartTime.Unix()
+	if room.EndTime != nil && room.EndTime.After(time.Now()) {
+		expireTime = room.EndTime.Unix()
+	} else {
+		expireTime = time.Now().Unix() + 7*86400
 	}
 
 	pushResp, err := h.pushURLService.GeneratePushURL(pushDomain, appName, streamName, streamKey, expireTime)
@@ -133,6 +136,86 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 }
 
 func int64Ptr(v int64) *int64 { return &v }
+
+// GeneratePlayURLByRoomRequest 根据直播间ID生成播放地址请求
+type GeneratePlayURLByRoomRequest struct {
+	RoomID string `json:"roomId" binding:"required"` // 直播间ID
+}
+
+// GeneratePlayURLByRoom 根据直播间ID生成播放地址
+// @Summary 根据直播间ID生成播放地址
+// @Description 根据直播间ID从 live:domains:list 缓存取当前公司播放域名（过滤 tlivecloud.com 尾缀），生成 RTMP/FLV/HLS 播放地址
+// @Tags Live
+// @Accept json
+// @Produce json
+// @Param request body GeneratePlayURLByRoomRequest true "直播间ID"
+// @Success 200 {object} map[string]string
+// @Router /api/v1/live/pull-url/by-room [post]
+func (h *LivePushURLHandler) GeneratePlayURLByRoom(c *gin.Context) {
+	var req GeneratePlayURLByRoomRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	if h.liveService == nil {
+		utils.InternalError(c, "直播服务不可用")
+		return
+	}
+
+	// 正确注入公司ID到上下文，使 ListDomains 缓存 key 用当前登录公司
+	ctx := withCompanyID(c)
+
+	roomID, err := strconv.ParseUint(req.RoomID, 10, 64)
+	if err != nil || roomID == 0 {
+		utils.BadRequest(c, "直播间ID无效: "+req.RoomID)
+		return
+	}
+
+	// 取当前公司的播放域名（Type=1）：从 live:domains:list 缓存读取，排除 tlivecloud.com 尾缀
+	var playDomain string
+	domains, err := h.liveService.ListDomains(ctx, int64Ptr(1))
+	if err == nil {
+		for _, d := range domains {
+			if d.Name != "" && !strings.HasSuffix(strings.ToLower(d.Name), ".tlivecloud.com") {
+				playDomain = d.Name
+				break
+			}
+		}
+	}
+	if playDomain == "" {
+		utils.InternalError(c, "当前公司未配置播放域名")
+		return
+	}
+
+	// 取播放域名的鉴权主KEY（取不到则地址不带鉴权参数）
+	playKey := ""
+	if auth, err := h.liveService.GetDomainAuthKey(ctx, playDomain, "play"); err == nil && auth != nil {
+		playKey = auth.MasterKey
+	}
+
+	// streamName 用直播间ID；appName 固定 live
+	streamName := req.RoomID
+	appName := "live"
+	var expireTime int64
+	if h.roomService != nil {
+		if room, err := h.roomService.GetRoom(ctx, uint(roomID)); err == nil {
+			if room.EndTime != nil && room.EndTime.After(time.Now()) {
+				expireTime = room.EndTime.Unix()
+			} else {
+				expireTime = time.Now().Unix() + 7*86400
+			}
+		}
+	}
+
+	playURLs, err := h.pushURLService.GeneratePlayURL(playDomain, appName, streamName, playKey, expireTime)
+	if err != nil {
+		utils.InternalError(c, "生成播放地址失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, playURLs)
+}
 
 // GeneratePushURL 生成推流地址
 // @Summary 生成推流地址
