@@ -47,7 +47,9 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 	}
 
 	// 批量查询每个分组
-	batchResults := make(map[fkBatchKey]map[interface{}]string)
+	// 以 ID 的字符串形式作键：同一个 ID 在不同表里可能被扫描成 int64 / uint32 等不同类型，
+	// 直接用 interface{} 作键会匹配不上，导致 _display 缺失、前端逐行请求显示值
+	batchResults := make(map[fkBatchKey]map[string]string)
 	for key, idSet := range batchGroups {
 		if len(idSet) == 0 {
 			continue
@@ -74,11 +76,11 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 		var rows []map[string]interface{}
 		s.db.Table(refTable.Name).Select(fmt.Sprintf("ID, %s", displayCol.DbName)).Where("ID IN ?", ids).Find(&rows)
 
-		labelMap := make(map[interface{}]string)
+		labelMap := make(map[string]string)
 		for _, row := range rows {
 			if id, ok := row["ID"]; ok {
-				if label, ok := row[displayCol.DbName]; ok {
-					labelMap[id] = fmt.Sprintf("%v", label)
+				if label, ok := row[displayCol.DbName]; ok && label != nil {
+					labelMap[fmt.Sprintf("%v", id)] = fmt.Sprintf("%v", label)
 				}
 			}
 		}
@@ -101,7 +103,7 @@ func (s *service) processForeignKeys(ctx context.Context, columns []*entity.SysC
 		for _, record := range results {
 			if val, exists := record[fkCol.DbName]; exists && val != nil {
 				if labelMap != nil {
-					if label, ok := labelMap[val]; ok {
+					if label, ok := labelMap[fmt.Sprintf("%v", val)]; ok {
 						record[displayFieldName] = label
 					}
 				}
