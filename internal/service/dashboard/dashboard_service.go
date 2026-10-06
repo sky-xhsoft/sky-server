@@ -23,6 +23,12 @@ type Service interface {
 
 	// GetActivities 获取最新动态
 	GetActivities(ctx context.Context, companyID uint, limit int) ([]*Activity, error)
+
+	// GetSystemOverview 系统中心概览（当前公司）
+	GetSystemOverview(ctx context.Context, companyID uint, days int) (*SystemOverview, error)
+
+	// GetCloudOverview 云盘概览（当前用户）
+	GetCloudOverview(ctx context.Context, userID uint, days int) (*CloudOverview, error)
 }
 
 // Stats 统计卡

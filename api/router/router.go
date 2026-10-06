@@ -245,6 +245,8 @@ func registerDashboardRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, dashboardSer
 		dashboard.GET("/trend", dashboardHandler.GetTrend)
 		dashboard.GET("/recent-rooms", dashboardHandler.GetRecentRooms)
 		dashboard.GET("/activities", dashboardHandler.GetActivities)
+		dashboard.GET("/system", dashboardHandler.GetSystemOverview)
+		dashboard.GET("/cloud", dashboardHandler.GetCloudOverview)
 	}
 }
 

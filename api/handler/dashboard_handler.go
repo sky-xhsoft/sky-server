@@ -142,3 +142,46 @@ func (h *DashboardHandler) GetActivities(c *gin.Context) {
 
 	utils.Success(c, activities)
 }
+
+// GetSystemOverview 系统中心概览（当前公司）
+// @Summary 系统中心概览
+// @Tags Dashboard
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dashboard.SystemOverview
+// @Router /api/v1/dashboard/system [get]
+func (h *DashboardHandler) GetSystemOverview(c *gin.Context) {
+	companyID := getCompanyID(c)
+	if companyID == 0 {
+		utils.BadRequest(c, "无法识别公司")
+		return
+	}
+	ov, err := h.dashboardService.GetSystemOverview(c, companyID, 7)
+	if err != nil {
+		utils.FailFromError(c, "获取系统概览失败: ", err)
+		return
+	}
+	utils.Success(c, ov)
+}
+
+// GetCloudOverview 云盘概览（当前用户）
+// @Summary 云盘概览
+// @Tags Dashboard
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dashboard.CloudOverview
+// @Router /api/v1/dashboard/cloud [get]
+func (h *DashboardHandler) GetCloudOverview(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	uid, _ := userID.(uint)
+	if uid == 0 {
+		utils.Unauthorized(c, "未登录")
+		return
+	}
+	ov, err := h.dashboardService.GetCloudOverview(c, uid, 7)
+	if err != nil {
+		utils.FailFromError(c, "获取云盘概览失败: ", err)
+		return
+	}
+	utils.Success(c, ov)
+}
