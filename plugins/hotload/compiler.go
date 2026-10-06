@@ -95,8 +95,10 @@ func (c *Compiler) Compile(pluginPath string) *CompileResult {
 
 	// 6. 执行编译
 	// 使用 go build -buildmode=plugin 编译成 .so 文件
+	// 插件源码带 hotplugin 构建标签，避免被 go build ./... 当作普通 main 包编译
 	cmd := exec.Command("go", "build",
 		"-buildmode=plugin",
+		"-tags", "hotplugin",
 		"-o", outputPath,
 		absSourceDir)
 

@@ -1,3 +1,8 @@
+//go:build hotplugin
+
+// 热加载插件（package main，无 main 函数）：仅由 plugins/hotload 以 -buildmode=plugin -tags hotplugin 编译，
+// 普通 go build ./... 会跳过本文件
+
 // 插件模板
 // 复制此文件到你的插件目录并修改
 // 例如：cp TEMPLATE.go myplugin/plugin.go

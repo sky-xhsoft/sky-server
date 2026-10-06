@@ -1,6 +1,6 @@
 # Sky-Server Makefile
 
-.PHONY: help init build run test clean tidy swagger metadata-init lint coverage test-cloud test-cloud-coverage test-cloud-integration test-cloud-bench test-all-cloud
+.PHONY: help init build run test clean tidy swagger wire metadata-init lint coverage test-cloud test-cloud-coverage test-cloud-integration test-cloud-bench test-all-cloud
 
 # 显示帮助信息
 help:
@@ -101,6 +101,12 @@ swagger:
 	@echo "Generating Swagger documentation..."
 	swag init -g cmd/server/main.go -o api/swagger
 	@echo "Swagger documentation generated!"
+
+# 重新生成依赖注入代码（修改 wire/wire.go 的 provider 后执行，勿手工编辑 wire_gen.go）
+wire:
+	@echo "Generating wire_gen.go..."
+	go run -mod=mod github.com/google/wire/cmd/wire gen ./wire
+	@echo "wire_gen.go generated!"
 
 # 从数据库初始化元数据
 metadata-init:

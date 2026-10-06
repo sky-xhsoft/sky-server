@@ -1,3 +1,8 @@
+//go:build hotplugin
+
+// 热加载插件（package main，无 main 函数）：仅由 plugins/hotload 以 -buildmode=plugin -tags hotplugin 编译，
+// 普通 go build ./... 会跳过本文件
+
 // Example Hot-Reload Plugin
 // 热加载示例插件 - 演示 JSP 风格的动态编译和热重载
 
