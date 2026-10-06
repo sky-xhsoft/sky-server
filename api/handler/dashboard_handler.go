@@ -46,7 +46,7 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 
 	stats, err := h.dashboardService.GetStats(c, companyID)
 	if err != nil {
-		utils.InternalError(c, "获取统计信息失败: "+err.Error())
+		utils.FailFromError(c, "获取统计信息失败: ", err)
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 
 	trend, err := h.dashboardService.GetTrend(c, companyID, days)
 	if err != nil {
-		utils.InternalError(c, "获取趋势数据失败: "+err.Error())
+		utils.FailFromError(c, "获取趋势数据失败: ", err)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *DashboardHandler) GetRecentRooms(c *gin.Context) {
 
 	rooms, err := h.dashboardService.GetRecentRooms(c, companyID, limit)
 	if err != nil {
-		utils.InternalError(c, "获取最近直播失败: "+err.Error())
+		utils.FailFromError(c, "获取最近直播失败: ", err)
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *DashboardHandler) GetActivities(c *gin.Context) {
 
 	activities, err := h.dashboardService.GetActivities(c, companyID, limit)
 	if err != nil {
-		utils.InternalError(c, "获取最新动态失败: "+err.Error())
+		utils.FailFromError(c, "获取最新动态失败: ", err)
 		return
 	}
 

@@ -46,7 +46,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 	// 获取表信息
 	table, err := h.metadataService.GetTableByID(uint(tableID))
 	if err != nil {
-		utils.InternalError(c, "获取表定义失败: "+err.Error())
+		utils.FailFromError(c, "获取表定义失败: ", err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 	// 获取字段列表
 	columns, err := h.metadataService.GetColumns(uint(tableID))
 	if err != nil {
-		utils.InternalError(c, "获取字段定义失败: "+err.Error())
+		utils.FailFromError(c, "获取字段定义失败: ", err)
 		return
 	}
 
@@ -173,7 +173,7 @@ func (h *MetadataHandler) GetTable(c *gin.Context) {
 
 	table, err := h.metadataService.GetTable(tableName)
 	if err != nil {
-		utils.InternalError(c, "获取表定义失败: "+err.Error())
+		utils.FailFromError(c, "获取表定义失败: ", err)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (h *MetadataHandler) GetColumns(c *gin.Context) {
 
 	columns, err := h.metadataService.GetColumns(uint(tableID))
 	if err != nil {
-		utils.InternalError(c, "获取字段定义失败: "+err.Error())
+		utils.FailFromError(c, "获取字段定义失败: ", err)
 		return
 	}
 
@@ -230,7 +230,7 @@ func (h *MetadataHandler) GetTableRefs(c *gin.Context) {
 
 	refs, err := h.metadataService.GetTableRefs(uint(tableID))
 	if err != nil {
-		utils.InternalError(c, "获取表关系失败: "+err.Error())
+		utils.FailFromError(c, "获取表关系失败: ", err)
 		return
 	}
 
@@ -256,7 +256,7 @@ func (h *MetadataHandler) GetActions(c *gin.Context) {
 
 	actions, err := h.metadataService.GetActions(uint(tableID))
 	if err != nil {
-		utils.InternalError(c, "获取动作定义失败: "+err.Error())
+		utils.FailFromError(c, "获取动作定义失败: ", err)
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *MetadataHandler) GetActions(c *gin.Context) {
 // @Router /api/v1/metadata/refresh [post]
 func (h *MetadataHandler) RefreshCache(c *gin.Context) {
 	if err := h.metadataService.RefreshCache(); err != nil {
-		utils.InternalError(c, "刷新缓存失败: "+err.Error())
+		utils.FailFromError(c, "刷新缓存失败: ", err)
 		return
 	}
 
@@ -339,7 +339,7 @@ func (h *MetadataHandler) GetForeignKeyOptions(c *gin.Context) {
 
 	options, total, isDropdown, err := h.metadataService.GetForeignKeyOptions(uint(tableID), columnID, search, filters, page, pageSize, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取外键选项失败: "+err.Error())
+		utils.FailFromError(c, "获取外键选项失败: ", err)
 		return
 	}
 
@@ -396,7 +396,7 @@ func (h *MetadataHandler) GetForeignKeyDisplayValue(c *gin.Context) {
 
 	displayValue, err := h.metadataService.GetForeignKeyDisplayValue(uint(tableID), value, columnID, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取显示值失败: "+err.Error())
+		utils.FailFromError(c, "获取显示值失败: ", err)
 		return
 	}
 

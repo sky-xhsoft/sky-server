@@ -238,6 +238,9 @@ func main() {
 		}
 	}()
 
+	// 启动自检：弱配置告警、元数据与表结构一致性（后台执行，不阻塞启动）
+	go runStartupChecks(cfg, app.DB)
+
 	// 过期会话、超过保留期的审计日志、已过期分享状态的定时清理
 	housekeeping.Start(ctx, app.DB, housekeeping.Config{
 		Interval:           time.Duration(cfg.Housekeeping.IntervalSeconds) * time.Second,

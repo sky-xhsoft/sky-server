@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -33,7 +34,7 @@ type CloudBatchDeleteResponse struct {
 func (h *CloudHandler) BatchDelete(c *gin.Context) {
 	var req CloudBatchDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c, errors.ErrInvalidParam, errors.New(errors.ErrInvalidParam, "参数错误"))
+		utils.Error(c, http.StatusBadRequest, errors.New(errors.ErrInvalidParam, "参数错误"))
 		return
 	}
 
@@ -93,7 +94,7 @@ type CloudBatchMoveResponse struct {
 func (h *CloudHandler) BatchMove(c *gin.Context) {
 	var req CloudBatchMoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c, errors.ErrInvalidParam, errors.New(errors.ErrInvalidParam, "参数错误"))
+		utils.Error(c, http.StatusBadRequest, errors.New(errors.ErrInvalidParam, "参数错误"))
 		return
 	}
 

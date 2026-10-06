@@ -90,7 +90,7 @@ func (h *CompanyHandler) GetCompanyConfig(c *gin.Context) {
 
 	conf, err := h.svc.GetCompanyConfig(c.Request.Context(), id)
 	if err != nil {
-		utils.InternalError(c, "获取公司配置失败: "+err.Error())
+		utils.FailFromError(c, "获取公司配置失败: ", err)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (h *CompanyHandler) UpdateCompanyConfig(c *gin.Context) {
 			utils.Error(c, http.StatusBadRequest, appErr)
 			return
 		}
-		utils.InternalError(c, "更新公司配置失败: "+err.Error())
+		utils.FailFromError(c, "更新公司配置失败: ", err)
 		return
 	}
 

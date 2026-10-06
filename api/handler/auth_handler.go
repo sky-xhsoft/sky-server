@@ -59,7 +59,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			utils.Unauthorized(c, "用户名或密码错误")
 			return
 		}
-		utils.InternalError(c, "登录失败: "+err.Error())
+		utils.FailFromError(c, "登录失败: ", err)
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	// 调用SSO服务登出
 	if err := h.ssoService.Logout(userID.(uint), req.DeviceID, tokenStr); err != nil {
-		utils.InternalError(c, "登出失败: "+err.Error())
+		utils.FailFromError(c, "登出失败: ", err)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 
 	// 调用SSO服务登出所有设备
 	if err := h.ssoService.LogoutAll(userID.(uint)); err != nil {
-		utils.InternalError(c, "登出失败: "+err.Error())
+		utils.FailFromError(c, "登出失败: ", err)
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *AuthHandler) GetActiveSessions(c *gin.Context) {
 	// 调用SSO服务获取活跃会话
 	sessions, err := h.ssoService.GetActiveSessions(userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取会话失败: "+err.Error())
+		utils.FailFromError(c, "获取会话失败: ", err)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (h *AuthHandler) KickDevice(c *gin.Context) {
 
 	// 调用SSO服务踢出设备
 	if err := h.ssoService.KickDevice(userID.(uint), req.DeviceID); err != nil {
-		utils.InternalError(c, "踢出设备失败: "+err.Error())
+		utils.FailFromError(c, "踢出设备失败: ", err)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 			utils.NotFound(c, "用户不存在")
 			return
 		}
-		utils.InternalError(c, "获取用户信息失败: "+err.Error())
+		utils.FailFromError(c, "获取用户信息失败: ", err)
 		return
 	}
 

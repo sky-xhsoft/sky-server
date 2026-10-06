@@ -286,7 +286,7 @@ func (h *LiveDomainHandler) GetDomainAuthKey(c *gin.Context) {
 	ctx := withCompanyID(c)
 	info, err := h.liveService.GetDomainAuthKey(ctx, domainName, keyType)
 	if err != nil {
-		utils.InternalError(c, "获取鉴权配置失败: "+err.Error())
+		utils.FailFromError(c, "获取鉴权配置失败: ", err)
 		return
 	}
 

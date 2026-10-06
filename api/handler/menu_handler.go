@@ -44,7 +44,7 @@ func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 	// 获取菜单树
 	menuTree, err := h.menuService.GetMenuTree(c.Request.Context(), companyID.(uint), systemType)
 	if err != nil {
-		utils.InternalError(c, "获取菜单树失败: "+err.Error())
+		utils.FailFromError(c, "获取菜单树失败: ", err)
 		return
 	}
 
@@ -62,7 +62,7 @@ func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 func (h *MenuHandler) GetSubsystems(c *gin.Context) {
 	subsystems, err := h.menuService.GetSubsystems(c.Request.Context())
 	if err != nil {
-		utils.InternalError(c, "获取子系统列表失败: "+err.Error())
+		utils.FailFromError(c, "获取子系统列表失败: ", err)
 		return
 	}
 	utils.Success(c, subsystems)
@@ -105,7 +105,7 @@ func (h *MenuHandler) GetUserMenuTree(c *gin.Context) {
 		systemType,
 	)
 	if err != nil {
-		utils.InternalError(c, "获取用户菜单树失败: "+err.Error())
+		utils.FailFromError(c, "获取用户菜单树失败: ", err)
 		return
 	}
 

@@ -36,7 +36,7 @@ func (h *PrefHandler) Get(c *gin.Context) {
 	def := c.Query("default")
 	val, err := h.prefService.Get(c.Request.Context(), uid, module, name, def)
 	if err != nil {
-		utils.InternalError(c, "查询环境变量失败: "+err.Error())
+		utils.FailFromError(c, "查询环境变量失败: ", err)
 		return
 	}
 	if val == "" {
@@ -51,7 +51,7 @@ func (h *PrefHandler) GetAll(c *gin.Context) {
 	module := c.Query("module")
 	m, err := h.prefService.GetAll(c.Request.Context(), uid, module)
 	if err != nil {
-		utils.InternalError(c, "查询失败: "+err.Error())
+		utils.FailFromError(c, "查询失败: ", err)
 		return
 	}
 	utils.Success(c, m)
@@ -74,7 +74,7 @@ func (h *PrefHandler) Set(c *gin.Context) {
 		return
 	}
 	if err := h.prefService.Set(c.Request.Context(), uid, req.Module, req.Name, req.Value); err != nil {
-		utils.InternalError(c, "写入失败: "+err.Error())
+		utils.FailFromError(c, "写入失败: ", err)
 		return
 	}
 	utils.Success(c, nil)
@@ -86,7 +86,7 @@ func (h *PrefHandler) Delete(c *gin.Context) {
 	module := c.Query("module")
 	name := c.Query("name")
 	if err := h.prefService.Delete(c.Request.Context(), uid, module, name); err != nil {
-		utils.InternalError(c, "删除失败: "+err.Error())
+		utils.FailFromError(c, "删除失败: ", err)
 		return
 	}
 	utils.Success(c, nil)
@@ -99,7 +99,7 @@ func (h *PrefHandler) List(c *gin.Context) {
 	uid := h.getUID(c)
 	rows, total, err := h.prefService.List(c.Request.Context(), uid, page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "查询失败: "+err.Error())
+		utils.FailFromError(c, "查询失败: ", err)
 		return
 	}
 	utils.Success(c, gin.H{"data": rows, "total": total})

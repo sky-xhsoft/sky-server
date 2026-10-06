@@ -178,7 +178,7 @@ func (h *CloudStorageConfigHandler) CreateConfig(c *gin.Context) {
 			zap.Uint("sysCompanyId", req.SysCompanyID),
 			zap.String("storageType", req.StorageType),
 			zap.Error(err))
-		utils.InternalError(c, "创建存储配置失败: "+err.Error())
+		utils.FailFromError(c, "创建存储配置失败: ", err)
 		return
 	}
 
@@ -246,7 +246,7 @@ func (h *CloudStorageConfigHandler) UpdateConfig(c *gin.Context) {
 			zap.Uint("sysCompanyId", req.SysCompanyID),
 			zap.String("storageType", req.StorageType),
 			zap.Error(err))
-		utils.InternalError(c, "更新存储配置失败: "+err.Error())
+		utils.FailFromError(c, "更新存储配置失败: ", err)
 		return
 	}
 
@@ -282,7 +282,7 @@ func (h *CloudStorageConfigHandler) GetCompanyConfig(c *gin.Context) {
 		logger.Error("获取公司存储配置失败",
 			zap.Uint("companyId", uint(companyID)),
 			zap.Error(err))
-		utils.InternalError(c, "获取公司存储配置失败: "+err.Error())
+		utils.FailFromError(c, "获取公司存储配置失败: ", err)
 		return
 	}
 
@@ -311,7 +311,7 @@ func (h *CloudStorageConfigHandler) GetAllConfigs(c *gin.Context) {
 	configs, err := h.storageConfigService.GetAllConfigs(c.Request.Context())
 	if err != nil {
 		logger.Error("获取所有存储配置失败", zap.Error(err))
-		utils.InternalError(c, "获取所有存储配置失败: "+err.Error())
+		utils.FailFromError(c, "获取所有存储配置失败: ", err)
 		return
 	}
 
@@ -351,7 +351,7 @@ func (h *CloudStorageConfigHandler) DeleteConfig(c *gin.Context) {
 		logger.Error("删除存储配置失败",
 			zap.Uint("id", uint(id)),
 			zap.Error(err))
-		utils.InternalError(c, "删除存储配置失败: "+err.Error())
+		utils.FailFromError(c, "删除存储配置失败: ", err)
 		return
 	}
 
@@ -384,7 +384,7 @@ func (h *CloudStorageConfigHandler) RefreshCache(c *gin.Context) {
 		logger.Error("刷新存储配置缓存失败",
 			zap.Uint("companyId", uint(companyID)),
 			zap.Error(err))
-		utils.InternalError(c, "刷新存储配置缓存失败: "+err.Error())
+		utils.FailFromError(c, "刷新存储配置缓存失败: ", err)
 		return
 	}
 

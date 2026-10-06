@@ -39,7 +39,7 @@ func (h *LanguageHandler) ListLanguages(c *gin.Context) {
 
 	languages, err := h.langService.ListLanguages(companyIDUint)
 	if err != nil {
-		utils.InternalError(c, "获取语言列表失败: "+err.Error())
+		utils.FailFromError(c, "获取语言列表失败: ", err)
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *LanguageHandler) ListTranslations(c *gin.Context) {
 
 	translations, total, err := h.langService.ListTranslations(companyIDUint, &req)
 	if err != nil {
-		utils.InternalError(c, "获取翻译列表失败: "+err.Error())
+		utils.FailFromError(c, "获取翻译列表失败: ", err)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (h *LanguageHandler) GetTranslation(c *gin.Context) {
 
 	translation, err := h.langService.GetTranslation(companyIDUint, key, language)
 	if err != nil {
-		utils.InternalError(c, "获取翻译失败: "+err.Error())
+		utils.FailFromError(c, "获取翻译失败: ", err)
 		return
 	}
 
@@ -156,7 +156,7 @@ func (h *LanguageHandler) AddTranslation(c *gin.Context) {
 
 	err := h.langService.AddTranslation(&req, userIDUint, username.(string), companyIDUint)
 	if err != nil {
-		utils.InternalError(c, "添加翻译失败: "+err.Error())
+		utils.FailFromError(c, "添加翻译失败: ", err)
 		return
 	}
 
@@ -203,7 +203,7 @@ func (h *LanguageHandler) UpdateTranslation(c *gin.Context) {
 
 	err = h.langService.UpdateTranslation(&req, userIDUint, username.(string), companyIDUint)
 	if err != nil {
-		utils.InternalError(c, "更新翻译失败: "+err.Error())
+		utils.FailFromError(c, "更新翻译失败: ", err)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (h *LanguageHandler) DeleteTranslation(c *gin.Context) {
 
 	err = h.langService.DeleteTranslation(uint(id))
 	if err != nil {
-		utils.InternalError(c, "删除翻译失败: "+err.Error())
+		utils.FailFromError(c, "删除翻译失败: ", err)
 		return
 	}
 
@@ -259,7 +259,7 @@ func (h *LanguageHandler) ExportTranslations(c *gin.Context) {
 
 	data, err := h.langService.ExportTranslations(companyIDUint, language)
 	if err != nil {
-		utils.InternalError(c, "导出翻译失败: "+err.Error())
+		utils.FailFromError(c, "导出翻译失败: ", err)
 		return
 	}
 
@@ -320,7 +320,7 @@ func (h *LanguageHandler) ImportTranslations(c *gin.Context) {
 
 	err = h.langService.ImportTranslations(companyIDUint, data, language, userIDUint, username.(string))
 	if err != nil {
-		utils.InternalError(c, "导入翻译失败: "+err.Error())
+		utils.FailFromError(c, "导入翻译失败: ", err)
 		return
 	}
 

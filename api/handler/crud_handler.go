@@ -52,7 +52,7 @@ func (h *CrudHandler) GetOne(c *gin.Context) {
 
 	result, err := h.crudService.GetOne(c.Request.Context(), tableName, uint(id), userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "查询失败: "+err.Error())
+		utils.FailFromError(c, "查询失败: ", err)
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *CrudHandler) GetList(c *gin.Context) {
 
 	result, err := h.crudService.GetList(c.Request.Context(), &req, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "查询失败: "+err.Error())
+		utils.FailFromError(c, "查询失败: ", err)
 		return
 	}
 
@@ -165,7 +165,7 @@ func (h *CrudHandler) Create(c *gin.Context) {
 
 	result, err := h.crudService.Create(c.Request.Context(), tableName, data, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "创建失败: "+err.Error())
+		utils.FailFromError(c, "创建失败: ", err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (h *CrudHandler) Update(c *gin.Context) {
 	}
 
 	if err := h.crudService.Update(c.Request.Context(), tableName, uint(id), data, userID.(uint)); err != nil {
-		utils.InternalError(c, "更新失败: "+err.Error())
+		utils.FailFromError(c, "更新失败: ", err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (h *CrudHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.crudService.Delete(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "删除失败: "+err.Error())
+		utils.FailFromError(c, "删除失败: ", err)
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *CrudHandler) BatchDelete(c *gin.Context) {
 	}
 
 	if err := h.crudService.BatchDelete(c.Request.Context(), tableName, req.IDs, userID.(uint)); err != nil {
-		utils.InternalError(c, "批量删除失败: "+err.Error())
+		utils.FailFromError(c, "批量删除失败: ", err)
 		return
 	}
 
@@ -345,7 +345,7 @@ func (h *CrudHandler) Submit(c *gin.Context) {
 	}
 
 	if err := h.crudService.Submit(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "提交失败: "+err.Error())
+		utils.FailFromError(c, "提交失败: ", err)
 		return
 	}
 
@@ -396,7 +396,7 @@ func (h *CrudHandler) SaveWithDetails(c *gin.Context) {
 
 	result, err := h.crudService.SaveWithDetails(c.Request.Context(), serviceReq, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "保存失败: "+err.Error())
+		utils.FailFromError(c, "保存失败: ", err)
 		return
 	}
 	if result == nil {
@@ -459,7 +459,7 @@ func (h *CrudHandler) Unsubmit(c *gin.Context) {
 	}
 
 	if err := h.crudService.Unsubmit(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "反提交失败: "+err.Error())
+		utils.FailFromError(c, "反提交失败: ", err)
 		return
 	}
 
@@ -481,7 +481,7 @@ func (h *CrudHandler) Void(c *gin.Context) {
 		return
 	}
 	if err := h.crudService.Void(c.Request.Context(), tableName, uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "作废失败: "+err.Error())
+		utils.FailFromError(c, "作废失败: ", err)
 		return
 	}
 	utils.Success(c, gin.H{"message": "作废成功"})
@@ -513,7 +513,7 @@ func (h *CrudHandler) Export(c *gin.Context) {
 
 	f, err := h.crudService.Export(c.Request.Context(), tableName, req.Filters, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "导出失败: "+err.Error())
+		utils.FailFromError(c, "导出失败: ", err)
 		return
 	}
 	buf, _ := f.WriteToBuffer()
@@ -543,7 +543,7 @@ func (h *CrudHandler) Import(c *gin.Context) {
 	defer f.Close()
 	count, err := h.crudService.Import(c.Request.Context(), tableName, f, userID.(uint))
 	if err != nil && count == 0 {
-		utils.InternalError(c, "导入失败: "+err.Error())
+		utils.FailFromError(c, "导入失败: ", err)
 		return
 	}
 	if err != nil {
@@ -564,7 +564,7 @@ func (h *CrudHandler) ImportTemplate(c *gin.Context) {
 	}
 	f, err := h.crudService.ImportTemplate(c.Request.Context(), tableName, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取模板失败: "+err.Error())
+		utils.FailFromError(c, "获取模板失败: ", err)
 		return
 	}
 	buf, _ := f.WriteToBuffer()
@@ -630,7 +630,7 @@ func (h *CrudHandler) Search(c *gin.Context) {
 
 	result, err := h.crudService.Search(c.Request.Context(), &req, tableName, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "搜索失败: "+err.Error())
+		utils.FailFromError(c, "搜索失败: ", err)
 		return
 	}
 

@@ -94,7 +94,7 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 	taskID, err := h.liveService.CreatePullStreamTask(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("创建拉流任务失败", zap.Error(err))
-		utils.InternalError(c, "创建拉流任务失败: "+err.Error())
+		utils.FailFromError(c, "创建拉流任务失败: ", err)
 		return
 	}
 
@@ -113,14 +113,14 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 	startTime, err := time.Parse("2006-01-02 15:04:05", req.StartTime)
 	if err != nil {
 		zap.L().Error("解析开始时间失败", zap.Error(err))
-		utils.InternalError(c, "解析开始时间失败: "+err.Error())
+		utils.FailFromError(c, "解析开始时间失败: ", err)
 		return
 	}
 
 	endTime, err := time.Parse("2006-01-02 15:04:05", req.EndTime)
 	if err != nil {
 		zap.L().Error("解析结束时间失败", zap.Error(err))
-		utils.InternalError(c, "解析结束时间失败: "+err.Error())
+		utils.FailFromError(c, "解析结束时间失败: ", err)
 		return
 	}
 
@@ -200,7 +200,7 @@ func (h *PullStreamHandler) GetPullStreamTasks(c *gin.Context) {
 	tasks, err := h.liveService.DescribePullStreamTasks(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("查询拉流任务列表失败", zap.Error(err))
-		utils.InternalError(c, "查询拉流任务列表失败: "+err.Error())
+		utils.FailFromError(c, "查询拉流任务列表失败: ", err)
 		return
 	}
 
@@ -291,7 +291,7 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 	err := h.liveService.UpdatePullStreamTask(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("更新拉流任务失败", zap.Error(err))
-		utils.InternalError(c, "更新拉流任务失败: "+err.Error())
+		utils.FailFromError(c, "更新拉流任务失败: ", err)
 		return
 	}
 
@@ -365,7 +365,7 @@ func (h *PullStreamHandler) DeletePullStreamTask(c *gin.Context) {
 	err := h.liveService.DeletePullStreamTask(withCompanyID(c), taskID, operator)
 	if err != nil {
 		zap.L().Error("删除拉流任务失败", zap.Error(err))
-		utils.InternalError(c, "删除拉流任务失败: "+err.Error())
+		utils.FailFromError(c, "删除拉流任务失败: ", err)
 		return
 	}
 
@@ -397,7 +397,7 @@ func (h *PullStreamHandler) GetPullStreamTaskStatus(c *gin.Context) {
 	status, err := h.liveService.DescribePullStreamTaskStatus(withCompanyID(c), taskID)
 	if err != nil {
 		zap.L().Error("查询拉流任务状态失败", zap.Error(err))
-		utils.InternalError(c, "查询拉流任务状态失败: "+err.Error())
+		utils.FailFromError(c, "查询拉流任务状态失败: ", err)
 		return
 	}
 
@@ -430,7 +430,7 @@ func (h *PullStreamHandler) RestartPullStreamTask(c *gin.Context) {
 	err := h.liveService.RestartPullStreamTask(withCompanyID(c), taskID, operator)
 	if err != nil {
 		zap.L().Error("重启拉流任务失败", zap.Error(err))
-		utils.InternalError(c, "重启拉流任务失败: "+err.Error())
+		utils.FailFromError(c, "重启拉流任务失败: ", err)
 		return
 	}
 
@@ -470,7 +470,7 @@ func (h *PullStreamHandler) DescribePullTransformPushInfoList(c *gin.Context) {
 	resp, err := h.liveService.DescribePullTransformPushInfoList(withCompanyID(c), &req)
 	if err != nil {
 		zap.L().Error("查询拉流转推任务流数据失败", zap.Error(err))
-		utils.InternalError(c, "查询拉流转推任务流数据失败: "+err.Error())
+		utils.FailFromError(c, "查询拉流转推任务流数据失败: ", err)
 		return
 	}
 

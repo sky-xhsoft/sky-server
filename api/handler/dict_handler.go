@@ -39,7 +39,7 @@ func (h *DictHandler) GetDictItems(c *gin.Context) {
 
 	items, err := h.dictService.GetDictItems(uint(dictID))
 	if err != nil {
-		utils.InternalError(c, "获取字典项失败: "+err.Error())
+		utils.FailFromError(c, "获取字典项失败: ", err)
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *DictHandler) GetDictItemsByName(c *gin.Context) {
 
 	items, err := h.dictService.GetDictItemsByName(dictName)
 	if err != nil {
-		utils.InternalError(c, "获取字典项失败: "+err.Error())
+		utils.FailFromError(c, "获取字典项失败: ", err)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (h *DictHandler) GetDefaultValue(c *gin.Context) {
 
 	defaultValue, err := h.dictService.GetDefaultValue(dictName)
 	if err != nil {
-		utils.InternalError(c, "获取默认值失败: "+err.Error())
+		utils.FailFromError(c, "获取默认值失败: ", err)
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *DictHandler) GetDefaultValue(c *gin.Context) {
 // @Router /api/v1/dicts/refresh [post]
 func (h *DictHandler) RefreshCache(c *gin.Context) {
 	if err := h.dictService.RefreshDictCache(); err != nil {
-		utils.InternalError(c, "刷新缓存失败: "+err.Error())
+		utils.FailFromError(c, "刷新缓存失败: ", err)
 		return
 	}
 

@@ -77,8 +77,6 @@ func Error(c *gin.Context, httpStatus int, err error) {
 		switch appErr.Code {
 		case errors.ErrInvalidCredentials:
 			key = "invalid_credentials"
-		case errors.ErrResourceNotFound:
-			key = "user_not_found"
 		case errors.ErrInvalidParam, errors.ErrValidation:
 			key = "invalid_params"
 		case errors.ErrUnauthorized:
@@ -170,6 +168,43 @@ func PageResponse(c *gin.Context, list interface{}, page, pageSize, total int) {
 				TotalPages: totalPages,
 			},
 		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+}
+
+// HTTPStatusFor 按业务错误码映射 HTTP 状态码；非 AppError 视为 500
+// 登录失败映射为 400 而非 401：前端遇到 401 会按登录过期处理并跳转登录页
+func HTTPStatusFor(err error) int {
+	var appErr *errors.AppError
+	if !errors.As(err, &appErr) {
+		return 500
+	}
+	switch code := appErr.Code; {
+	case code >= 10000 && code < 20000, code == errors.ErrInvalidCredentials:
+		return 400
+	case code == errors.ErrInvalidToken, code == errors.ErrTokenExpired:
+		return 401
+	case code == errors.ErrPermissionDenied, code == errors.ErrForbidden, code == errors.ErrUnauthorized:
+		return 403
+	case code == errors.ErrResourceNotFound:
+		return 404
+	case code == errors.ErrResourceExists, code == errors.ErrResourceConflict:
+		return 409
+	}
+	return 500
+}
+
+// FailFromError 按错误码返回对应的 HTTP 状态：4xx 只返回业务提示，5xx 附带前缀与原始错误便于排查
+func FailFromError(c *gin.Context, prefix string, err error) {
+	status := HTTPStatusFor(err)
+	message := prefix + err.Error()
+	var appErr *errors.AppError
+	if status < 500 && errors.As(err, &appErr) {
+		message = appErr.Message
+	}
+	c.JSON(status, Response{
+		Code:      status,
+		Message:   message,
 		Timestamp: time.Now().Format(time.RFC3339),
 	})
 }

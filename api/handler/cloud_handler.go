@@ -59,7 +59,7 @@ func (h *CloudHandler) CreateFolder(c *gin.Context) {
 
 	folder, err := h.cloudService.CreateFolder(c.Request.Context(), createReq, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "创建文件夹失败: "+err.Error())
+		utils.FailFromError(c, "创建文件夹失败: ", err)
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *CloudHandler) ListFolders(c *gin.Context) {
 
 	folders, err := h.cloudService.ListFolders(c.Request.Context(), parentID, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "查询文件夹失败: "+err.Error())
+		utils.FailFromError(c, "查询文件夹失败: ", err)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (h *CloudHandler) GetFolderTree(c *gin.Context) {
 
 	tree, err := h.cloudService.GetFolderTree(c.Request.Context(), userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "查询文件夹树失败: "+err.Error())
+		utils.FailFromError(c, "查询文件夹树失败: ", err)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *CloudHandler) DeleteFolder(c *gin.Context) {
 	}
 
 	if err := h.cloudService.DeleteFolder(c.Request.Context(), uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "删除文件夹失败: "+err.Error())
+		utils.FailFromError(c, "删除文件夹失败: ", err)
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *CloudHandler) RenameFolder(c *gin.Context) {
 	}
 
 	if err := h.cloudService.RenameFolder(c.Request.Context(), uint(id), req.NewName, userID.(uint)); err != nil {
-		utils.InternalError(c, "重命名文件夹失败: "+err.Error())
+		utils.FailFromError(c, "重命名文件夹失败: ", err)
 		return
 	}
 
@@ -240,7 +240,7 @@ func (h *CloudHandler) UploadFile(c *gin.Context) {
 	// 打开文件
 	file, err := fileHeader.Open()
 	if err != nil {
-		utils.InternalError(c, "打开文件失败: "+err.Error())
+		utils.FailFromError(c, "打开文件失败: ", err)
 		return
 	}
 	defer file.Close()
@@ -257,7 +257,7 @@ func (h *CloudHandler) UploadFile(c *gin.Context) {
 
 	uploadedFile, err := h.cloudService.UploadFile(c.Request.Context(), uploadReq, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "上传文件失败: "+err.Error())
+		utils.FailFromError(c, "上传文件失败: ", err)
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 
 	reader, fileInfo, err := h.cloudService.DownloadFile(c.Request.Context(), uint(id), userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "下载文件失败: "+err.Error())
+		utils.FailFromError(c, "下载文件失败: ", err)
 		return
 	}
 	defer reader.Close()
@@ -301,7 +301,7 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
-		utils.InternalError(c, "传输文件失败: "+err.Error())
+		utils.FailFromError(c, "传输文件失败: ", err)
 		return
 	}
 }
@@ -330,7 +330,7 @@ func (h *CloudHandler) DeleteFile(c *gin.Context) {
 	}
 
 	if err := h.cloudService.DeleteFile(c.Request.Context(), uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "删除文件失败: "+err.Error())
+		utils.FailFromError(c, "删除文件失败: ", err)
 		return
 	}
 
@@ -373,7 +373,7 @@ func (h *CloudHandler) MoveFile(c *gin.Context) {
 	}
 
 	if err := h.cloudService.MoveFile(c.Request.Context(), uint(id), req.TargetFolderID, userID.(uint)); err != nil {
-		utils.InternalError(c, "移动文件失败: "+err.Error())
+		utils.FailFromError(c, "移动文件失败: ", err)
 		return
 	}
 
@@ -411,7 +411,7 @@ func (h *CloudHandler) RenameFile(c *gin.Context) {
 	}
 
 	if err := h.cloudService.RenameFile(c.Request.Context(), uint(id), req.NewName, userID.(uint)); err != nil {
-		utils.InternalError(c, "重命名文件失败: "+err.Error())
+		utils.FailFromError(c, "重命名文件失败: ", err)
 		return
 	}
 
@@ -463,7 +463,7 @@ func (h *CloudHandler) ListFiles(c *gin.Context) {
 
 	files, total, err := h.cloudService.ListFiles(c.Request.Context(), folderID, userID.(uint), page, pageSize)
 	if err != nil {
-		utils.InternalError(c, "查询文件失败: "+err.Error())
+		utils.FailFromError(c, "查询文件失败: ", err)
 		return
 	}
 
@@ -508,7 +508,7 @@ func (h *CloudHandler) CreateShare(c *gin.Context) {
 
 	share, err := h.cloudService.CreateShare(c.Request.Context(), shareReq, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "创建分享失败: "+err.Error())
+		utils.FailFromError(c, "创建分享失败: ", err)
 		return
 	}
 
@@ -539,7 +539,7 @@ func (h *CloudHandler) GetMyShares(c *gin.Context) {
 
 	shares, err := h.cloudService.GetUserShares(c.Request.Context(), userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取分享列表失败: "+err.Error())
+		utils.FailFromError(c, "获取分享列表失败: ", err)
 		return
 	}
 
@@ -739,7 +739,7 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	// 下载文件（不需要用户ID验证，因为是公开分享）
 	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), fileID)
 	if err != nil {
-		utils.InternalError(c, "下载文件失败: "+err.Error())
+		utils.FailFromError(c, "下载文件失败: ", err)
 		return
 	}
 	defer reader.Close()
@@ -754,7 +754,7 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
-		utils.InternalError(c, "传输文件失败: "+err.Error())
+		utils.FailFromError(c, "传输文件失败: ", err)
 		return
 	}
 }
@@ -803,7 +803,7 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 	// 下载文件
 	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), uint(fileID))
 	if err != nil {
-		utils.InternalError(c, "下载文件失败: "+err.Error())
+		utils.FailFromError(c, "下载文件失败: ", err)
 		return
 	}
 	defer reader.Close()
@@ -821,7 +821,7 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
-		utils.InternalError(c, "传输文件失败: "+err.Error())
+		utils.FailFromError(c, "传输文件失败: ", err)
 		return
 	}
 }
@@ -870,7 +870,7 @@ func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
 	// 下载文件（用于预览）
 	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), uint(fileID))
 	if err != nil {
-		utils.InternalError(c, "获取文件失败: "+err.Error())
+		utils.FailFromError(c, "获取文件失败: ", err)
 		return
 	}
 	defer reader.Close()
@@ -890,7 +890,7 @@ func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
-		utils.InternalError(c, "传输文件失败: "+err.Error())
+		utils.FailFromError(c, "传输文件失败: ", err)
 		return
 	}
 }
@@ -950,13 +950,13 @@ func (h *CloudHandler) GetShareFolderContent(c *gin.Context) {
 	// 获取文件夹内容（使用分享者的 userID）
 	folders, err := h.cloudService.ListFolders(c.Request.Context(), parentID, share.SharerID)
 	if err != nil {
-		utils.InternalError(c, "查询文件夹失败: "+err.Error())
+		utils.FailFromError(c, "查询文件夹失败: ", err)
 		return
 	}
 
 	files, _, err := h.cloudService.ListFiles(c.Request.Context(), parentID, share.SharerID, 1, 10000)
 	if err != nil {
-		utils.InternalError(c, "查询文件失败: "+err.Error())
+		utils.FailFromError(c, "查询文件失败: ", err)
 		return
 	}
 
@@ -990,7 +990,7 @@ func (h *CloudHandler) CancelShare(c *gin.Context) {
 	}
 
 	if err := h.cloudService.CancelShare(c.Request.Context(), uint(id), userID.(uint)); err != nil {
-		utils.InternalError(c, "取消分享失败: "+err.Error())
+		utils.FailFromError(c, "取消分享失败: ", err)
 		return
 	}
 
@@ -1035,7 +1035,7 @@ func (h *CloudHandler) UpdateShare(c *gin.Context) {
 
 	share, err := h.cloudService.UpdateShare(c.Request.Context(), uint(id), updateReq, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "更新分享失败: "+err.Error())
+		utils.FailFromError(c, "更新分享失败: ", err)
 		return
 	}
 
@@ -1059,7 +1059,7 @@ func (h *CloudHandler) GetUserQuota(c *gin.Context) {
 
 	quota, err := h.cloudService.GetUserQuota(c.Request.Context(), userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取配额信息失败: "+err.Error())
+		utils.FailFromError(c, "获取配额信息失败: ", err)
 		return
 	}
 

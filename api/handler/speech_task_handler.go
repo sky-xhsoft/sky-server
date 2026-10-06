@@ -83,7 +83,7 @@ func (h *SpeechTaskHandler) CreateSpeechTask(c *gin.Context) {
 	taskID, err := h.speechTaskService.CreateSpeechTask(c.Request.Context(), companyID, &req)
 	if err != nil {
 		zap.L().Error("创建声影同传任务失败", zap.Error(err))
-		utils.InternalError(c, "创建声影同传任务失败: "+err.Error())
+		utils.FailFromError(c, "创建声影同传任务失败: ", err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *SpeechTaskHandler) DeleteSpeechTask(c *gin.Context) {
 
 	if err := h.speechTaskService.DeleteSpeechTask(c.Request.Context(), companyID, &req); err != nil {
 		zap.L().Error("删除声影同传任务失败", zap.Error(err))
-		utils.InternalError(c, "删除声影同传任务失败: "+err.Error())
+		utils.FailFromError(c, "删除声影同传任务失败: ", err)
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *SpeechTaskHandler) ListSpeechTasks(c *gin.Context) {
 	items, err := h.speechTaskService.ListSpeechTasks(c.Request.Context(), companyID, roomID)
 	if err != nil {
 		zap.L().Error("查询声影同传任务列表失败", zap.Error(err))
-		utils.InternalError(c, "查询声影同传任务列表失败: "+err.Error())
+		utils.FailFromError(c, "查询声影同传任务列表失败: ", err)
 		return
 	}
 	if items == nil {

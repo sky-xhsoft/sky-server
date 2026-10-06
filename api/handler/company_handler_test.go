@@ -13,6 +13,15 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 )
 
+// fakeSmsService 实现 sms.Service：验证码固定为 123456
+type fakeSmsService struct{}
+
+func (f *fakeSmsService) SendVerifyCode(ctx context.Context, phone string) error { return nil }
+
+func (f *fakeSmsService) VerifyCode(ctx context.Context, phone, code string) (bool, error) {
+	return code == "123456", nil
+}
+
 // fakeCompanyService 实现 company.Service 接口
 type fakeCompanyService struct {
 	registerErr error
@@ -33,7 +42,7 @@ func (m *fakeCompanyService) UpdateCompanyConfig(ctx context.Context, companyID 
 func TestCompanyHandler_Register_InvalidBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &fakeCompanyService{}
-	h := NewCompanyHandler(svc)
+	h := NewCompanyHandler(svc, nil)
 
 	r := gin.New()
 	r.POST("/register", h.Register)
@@ -53,13 +62,13 @@ func TestCompanyHandler_Register_ServiceError(t *testing.T) {
 	svc := &fakeCompanyService{
 		registerErr: stderrors.New("db error"),
 	}
-	h := NewCompanyHandler(svc)
+	h := NewCompanyHandler(svc, &fakeSmsService{})
 
 	r := gin.New()
 	r.POST("/register", h.Register)
 
 	w := httptest.NewRecorder()
-	body := `{"name":"Test","code":"TC","username":"admin","password":"password123","confirmPassword":"password123","adminName":"Admin"}`
+	body := `{"name":"Test","code":"TC","username":"admin","password":"password123","confirmPassword":"password123","adminName":"Admin","phone":"13800000000","verifyCode":"123456"}`
 	req, _ := http.NewRequest("POST", "/register", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
@@ -72,18 +81,37 @@ func TestCompanyHandler_Register_ServiceError(t *testing.T) {
 func TestCompanyHandler_Register_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &fakeCompanyService{}
-	h := NewCompanyHandler(svc)
+	h := NewCompanyHandler(svc, &fakeSmsService{})
 
 	r := gin.New()
 	r.POST("/register", h.Register)
 
 	w := httptest.NewRecorder()
-	body := `{"name":"Test","code":"TC","username":"admin","password":"password123","confirmPassword":"password123","adminName":"Admin"}`
+	body := `{"name":"Test","code":"TC","username":"admin","password":"password123","confirmPassword":"password123","adminName":"Admin","phone":"13800000000","verifyCode":"123456"}`
 	req, _ := http.NewRequest("POST", "/register", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCompanyHandler_Register_WrongVerifyCode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &fakeCompanyService{}
+	h := NewCompanyHandler(svc, &fakeSmsService{})
+
+	r := gin.New()
+	r.POST("/register", h.Register)
+
+	w := httptest.NewRecorder()
+	body := `{"name":"Test","code":"TC","username":"admin","password":"password123","confirmPassword":"password123","adminName":"Admin","phone":"13800000000","verifyCode":"000000"}`
+	req, _ := http.NewRequest("POST", "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for wrong verify code, got %d", w.Code)
 	}
 }

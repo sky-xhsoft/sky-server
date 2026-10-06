@@ -36,7 +36,7 @@ func (h *SequenceHandler) NextValue(c *gin.Context) {
 
 	value, err := h.sequenceService.NextValue(seqName)
 	if err != nil {
-		utils.InternalError(c, "生成序号失败: "+err.Error())
+		utils.FailFromError(c, "生成序号失败: ", err)
 		return
 	}
 
@@ -68,7 +68,7 @@ func (h *SequenceHandler) BatchNextValue(c *gin.Context) {
 	for i := 0; i < req.Count; i++ {
 		value, err := h.sequenceService.NextValue(req.SeqName)
 		if err != nil {
-			utils.InternalError(c, "生成序号失败: "+err.Error())
+			utils.FailFromError(c, "生成序号失败: ", err)
 			return
 		}
 		values = append(values, value)
@@ -95,7 +95,7 @@ func (h *SequenceHandler) GetCurrentValue(c *gin.Context) {
 
 	value, err := h.sequenceService.GetCurrentValue(seqName)
 	if err != nil {
-		utils.InternalError(c, "获取当前序号失败: "+err.Error())
+		utils.FailFromError(c, "获取当前序号失败: ", err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *SequenceHandler) ResetSequence(c *gin.Context) {
 	}
 
 	if err := h.sequenceService.ResetSequence(seqName); err != nil {
-		utils.InternalError(c, "重置序号失败: "+err.Error())
+		utils.FailFromError(c, "重置序号失败: ", err)
 		return
 	}
 

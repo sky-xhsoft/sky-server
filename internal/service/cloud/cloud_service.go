@@ -917,29 +917,12 @@ func (s *service) ListFiles(ctx context.Context, folderID *uint, userID uint, pa
 
 // GetShareInfo 获取分享信息
 func (s *service) GetShareInfo(ctx context.Context, shareCode string, password string) (*ShareInfo, error) {
-	var share entity.CloudShare
-	if err := s.db.WithContext(ctx).
-		Where("SHARE_CODE = ? AND IS_ACTIVE = ?", shareCode, "Y").
-		First(&share).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, errors.New(errors.ErrResourceNotFound, "分享不存在或已失效")
-		}
-		return nil, errors.Wrap(errors.ErrDatabase, "查询分享失败", err)
+	// 存在性、状态、过期、资源是否已删除的检查与 GetShareByCode 一致
+	found, err := s.GetShareByCode(ctx, shareCode)
+	if err != nil {
+		return nil, err
 	}
-
-	// 检查状态
-	if share.Status != "active" {
-		return nil, errors.New(errors.ErrResourceNotFound, "分享已失效")
-	}
-
-	// 检查过期时间
-	if share.ExpireTime != nil && share.ExpireTime.Before(time.Now()) {
-		// 更新状态为过期
-		s.db.WithContext(ctx).Model(&entity.CloudShare{}).
-			Where("ID = ?", share.ID).
-			Update("STATUS", "expired")
-		return nil, errors.New(errors.ErrResourceNotFound, "分享已过期")
-	}
+	share := *found
 
 	// 构建基本信息（不包含文件/文件夹详情）
 	// 公开接口：返回副本并清空访问密码，避免未验证即泄露
@@ -1040,6 +1023,17 @@ func (s *service) GetShareByCode(ctx context.Context, shareCode string) (*entity
 			Where("ID = ?", share.ID).
 			Update("STATUS", "expired")
 		return nil, errors.New(errors.ErrResourceNotFound, "分享已过期")
+	}
+
+	// 分享的文件/文件夹已被删除（云盘删除即最终状态，无回收站恢复）
+	var alive int64
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("ID = ? AND IS_ACTIVE = ?", share.ResourceID, "Y").
+		Count(&alive).Error; err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "查询分享资源失败", err)
+	}
+	if alive == 0 {
+		return nil, errors.New(errors.ErrResourceNotFound, "分享的文件已被删除")
 	}
 
 	return &share, nil

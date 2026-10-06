@@ -60,7 +60,7 @@ func (h *MultipartUploadHandler) InitUpload(c *gin.Context) {
 
 	sessionInfo, err := h.multipartService.InitUpload(c.Request.Context(), initReq, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "初始化上传失败: "+err.Error())
+		utils.FailFromError(c, "初始化上传失败: ", err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *MultipartUploadHandler) UploadChunk(c *gin.Context) {
 	// 打开分片文件
 	file, err := fileHeader.Open()
 	if err != nil {
-		utils.InternalError(c, "打开分片文件失败: "+err.Error())
+		utils.FailFromError(c, "打开分片文件失败: ", err)
 		return
 	}
 	defer file.Close()
@@ -121,7 +121,7 @@ func (h *MultipartUploadHandler) UploadChunk(c *gin.Context) {
 	// 读取分片数据
 	chunkData, err := io.ReadAll(file)
 	if err != nil {
-		utils.InternalError(c, "读取分片数据失败: "+err.Error())
+		utils.FailFromError(c, "读取分片数据失败: ", err)
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *MultipartUploadHandler) UploadChunk(c *gin.Context) {
 	}
 
 	if err := h.multipartService.UploadChunk(c.Request.Context(), uploadReq, userID.(uint)); err != nil {
-		utils.InternalError(c, "上传分片失败: "+err.Error())
+		utils.FailFromError(c, "上传分片失败: ", err)
 		return
 	}
 
@@ -175,7 +175,7 @@ func (h *MultipartUploadHandler) GetUploadStatus(c *gin.Context) {
 
 	status, err := h.multipartService.GetUploadStatus(c.Request.Context(), sessionID, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "获取上传状态失败: "+err.Error())
+		utils.FailFromError(c, "获取上传状态失败: ", err)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (h *MultipartUploadHandler) CompleteUpload(c *gin.Context) {
 
 	file, err := h.multipartService.CompleteUpload(c.Request.Context(), req.SessionID, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "完成上传失败: "+err.Error())
+		utils.FailFromError(c, "完成上传失败: ", err)
 		return
 	}
 
@@ -236,7 +236,7 @@ func (h *MultipartUploadHandler) AbortUpload(c *gin.Context) {
 	}
 
 	if err := h.multipartService.AbortUpload(c.Request.Context(), sessionID, userID.(uint)); err != nil {
-		utils.InternalError(c, "取消上传失败: "+err.Error())
+		utils.FailFromError(c, "取消上传失败: ", err)
 		return
 	}
 
@@ -267,7 +267,7 @@ func (h *MultipartUploadHandler) ResumeUpload(c *gin.Context) {
 
 	sessionInfo, err := h.multipartService.ResumeUpload(c.Request.Context(), req.FileMD5, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "恢复上传失败: "+err.Error())
+		utils.FailFromError(c, "恢复上传失败: ", err)
 		return
 	}
 
@@ -305,7 +305,7 @@ func (h *MultipartUploadHandler) GetChunkPresignedURL(c *gin.Context) {
 
 	result, err := h.multipartService.GetChunkPresignedURL(c.Request.Context(), sessionID, chunkIndex, userID)
 	if err != nil {
-		utils.InternalError(c, "获取预签名URL失败: "+err.Error())
+		utils.FailFromError(c, "获取预签名URL失败: ", err)
 		return
 	}
 
@@ -347,7 +347,7 @@ func (h *MultipartUploadHandler) MarkChunkUploaded(c *gin.Context) {
 
 	err = h.multipartService.MarkChunkUploaded(c.Request.Context(), sessionID, chunkIndex, etag, userID)
 	if err != nil {
-		utils.InternalError(c, "标记分片失败: "+err.Error())
+		utils.FailFromError(c, "标记分片失败: ", err)
 		return
 	}
 

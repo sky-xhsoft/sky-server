@@ -53,7 +53,7 @@ func (h *CloudItemHandler) ListItems(c *gin.Context) {
 
 	items, err := h.cloudService.ListItems(c.Request.Context(), parentID, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "查询项目失败: "+err.Error())
+		utils.FailFromError(c, "查询项目失败: ", err)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (h *CloudItemHandler) CreateItem(c *gin.Context) {
 	}
 
 	if err := h.cloudService.CreateItem(c.Request.Context(), item); err != nil {
-		utils.InternalError(c, "创建项目失败: "+err.Error())
+		utils.FailFromError(c, "创建项目失败: ", err)
 		return
 	}
 
@@ -160,13 +160,13 @@ func (h *CloudItemHandler) DeleteItem(c *gin.Context) {
 
 	if item.IsFolder() {
 		if err := h.cloudService.DeleteItemsByParentID(c.Request.Context(), item.ID, uid); err != nil {
-			utils.InternalError(c, "删除子项目失败: "+err.Error())
+			utils.FailFromError(c, "删除子项目失败: ", err)
 			return
 		}
 	}
 
 	if err := h.cloudService.DeleteItem(c.Request.Context(), uint(id), uid); err != nil {
-		utils.InternalError(c, "删除项目失败: "+err.Error())
+		utils.FailFromError(c, "删除项目失败: ", err)
 		return
 	}
 
@@ -208,7 +208,7 @@ func (h *CloudItemHandler) RenameItem(c *gin.Context) {
 	}
 
 	if err := h.cloudService.RenameItem(c.Request.Context(), uint(id), req.NewName, userID.(uint)); err != nil {
-		utils.InternalError(c, "重命名失败: "+err.Error())
+		utils.FailFromError(c, "重命名失败: ", err)
 		return
 	}
 
@@ -245,7 +245,7 @@ func (h *CloudItemHandler) MoveItem(c *gin.Context) {
 	}
 
 	if err := h.cloudService.MoveItem(c.Request.Context(), uint(id), req.TargetParentID, userID.(uint)); err != nil {
-		utils.InternalError(c, "移动失败: "+err.Error())
+		utils.FailFromError(c, "移动失败: ", err)
 		return
 	}
 
@@ -420,7 +420,7 @@ func (h *CloudItemHandler) SetItemPermission(c *gin.Context) {
 	}
 
 	if err := h.cloudService.SetItemPermission(c.Request.Context(), uint(id), &req, userID.(uint)); err != nil {
-		utils.InternalError(c, "设置权限失败: "+err.Error())
+		utils.FailFromError(c, "设置权限失败: ", err)
 		return
 	}
 
@@ -450,7 +450,7 @@ func (h *CloudItemHandler) ListItemPermissions(c *gin.Context) {
 
 	perms, err := h.cloudService.ListItemPermissions(c.Request.Context(), uint(id), userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "查询权限失败: "+err.Error())
+		utils.FailFromError(c, "查询权限失败: ", err)
 		return
 	}
 
@@ -487,7 +487,7 @@ func (h *CloudItemHandler) RemoveItemPermission(c *gin.Context) {
 	}
 
 	if err := h.cloudService.RemoveItemPermission(c.Request.Context(), uint(id), uint(permID), userID.(uint)); err != nil {
-		utils.InternalError(c, "删除权限失败: "+err.Error())
+		utils.FailFromError(c, "删除权限失败: ", err)
 		return
 	}
 

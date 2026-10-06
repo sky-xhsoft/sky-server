@@ -25,6 +25,11 @@ type fakeActionService struct {
 	getErr              error
 }
 
+func (m *fakeActionService) SetScheduleRunner(fn func() (string, error)) {}
+
+func (m *fakeActionService) SetVarReplacer(fn func(ctx context.Context, str string, userID uint) (string, error)) {
+}
+
 func (m *fakeActionService) ExecuteAction(ctx context.Context, actionID uint, params map[string]interface{}, userID uint) (*action.ActionResult, error) {
 	return m.executeResult, m.executeErr
 }

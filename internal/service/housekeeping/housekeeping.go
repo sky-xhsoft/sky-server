@@ -1,4 +1,4 @@
-// Package housekeeping 定时清理过期数据：过期会话、超过保留期的审计日志、已过期分享的状态
+// Package housekeeping 定时清理过期数据：过期会话、超过保留期的审计日志、已过期或资源已删除的分享状态
 package housekeeping
 
 import (
@@ -24,6 +24,7 @@ type Result struct {
 	ExpiredSessions int64
 	OldAuditLogs    int64
 	ExpiredShares   int64
+	DisabledShares  int64 // 指向已删除文件/文件夹的分享
 }
 
 // RunOnce 执行一次清理
@@ -49,6 +50,14 @@ func RunOnce(ctx context.Context, db *gorm.DB, cfg Config, now time.Time) (Resul
 		return res, r.Error
 	}
 	res.ExpiredShares = r.RowsAffected
+
+	// 分享的文件/文件夹已被删除（云盘删除即最终状态）：分享随之失效
+	r = db.WithContext(ctx).Exec(`UPDATE cloud_share SET STATUS = 'disabled' WHERE STATUS = 'active'
+		AND NOT EXISTS (SELECT 1 FROM cloud_item i WHERE i.ID = cloud_share.RESOURCE_ID AND i.IS_ACTIVE = 'Y')`)
+	if r.Error != nil {
+		return res, r.Error
+	}
+	res.DisabledShares = r.RowsAffected
 
 	return res, nil
 }
@@ -87,11 +96,12 @@ func Start(ctx context.Context, db *gorm.DB, cfg Config) {
 			logger.Error("Housekeeping failed", zap.Error(err))
 			return
 		}
-		if res.ExpiredSessions+res.OldAuditLogs+res.ExpiredShares > 0 {
+		if res.ExpiredSessions+res.OldAuditLogs+res.ExpiredShares+res.DisabledShares > 0 {
 			logger.Info("Housekeeping done",
 				zap.Int64("expiredSessions", res.ExpiredSessions),
 				zap.Int64("oldAuditLogs", res.OldAuditLogs),
-				zap.Int64("expiredShares", res.ExpiredShares))
+				zap.Int64("expiredShares", res.ExpiredShares),
+				zap.Int64("disabledShares", res.DisabledShares))
 		}
 	}
 	go func() {

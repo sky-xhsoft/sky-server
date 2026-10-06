@@ -61,7 +61,7 @@ func (h *MFAHandler) Enroll(c *gin.Context) {
 
 	secret, qrURI, err := h.mfaService.EnrollUser(uid, req.AccountName)
 	if err != nil {
-		utils.InternalError(c, "启用 MFA 失败: "+err.Error())
+		utils.FailFromError(c, "启用 MFA 失败: ", err)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *MFAHandler) Verify(c *gin.Context) {
 			utils.Unauthorized(c, "验证码无效")
 			return
 		}
-		utils.InternalError(c, "验证失败: "+err.Error())
+		utils.FailFromError(c, "验证失败: ", err)
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *MFAHandler) Disable(c *gin.Context) {
 	}
 
 	if err := h.mfaService.DisableMFA(uid); err != nil {
-		utils.InternalError(c, "禁用失败: "+err.Error())
+		utils.FailFromError(c, "禁用失败: ", err)
 		return
 	}
 

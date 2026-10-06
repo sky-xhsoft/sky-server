@@ -53,7 +53,7 @@ func (h *ActionHandler) ExecuteAction(c *gin.Context) {
 
 	result, err := h.actionService.ExecuteAction(c.Request.Context(), uint(actionID), req.Params, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "执行动作失败: "+err.Error())
+		utils.FailFromError(c, "执行动作失败: ", err)
 		return
 	}
 
@@ -100,7 +100,7 @@ func (h *ActionHandler) ExecuteActionByName(c *gin.Context) {
 
 	result, err := h.actionService.ExecuteActionByName(c.Request.Context(), tableName, actionName, req.Params, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "执行动作失败: "+err.Error())
+		utils.FailFromError(c, "执行动作失败: ", err)
 		return
 	}
 
@@ -145,7 +145,7 @@ func (h *ActionHandler) BatchExecuteAction(c *gin.Context) {
 
 	results, err := h.actionService.BatchExecuteAction(c.Request.Context(), uint(actionID), req.BatchParams, userID.(uint))
 	if err != nil {
-		utils.InternalError(c, "批量执行失败: "+err.Error())
+		utils.FailFromError(c, "批量执行失败: ", err)
 		return
 	}
 

@@ -291,7 +291,13 @@ func TestCrudHandler_Create_BusinessError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("Expected 500, got %d", w.Code)
+	// 字段验证失败属于参数错误，返回 400 与业务提示
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["message"] != "字段验证失败" {
+		t.Errorf("Expected business message, got %v", resp["message"])
 	}
 }

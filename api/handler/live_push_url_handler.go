@@ -88,7 +88,7 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 	// 查询直播间，取开始时间
 	room, err := h.roomService.GetRoom(ctx, uint(roomID))
 	if err != nil {
-		utils.InternalError(c, "查询直播间失败: "+err.Error())
+		utils.FailFromError(c, "查询直播间失败: ", err)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 
 	pushResp, err := h.pushURLService.GeneratePushURL(pushDomain, appName, streamName, streamKey, expireTime)
 	if err != nil {
-		utils.InternalError(c, "生成推流地址失败: "+err.Error())
+		utils.FailFromError(c, "生成推流地址失败: ", err)
 		return
 	}
 
@@ -210,7 +210,7 @@ func (h *LivePushURLHandler) GeneratePlayURLByRoom(c *gin.Context) {
 
 	playURLs, err := h.pushURLService.GeneratePlayURL(playDomain, appName, streamName, playKey, expireTime)
 	if err != nil {
-		utils.InternalError(c, "生成播放地址失败: "+err.Error())
+		utils.FailFromError(c, "生成播放地址失败: ", err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (h *LivePushURLHandler) GeneratePushURL(c *gin.Context) {
 		req.ExpireTime,
 	)
 	if err != nil {
-		utils.InternalError(c, "生成推流地址失败: "+err.Error())
+		utils.FailFromError(c, "生成推流地址失败: ", err)
 		return
 	}
 
@@ -274,7 +274,7 @@ func (h *LivePushURLHandler) GeneratePlayURL(c *gin.Context) {
 		req.ExpireTime,
 	)
 	if err != nil {
-		utils.InternalError(c, "生成播放地址失败: "+err.Error())
+		utils.FailFromError(c, "生成播放地址失败: ", err)
 		return
 	}
 
