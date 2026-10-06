@@ -600,7 +600,8 @@ func (s *service) GetForeignKeyDisplayValue(tableID uint, value string, columnID
 	if safeCol == "" {
 		return "", errors.New(errors.ErrInvalidParam, "无效的列名")
 	}
-	querySQL := fmt.Sprintf("SELECT %s FROM %s WHERE %s", safeCol, table.Name, baseWhere)
+	// COALESCE：显示列为 NULL 时返回空串，避免 Scan 到 string 失败
+	querySQL := fmt.Sprintf("SELECT COALESCE(%s, '') FROM %s WHERE %s", safeCol, table.Name, baseWhere)
 	var displayValue string
 	if err := s.repo.RawQuery(querySQL, queryParams...).Scan(&displayValue).Error; err != nil {
 		return "", errors.Wrap(errors.ErrDatabase, "查询显示值失败", err)

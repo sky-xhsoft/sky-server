@@ -39,10 +39,10 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 	query := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ?", "Y")
 
-	// 三个系统单独区分：live → 视频直播；cloud → 云存储；system → 系统管理（KEY 为 NULL）
-	// 后台管理类通用子系统（KEY=NULL）只归属「系统中心」，不随其他系统菜单混入
+	// 三个系统单独区分：live → 视频直播；cloud → 云存储；system → 系统管理（KEY 为 system 或 NULL）
+	// 后台管理类通用子系统（KEY=system/NULL）只归属「系统中心」，不随其他系统菜单混入
 	if systemType == "system" {
-		query = query.Where("`KEY` IS NULL")
+		query = query.Where("(`KEY` IS NULL OR `KEY` = ?)", systemType)
 	} else if systemType == "live" || systemType == "cloud" {
 		query = query.Where("`KEY` = ?", systemType)
 	} else {

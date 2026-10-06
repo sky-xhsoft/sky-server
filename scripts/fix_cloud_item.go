@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -43,12 +44,14 @@ type LiveCallbackEvent struct {
 
 // 数据库配置
 const (
-	DBHost     = "127.0.0.1"
-	DBPort     = 3306
-	DBUser     = "root"
-	DBPassword = "***REMOVED***"
-	DBName     = "skyserver"
+	DBHost = "127.0.0.1"
+	DBPort = 3306
+	DBUser = "root"
+	DBName = "skyserver"
 )
+
+// DBPassword 数据库密码，通过环境变量 DB_PASSWORD 提供
+var DBPassword = os.Getenv("DB_PASSWORD")
 
 // DefaultRoomParentID 默认直播间父文件夹ID（与配置一致）
 const DefaultRoomParentID = 391

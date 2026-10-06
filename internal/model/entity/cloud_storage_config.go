@@ -15,14 +15,14 @@ type CloudStorageConfig struct {
 	// 阿里云OSS配置
 	AliyunOSSEndpoint        string `gorm:"column:ALIYUN_OSS_ENDPOINT;size:255" json:"aliyunOssEndpoint"`
 	AliyunOSSAccessKeyID     string `gorm:"column:ALIYUN_OSS_ACCESS_KEY_ID;size:255" json:"aliyunOssAccessKeyId"`
-	AliyunOSSAccessKeySecret string `gorm:"column:ALIYUN_OSS_ACCESS_KEY_SECRET;size:255" json:"aliyunOssAccessKeySecret"`
+	AliyunOSSAccessKeySecret string `gorm:"column:ALIYUN_OSS_ACCESS_KEY_SECRET;size:255;serializer:encrypted" json:"aliyunOssAccessKeySecret"`
 	AliyunOSSBucketName      string `gorm:"column:ALIYUN_OSS_BUCKET_NAME;size:255" json:"aliyunOssBucketName"`
 	AliyunOSSCDNDomain       string `gorm:"column:ALIYUN_OSS_CDN_DOMAIN;size:500" json:"aliyunOssCdnDomain"`
 
 	// 腾讯云COS配置
 	TencentCOSBucketURL  string `gorm:"column:TENCENT_COS_BUCKET_URL;size:500" json:"tencentCosBucketUrl"`
 	TencentCOSSecretID   string `gorm:"column:TENCENT_COS_SECRET_ID;size:255" json:"tencentCosSecretId"`
-	TencentCOSSecretKey  string `gorm:"column:TENCENT_COS_SECRET_KEY;size:255" json:"tencentCosSecretKey"`
+	TencentCOSSecretKey  string `gorm:"column:TENCENT_COS_SECRET_KEY;size:255;serializer:encrypted" json:"tencentCosSecretKey"`
 	TencentCOSBucketName string `gorm:"column:TENCENT_COS_BUCKET_NAME;size:255" json:"tencentCosBucketName"`
 	TencentCOSRegion     string `gorm:"column:TENCENT_COS_REGION;size:50" json:"tencentCosRegion"`
 	TencentCOSCDNDomain  string `gorm:"column:TENCENT_COS_CDN_DOMAIN;size:500" json:"tencentCosCdnDomain"`

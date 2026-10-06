@@ -66,15 +66,15 @@ func (SysMessageTemplate) TableName() string {
 // SysEmailConfig 邮件配置
 type SysEmailConfig struct {
 	BaseModel
-	SmtpHost     string `gorm:"column:SMTP_HOST;size:100;not null" json:"smtpHost"`         // SMTP服务器地址
-	SmtpPort     int    `gorm:"column:SMTP_PORT;not null" json:"smtpPort"`                  // SMTP端口
-	SmtpUser     string `gorm:"column:SMTP_USER;size:100;not null" json:"smtpUser"`         // SMTP用户名
-	SmtpPassword string `gorm:"column:SMTP_PASSWORD;size:255;not null" json:"smtpPassword"` // SMTP密码（加密存储）
-	FromEmail    string `gorm:"column:FROM_EMAIL;size:100;not null" json:"fromEmail"`       // 发件人邮箱
-	FromName     string `gorm:"column:FROM_NAME;size:100" json:"fromName"`                  // 发件人名称
-	UseTLS       string `gorm:"column:USE_TLS;size:1;default:Y" json:"useTls"`              // 是否使用TLS Y/N
-	IsDefault    string `gorm:"column:IS_DEFAULT;size:1;default:N" json:"isDefault"`        // 是否默认配置 Y/N
-	Description  string `gorm:"column:DESCRIPTION;size:500" json:"description"`             // 描述
+	SmtpHost     string `gorm:"column:SMTP_HOST;size:100;not null" json:"smtpHost"`                              // SMTP服务器地址
+	SmtpPort     int    `gorm:"column:SMTP_PORT;not null" json:"smtpPort"`                                       // SMTP端口
+	SmtpUser     string `gorm:"column:SMTP_USER;size:100;not null" json:"smtpUser"`                              // SMTP用户名
+	SmtpPassword string `gorm:"column:SMTP_PASSWORD;size:255;not null;serializer:encrypted" json:"smtpPassword"` // SMTP密码（加密存储）
+	FromEmail    string `gorm:"column:FROM_EMAIL;size:100;not null" json:"fromEmail"`                            // 发件人邮箱
+	FromName     string `gorm:"column:FROM_NAME;size:100" json:"fromName"`                                       // 发件人名称
+	UseTLS       string `gorm:"column:USE_TLS;size:1;default:Y" json:"useTls"`                                   // 是否使用TLS Y/N
+	IsDefault    string `gorm:"column:IS_DEFAULT;size:1;default:N" json:"isDefault"`                             // 是否默认配置 Y/N
+	Description  string `gorm:"column:DESCRIPTION;size:500" json:"description"`                                  // 描述
 }
 
 // TableName 指定表名

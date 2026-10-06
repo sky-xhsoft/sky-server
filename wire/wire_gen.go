@@ -159,6 +159,7 @@ func provideConfig() (*config.Config, error) { return config.Load() }
 func provideLogger(cfg *config.Config) (*zap.Logger, error) { return logger.Init(&cfg.Log) }
 
 func provideDB(cfg *config.Config, log *zap.Logger) (*gorm.DB, error) {
+	setupFieldCrypto(cfg, log)
 	return mysql.Init(&cfg.Database.MySQL, log)
 }
 

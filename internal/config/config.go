@@ -220,6 +220,7 @@ type SwaggerConfig struct {
 // SecurityConfig 安全配置
 type SecurityConfig struct {
 	PasswordCost        int                   `mapstructure:"passwordCost"`
+	FieldEncryptKey     string                `mapstructure:"fieldEncryptKey"` // 敏感字段（云密钥等）AES 加密密钥，未配置时回退 jwt.secret
 	ScriptExecution     ScriptExecutionConfig `mapstructure:"scriptExecution"`
 	AllowedBashCommands []string              `mapstructure:"allowedBashCommands"`
 	BashTimeout         int                   `mapstructure:"bashTimeout"`

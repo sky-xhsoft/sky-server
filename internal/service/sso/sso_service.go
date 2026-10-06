@@ -256,7 +256,7 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 			CompanyID: user.SysCompanyID,
 		},
 		Company:     company,
-		CompanyConf: companyConf,
+		CompanyConf: companyConf.Masked(), // 密钥脱敏，避免明文下发到浏览器
 	}, nil
 }
 
@@ -455,7 +455,7 @@ func (s *service) GetCurrentUser(userID uint) (*CurrentUserResponse, error) {
 					zap.Uint("companyId", user.SysCompanyID),
 					zap.Error(err))
 			} else if companyConf != nil {
-				resp.CompanyConf = companyConf
+				resp.CompanyConf = companyConf.Masked()
 			}
 		}
 	}

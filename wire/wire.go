@@ -77,6 +77,7 @@ type App struct {
 func provideConfig() (*config.Config, error)                { return config.Load() }
 func provideLogger(cfg *config.Config) (*zap.Logger, error) { return logger.Init(&cfg.Log) }
 func provideDB(cfg *config.Config, log *zap.Logger) (*gorm.DB, error) {
+	setupFieldCrypto(cfg, log)
 	return mysqlRepo.Init(&cfg.Database.MySQL, log)
 }
 func provideRedis(cfg *config.Config) (*redis.Client, error) { return redisRepo.Init(&cfg.Redis) }

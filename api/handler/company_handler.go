@@ -146,21 +146,7 @@ func (h *CompanyHandler) UpdateCompanyConfig(c *gin.Context) {
 
 // maskCompanyConfig 对公司配置敏感字段脱敏
 func maskCompanyConfig(conf *entity.SysCompanyConf) *entity.SysCompanyConf {
-	if conf == nil {
-		return nil
-	}
-
-	masked := *conf
-	masked.SecretKey = maskSecret(masked.SecretKey)
-	masked.AliyunOSSAccessKeySecret = maskSecret(masked.AliyunOSSAccessKeySecret)
-	masked.TencentCOSSecretKey = maskSecret(masked.TencentCOSSecretKey)
-	masked.TencentCloudSecretKey = maskSecret(masked.TencentCloudSecretKey)
-	masked.VolcengineAccessKeySecret = maskSecret(masked.VolcengineAccessKeySecret)
-	masked.TencentCOSSecretID = maskSecretID(masked.TencentCOSSecretID)
-	masked.TencentCloudSecretID = maskSecretID(masked.TencentCloudSecretID)
-	masked.AliyunOSSAccessKeyID = maskSecretID(masked.AliyunOSSAccessKeyID)
-	masked.VolcengineAccessKeyId = maskSecretID(masked.VolcengineAccessKeyId)
-	return &masked
+	return conf.Masked()
 }
 
 // maskSecret 对密钥进行脱敏（保留首尾各4位，中间替换为 ****）

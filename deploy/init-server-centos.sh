@@ -4,6 +4,9 @@
 
 set -e
 
+# 数据库 root 密码通过环境变量传入，不写入脚本
+MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:?请先设置环境变量 MYSQL_ROOT_PASSWORD}"
+
 echo "=========================================="
 echo "   Sky-Server 生产环境初始化 (CentOS)"
 echo "=========================================="
@@ -47,17 +50,17 @@ echo ">>> [6/8] 创建数据库..."
 # 获取临时密码
 TEMP_PASSWORD=$(grep 'temporary password' /var/log/mysqld.log | awk '{print $NF}')
 if [ -n "$TEMP_PASSWORD" ]; then
-    mysql -uroot -p"$TEMP_PASSWORD" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '***REMOVED***';"
+    mysql -uroot -p"$TEMP_PASSWORD" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';"
 fi
-mysql -uroot -p"***REMOVED***" -e "CREATE DATABASE IF NOT EXISTS sky_server DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS sky_server DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 echo "数据库 sky_server 创建完成"
-echo "MySQL root password: ***REMOVED***"
+echo "MySQL root password: （见环境变量 MYSQL_ROOT_PASSWORD）"
 
 # 下载 SQL 初始化脚本
 echo ">>> [7/8] 下载并导入初始化 SQL..."
 cd /tmp
 wget https://raw.githubusercontent.com/sky-xhsoft/sky-server/master/sqls/create_skyserver.sql
-mysql -uroot -p"***REMOVED***" sky_server < /tmp/create_skyserver.sql
+mysql -uroot -p"$MYSQL_ROOT_PASSWORD" sky_server < /tmp/create_skyserver.sql
 echo "数据库初始化完成"
 
 # 创建应用目录
@@ -80,7 +83,7 @@ else
 fi
 
 # 修改数据库配置为新密码
-sed -i 's/password: .*/password: "***REMOVED***"/g' /opt/sky-server/configs/config.yaml
+sed -i "s/password: .*/password: \"${MYSQL_ROOT_PASSWORD}\"/g" /opt/sky-server/configs/config.yaml
 
 # 安装 systemd 服务
 if [ -f /tmp/sky-server.service ]; then
@@ -93,7 +96,7 @@ echo "=========================================="
 echo "       初始化完成!"
 echo "=========================================="
 echo ""
-echo "MySQL root password: ***REMOVED***"
+echo "MySQL root password: （见环境变量 MYSQL_ROOT_PASSWORD）"
 echo ""
 echo "下一步："
 echo "1. 编辑配置文件: nano /opt/sky-server/configs/config.yaml"

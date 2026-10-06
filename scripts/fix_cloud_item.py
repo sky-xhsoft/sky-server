@@ -13,7 +13,7 @@
     主机: 127.0.0.1
     端口: 3306
     用户: root
-    密码: ***REMOVED***
+    密码: 通过环境变量 DB_PASSWORD 提供
     库名: skyserver
 
 依赖安装：
@@ -21,6 +21,7 @@
 """
 
 import json
+import os
 import pymysql
 from typing import Optional, Dict, Any
 
@@ -29,7 +30,7 @@ DB_CONFIG = {
     'host': '127.0.0.1',
     'port': 3306,
     'user': 'root',
-    'password': '***REMOVED***',
+    'password': os.environ.get('DB_PASSWORD', ''),
     'database': 'skyserver',
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor

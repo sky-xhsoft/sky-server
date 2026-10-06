@@ -65,6 +65,7 @@ cors:
   allowHeaders:
     - "Content-Type"
     - "Authorization"
+    - "X-Share-Token" # 加密分享访问凭证
   exposeHeaders:
     - "Content-Length"
   allowCredentials: true
@@ -137,6 +138,8 @@ swagger:
 security:
   # 密码加密cost（bcrypt）
   passwordCost: 10
+  # 敏感字段（云密钥等）AES 加密密钥；上线后不要更换，否则已加密数据无法解密
+  fieldEncryptKey: "${FIELD_ENCRYPT_KEY}"
   # 允许执行Bash命令的白名单
   allowedBashCommands:
     - "echo"

@@ -28,14 +28,10 @@ func RegisterSerializer(encryptor *Encryptor) {
 	schema.RegisterSerializer("encrypted", &EncryptedString{})
 }
 
-// Scan 数据库 → Go 值（解密）
+// Scan 数据库 → Go 值（解密；无前缀的历史明文原样返回）
 func (s *EncryptedString) Scan(ctx context.Context, field *schema.Field, dst reflect.Value, dbValue interface{}) error {
 	if dbValue == nil {
 		return nil
-	}
-
-	if globalEncryptor == nil {
-		return fmt.Errorf("fieldcrypto: encryptor not registered")
 	}
 
 	var encrypted string
@@ -53,7 +49,7 @@ func (s *EncryptedString) Scan(ctx context.Context, field *schema.Field, dst ref
 		return nil
 	}
 
-	decrypted, err := globalEncryptor.Decrypt(encrypted)
+	decrypted, err := DecryptField(encrypted)
 	if err != nil {
 		return fmt.Errorf("fieldcrypto: decrypt: %w", err)
 	}
@@ -62,14 +58,10 @@ func (s *EncryptedString) Scan(ctx context.Context, field *schema.Field, dst ref
 	return nil
 }
 
-// Value Go 值 → 数据库（加密）
+// Value Go 值 → 数据库（加密，带 EncPrefix 前缀）
 func (s *EncryptedString) Value(ctx context.Context, field *schema.Field, dst reflect.Value, fieldValue interface{}) (interface{}, error) {
 	if fieldValue == nil {
 		return nil, nil
-	}
-
-	if globalEncryptor == nil {
-		return nil, fmt.Errorf("fieldcrypto: encryptor not registered")
 	}
 
 	str, ok := fieldValue.(string)
@@ -77,9 +69,5 @@ func (s *EncryptedString) Value(ctx context.Context, field *schema.Field, dst re
 		return nil, fmt.Errorf("fieldcrypto: field value must be string, got %T", fieldValue)
 	}
 
-	if str == "" {
-		return "", nil
-	}
-
-	return globalEncryptor.Encrypt(str)
+	return EncryptField(str)
 }

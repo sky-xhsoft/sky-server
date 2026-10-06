@@ -11,6 +11,7 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/fieldcrypto"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/mask"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -47,6 +48,11 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 	for _, col := range columns {
 		// 跳过UI-only字段（不在真实数据库表中）
 		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
+			continue
+		}
+
+		// 敏感字段（密码/密钥）永不返回给前端
+		if col.SetValueType == "password" || col.SetValueType == "encrypt" {
 			continue
 		}
 
@@ -139,6 +145,15 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 				}
 				data[col.DbName] = string(hashed)
 				value = string(hashed)
+			}
+		case "encrypt":
+			if strVal, ok := value.(string); ok && strVal != "" {
+				encrypted, err := fieldcrypto.EncryptField(strVal)
+				if err != nil {
+					return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("字段 %s: 加密失败", col.DisplayName), err)
+				}
+				data[col.DbName] = encrypted
+				value = encrypted
 			}
 		case "docno":
 			if col.Seq != "" {
@@ -294,6 +309,28 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 			if !fieldMask.IsEditable("edit") {
 				continue
 			}
+		}
+
+		// 敏感字段：查询时不返回，编辑时留空表示不修改；有值则 bcrypt/AES 加密后更新
+		if col.SetValueType == "password" {
+			if strVal, ok := value.(string); ok && strVal != "" {
+				hashed, err := bcrypt.GenerateFromPassword([]byte(strVal), bcrypt.DefaultCost)
+				if err != nil {
+					return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("字段 %s: 密码加密失败", col.DisplayName), err)
+				}
+				processedData[col.DbName] = string(hashed)
+			}
+			continue
+		}
+		if col.SetValueType == "encrypt" {
+			if strVal, ok := value.(string); ok && strVal != "" {
+				encrypted, err := fieldcrypto.EncryptField(strVal)
+				if err != nil {
+					return nil, errors.Wrap(errors.ErrInternal, fmt.Sprintf("字段 %s: 加密失败", col.DisplayName), err)
+				}
+				processedData[col.DbName] = encrypted
+			}
+			continue
 		}
 
 		if exists {

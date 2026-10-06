@@ -34,7 +34,7 @@ const (
     DBHost     = "127.0.0.1"
     DBPort     = 3306
     DBUser     = "root"
-    DBPassword = "***REMOVED***"
+    DBPassword = os.Getenv("DB_PASSWORD") // 通过环境变量 DB_PASSWORD 提供
     DBName     = "skyserver"
 )
 ```

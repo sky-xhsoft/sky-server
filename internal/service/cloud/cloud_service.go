@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"io"
 	"math/rand"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/fieldcrypto"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
@@ -58,6 +60,7 @@ type Service interface {
 	GetShareByCode(ctx context.Context, shareCode string) (*entity.CloudShare, error)
 	GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
+	VerifyShareAccess(share *entity.CloudShare, token string) error
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
 	UpdateShare(ctx context.Context, shareID uint, req *UpdateShareRequest, userID uint) (*entity.CloudShare, error)
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
@@ -153,6 +156,7 @@ type ShareInfo struct {
 	File         *entity.CloudItem   `json:"file,omitempty"`
 	Folder       *entity.CloudFolder `json:"folder,omitempty"`
 	Sharer       string              `json:"sharer"` // 分享者名称
+	AccessToken  string              `json:"accessToken,omitempty"` // 加密分享验证通过后签发的访问凭证（下载/预览/浏览需携带）
 }
 
 // FolderNode 文件夹树节点
@@ -937,8 +941,11 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 	}
 
 	// 构建基本信息（不包含文件/文件夹详情）
+	// 公开接口：返回副本并清空访问密码，避免未验证即泄露
+	publicShare := share
+	publicShare.Password = ""
 	info := &ShareInfo{
-		Share:        &share,
+		Share:        &publicShare,
 		ResourceType: share.ResourceType,
 	}
 
@@ -971,7 +978,7 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 	// 如果需要密码验证
 	needPassword := share.ShareType == "password"
 	passwordProvided := password != ""
-	passwordCorrect := password == share.Password
+	passwordCorrect := subtle.ConstantTimeCompare([]byte(password), []byte(share.Password)) == 1
 
 	// 如果需要密码但没有提供，或者密码错误，只返回基本信息
 	if needPassword && (!passwordProvided || !passwordCorrect) {
@@ -979,8 +986,24 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 		if passwordProvided && !passwordCorrect {
 			return nil, errors.New(errors.ErrInvalidParam, "访问密码错误")
 		}
-		// 如果没有提供密码，返回基本信息（用于显示分享页面）
+		// 如果没有提供密码，返回基本信息（用于显示分享页面），去掉文件直链与存储路径
+		if info.File != nil {
+			file := *info.File
+			file.AccessURL = nil
+			file.StoragePath = nil
+			file.Thumbnail = nil
+			info.File = &file
+		}
 		return info, nil
+	}
+
+	// 加密分享验证通过：签发访问凭证
+	if needPassword {
+		token, err := issueShareAccessToken(&share, time.Now())
+		if err != nil {
+			return nil, errors.Wrap(errors.ErrInternal, "签发访问凭证失败", err)
+		}
+		info.AccessToken = token
 	}
 
 	// 密码验证通过或公开分享
@@ -1144,7 +1167,12 @@ func (s *service) UpdateShare(ctx context.Context, shareID uint, req *UpdateShar
 	}
 
 	if req.Password != nil {
-		updates["PASSWORD"] = *req.Password
+		// map 更新不经过实体序列化器，需手动加密
+		encrypted, err := fieldcrypto.EncryptField(*req.Password)
+		if err != nil {
+			return nil, errors.Wrap(errors.ErrInternal, "加密分享密码失败", err)
+		}
+		updates["PASSWORD"] = encrypted
 	}
 
 	if req.ExpireDays != nil {

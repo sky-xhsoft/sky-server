@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 )
@@ -598,7 +599,7 @@ func (h *CloudHandler) GetShareInfo(c *gin.Context) {
 
 	shareInfo, err := h.cloudService.GetShareInfo(c.Request.Context(), code, password)
 	if err != nil {
-		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		writeShareError(c, "获取分享信息失败: ", err)
 		return
 	}
 
@@ -626,11 +627,39 @@ func (h *CloudHandler) AccessShare(c *gin.Context) {
 
 	share, err := h.cloudService.AccessShare(c.Request.Context(), code, req.Password)
 	if err != nil {
-		utils.InternalError(c, "访问分享失败: "+err.Error())
+		writeShareError(c, "访问分享失败: ", err)
 		return
 	}
 
 	utils.Success(c, share)
+}
+
+// writeShareError 分享公开接口的错误响应：访问密码错误 400，缺少/无效访问凭证 403，分享不存在/失效/过期 404，其余 500
+func writeShareError(c *gin.Context, prefix string, err error) {
+	var appErr *errors.AppError
+	if errors.As(err, &appErr) {
+		switch appErr.Code {
+		case errors.ErrInvalidParam:
+			utils.BadRequest(c, appErr.Message)
+			return
+		case errors.ErrResourceNotFound:
+			utils.NotFound(c, appErr.Message)
+			return
+		case errors.ErrUnauthorized:
+			// 用 403 而非 401：前端遇到 401 会按登录过期处理并跳转登录页，而分享访问者通常未登录
+			utils.Forbidden(c, appErr.Message)
+			return
+		}
+	}
+	utils.InternalError(c, prefix+err.Error())
+}
+
+// shareAccessToken 读取加密分享访问凭证：优先请求头，其次查询参数（<img>/<video> 等无法设置请求头）
+func shareAccessToken(c *gin.Context) string {
+	if token := c.GetHeader("X-Share-Token"); token != "" {
+		return token
+	}
+	return c.Query("token")
 }
 
 // DownloadShareFile 下载分享的文件
@@ -647,7 +676,12 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	// 获取分享记录（不验证密码）
 	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
 	if err != nil {
-		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		writeShareError(c, "获取分享信息失败: ", err)
+		return
+	}
+	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
+		writeShareError(c, "", err)
 		return
 	}
 
@@ -711,7 +745,12 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 	// 获取分享记录（不验证密码）
 	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
 	if err != nil {
-		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		writeShareError(c, "获取分享信息失败: ", err)
+		return
+	}
+	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
+		writeShareError(c, "", err)
 		return
 	}
 
@@ -769,7 +808,12 @@ func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
 	// 获取分享记录（不验证密码）
 	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
 	if err != nil {
-		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		writeShareError(c, "获取分享信息失败: ", err)
+		return
+	}
+	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
+		writeShareError(c, "", err)
 		return
 	}
 
@@ -823,7 +867,12 @@ func (h *CloudHandler) GetShareFolderContent(c *gin.Context) {
 	// 获取分享记录（不验证密码）
 	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
 	if err != nil {
-		utils.InternalError(c, "获取分享信息失败: "+err.Error())
+		writeShareError(c, "获取分享信息失败: ", err)
+		return
+	}
+	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
+		writeShareError(c, "", err)
 		return
 	}
 

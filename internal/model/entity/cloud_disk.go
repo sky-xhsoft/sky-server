@@ -58,7 +58,7 @@ type CloudShare struct {
 	ResourceID    uint       `gorm:"column:RESOURCE_ID;index;not null" json:"resourceId"`             // 资源ID
 	SharerID      uint       `gorm:"column:SHARER_ID;index;not null" json:"sharerId"`                 // 分享者ID
 	ShareType     string     `gorm:"column:SHARE_TYPE;size:20;not null" json:"shareType"`             // 分享类型: public, password, private
-	Password      string     `gorm:"column:PASSWORD;size:50" json:"password"`                         // 访问密码
+	Password      string     `gorm:"column:PASSWORD;size:255;serializer:encrypted" json:"password"`   // 访问密码（加密存储，仅分享者可见）
 	ExpireTime    *time.Time `gorm:"column:EXPIRE_TIME;type:datetime" json:"expireTime"`              // 过期时间
 	MaxDownloads  int        `gorm:"column:MAX_DOWNLOADS;default:0" json:"maxDownloads"`              // 最大下载次数（0=无限制）
 	DownloadCount int        `gorm:"column:DOWNLOAD_COUNT;default:0" json:"downloadCount"`            // 已下载次数
