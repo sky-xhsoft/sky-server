@@ -1,6 +1,7 @@
 package cloud
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -25,23 +26,26 @@ func shareAccessFingerprint(share *entity.CloudShare) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// issueShareAccessToken 密码验证通过后签发访问凭证（载荷：分享ID、过期时间、密码指纹）
+// issueShareAccessToken 加密分享密码验证通过、或私密分享访问者校验通过后签发访问凭证（载荷：分享ID、过期时间、密码指纹）
 func issueShareAccessToken(share *entity.CloudShare, now time.Time) (string, error) {
 	payload := fmt.Sprintf("%s|%d|%d|%s", shareAccessTokenPrefix, share.ID,
 		now.Add(shareAccessTokenTTL).Unix(), shareAccessFingerprint(share))
 	return fieldcrypto.SealToken(payload)
 }
 
-// VerifyShareAccess 校验访问加密分享内容（下载/预览/浏览文件夹）所需的凭证；非加密分享直接放行
+// VerifyShareAccess 校验访问加密/私密分享内容（下载/预览/浏览文件夹）所需的凭证；公开分享直接放行
 func (s *service) VerifyShareAccess(share *entity.CloudShare, token string) error {
 	return verifyShareAccessToken(share, token, time.Now())
 }
 
 func verifyShareAccessToken(share *entity.CloudShare, token string, now time.Time) error {
-	if share.ShareType != "password" {
+	if !shareNeedsAccessToken(share) {
 		return nil
 	}
 	if token == "" {
+		if share.ShareType == "private" {
+			return errors.New(errors.ErrUnauthorized, "访问凭证缺失，请重新打开分享页面")
+		}
 		return errors.New(errors.ErrUnauthorized, "请先输入访问密码")
 	}
 
@@ -67,6 +71,29 @@ func verifyShareAccessToken(share *entity.CloudShare, token string, now time.Tim
 	}
 	if now.Unix() > expireAt {
 		return errors.New(errors.ErrUnauthorized, "访问凭证已过期，请重新输入访问密码")
+	}
+	return nil
+}
+
+// shareNeedsAccessToken 加密分享与私密分享的内容访问都需要访问凭证
+func shareNeedsAccessToken(share *entity.CloudShare) bool {
+	return share.ShareType == "password" || share.ShareType == "private"
+}
+
+// VerifyShareViewer 私密分享仅限分享者所在公司的登录用户访问；viewerCompanyID 为 0 表示未登录
+func (s *service) VerifyShareViewer(ctx context.Context, share *entity.CloudShare, viewerCompanyID uint) error {
+	if share.ShareType != "private" {
+		return nil
+	}
+	if viewerCompanyID == 0 {
+		return errors.New(errors.ErrUnauthorized, "该分享仅限分享者所在公司的成员访问，请先登录")
+	}
+	var sharerCompanyID uint
+	if err := s.db.WithContext(ctx).Raw("SELECT SYS_COMPANY_ID FROM sys_user WHERE ID = ?", share.SharerID).Scan(&sharerCompanyID).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "查询分享者失败", err)
+	}
+	if sharerCompanyID == 0 || sharerCompanyID != viewerCompanyID {
+		return errors.New(errors.ErrUnauthorized, "该分享仅限分享者所在公司的成员访问")
 	}
 	return nil
 }

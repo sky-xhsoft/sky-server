@@ -42,6 +42,13 @@ type Config struct {
 	Volcengine      VolcengineConfig      `mapstructure:"volcengine"` // 火山引擎配置
 	Email           EmailConfig           `mapstructure:"email"`
 	SMS             SMSConfig             `mapstructure:"sms"`
+	Housekeeping    HousekeepingConfig    `mapstructure:"housekeeping"` // 过期数据定时清理
+}
+
+// HousekeepingConfig 过期数据定时清理配置
+type HousekeepingConfig struct {
+	IntervalSeconds    int `mapstructure:"intervalSeconds"`    // 执行间隔（秒），未配置时 3600
+	AuditRetentionDays int `mapstructure:"auditRetentionDays"` // 审计日志保留天数，0 表示不删除
 }
 
 // SMSConfig 阿里云短信配置

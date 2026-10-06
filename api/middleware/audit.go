@@ -8,12 +8,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/sensitive"
 	"github.com/sky-xhsoft/sky-server/internal/service/audit"
 )
 
 // AuditLogger 审计日志中间件
 func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 只审计写操作：读请求（含状态轮询）占审计量七成以上，且不改变数据
+		if !shouldAudit(c.Request.Method) {
+			c.Next()
+			return
+		}
+
 		// 记录开始时间
 		startTime := time.Now()
 
@@ -83,12 +90,12 @@ func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 
 		// 设置请求体(过滤敏感信息)
 		if requestBody != "" && len(requestBody) < 10000 { // 限制大小
-			log.RequestBody = filterSensitiveData(requestBody)
+			log.RequestBody = sensitive.Filter(requestBody)
 		}
 
 		// 设置响应体(仅在失败时记录,或者根据配置)
 		if status == entity.StatusFailure && responseWriter.body.Len() < 10000 {
-			log.ResponseBody = responseWriter.body.String()
+			log.ResponseBody = sensitive.Filter(responseWriter.body.String())
 		}
 
 		// 异步记录日志(不阻塞请求)
@@ -105,6 +112,15 @@ type responseBodyWriter struct {
 func (w *responseBodyWriter) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)
+}
+
+// shouldAudit 判断是否需要审计：只记录会改变数据的请求
+func shouldAudit(method string) bool {
+	switch method {
+	case "GET", "HEAD", "OPTIONS":
+		return false
+	}
+	return true
 }
 
 // shouldLogBody 判断是否应该记录请求体
@@ -170,22 +186,4 @@ func parseActionAndResource(method, path string) (action, resource string) {
 	}
 
 	return
-}
-
-// filterSensitiveData 过滤敏感数据
-func filterSensitiveData(data string) string {
-	// 移除密码等敏感字段
-	// 这里使用简单的字符串替换,生产环境应使用更复杂的JSON解析和过滤
-	sensitiveFields := []string{"password", "token", "secret", "accessToken", "refreshToken"}
-
-	filtered := data
-	for _, field := range sensitiveFields {
-		// 简单替换包含敏感字段的值
-		if strings.Contains(strings.ToLower(filtered), strings.ToLower(field)) {
-			// TODO: 使用JSON解析替换具体字段值为***
-			filtered = strings.ReplaceAll(filtered, field, field+":[FILTERED]")
-		}
-	}
-
-	return filtered
 }

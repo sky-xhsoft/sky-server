@@ -194,3 +194,42 @@ func TestBuildMenuTree_FiltersEmptyBranches(t *testing.T) {
 		t.Errorf("Empty branches should be filtered, got %d nodes", len(tree))
 	}
 }
+
+func TestMenuService_GetUserMenuTree_NonAdminFilteredBySystemType(t *testing.T) {
+	db := setupMenuTestDB(t)
+
+	// 非管理员，权限覆盖直播与系统管理（KEY='system' 和 KEY 为 NULL）各一张表
+	db.Exec(`INSERT INTO sys_user (USERNAME, SYS_COMPANY_ID, IS_ADMIN, IS_ACTIVE) VALUES ('user1', 1, 'N', 'Y')`)
+	db.Exec(`INSERT INTO sys_subsystem (ID, NAME, KEY, IS_ACTIVE) VALUES (1, 'Live', 'live', 'Y'), (2, 'System', 'system', 'Y'), (3, 'Legacy', NULL, 'Y')`)
+	db.Exec(`INSERT INTO sys_table_category (ID, NAME, SYS_SUBSYSTEM_ID, IS_ACTIVE) VALUES (1, 'LiveCat', 1, 'Y'), (2, 'SysCat', 2, 'Y'), (3, 'LegacyCat', 3, 'Y')`)
+	db.Exec(`INSERT INTO sys_table (ID, NAME, SYS_TABLECATEGORY_ID, IS_MENU, SYS_COMPANY_ID, IS_ACTIVE) VALUES (1, 'live_room', 1, 'Y', 1, 'Y'), (2, 'sys_user', 2, 'Y', 1, 'Y'), (3, 'sys_dict', 3, 'Y', 1, 'Y')`)
+	db.Exec(`INSERT INTO sys_directory (ID, SYS_TABLE_ID, IS_ACTIVE) VALUES (1, 1, 'Y'), (2, 2, 'Y'), (3, 3, 'Y')`)
+	db.Exec(`INSERT INTO sys_user_groups (SYS_USER_ID, SYS_GROUPS_ID, IS_ACTIVE) VALUES (1, 1, 'Y')`)
+	db.Exec(`INSERT INTO sys_group_prem (SYS_GROUPS_ID, SYS_DIRECTORY_ID, IS_ACTIVE) VALUES (1, 1, 'Y'), (1, 2, 'Y'), (1, 3, 'Y')`)
+
+	svc := NewService(db)
+	cases := map[string][]string{
+		"live":   {"LiveCat"},
+		"system": {"SysCat", "LegacyCat"},
+		"cloud":  {},
+	}
+	for systemType, want := range cases {
+		tree, err := svc.GetUserMenuTree(context.Background(), 1, 1, systemType)
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", systemType, err)
+		}
+		got := map[string]bool{}
+		for _, n := range tree {
+			got[n.Name] = true
+		}
+		if len(tree) != len(want) {
+			t.Errorf("%s: expected %v, got %d nodes %v", systemType, want, len(tree), got)
+			continue
+		}
+		for _, name := range want {
+			if !got[name] {
+				t.Errorf("%s: missing %s, got %v", systemType, name, got)
+			}
+		}
+	}
+}

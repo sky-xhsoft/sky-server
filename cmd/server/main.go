@@ -21,6 +21,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/dashboard"
+	"github.com/sky-xhsoft/sky-server/internal/service/housekeeping"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/pref"
 	"github.com/sky-xhsoft/sky-server/internal/service/schedule"
@@ -236,6 +237,12 @@ func main() {
 			}
 		}
 	}()
+
+	// 过期会话、超过保留期的审计日志、已过期分享状态的定时清理
+	housekeeping.Start(ctx, app.DB, housekeeping.Config{
+		Interval:           time.Duration(cfg.Housekeeping.IntervalSeconds) * time.Second,
+		AuditRetentionDays: cfg.Housekeeping.AuditRetentionDays,
+	})
 
 	// 10. 启动HTTP服务器
 	srv := &http.Server{

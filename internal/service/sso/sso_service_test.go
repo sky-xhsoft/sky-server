@@ -20,9 +20,17 @@ type mockUserRepository struct {
 	companyConfErr error
 	sessions       []*entity.SysUserSession
 	sessionErr     error
+	created        *entity.SysUserSession // 最近一次 CreateSession 写入的会话
 }
 
 func (m *mockUserRepository) GetUserByUsername(username string) (*entity.SysUser, error) {
+	if m.userErr != nil {
+		return nil, m.userErr
+	}
+	return m.user, nil
+}
+
+func (m *mockUserRepository) GetUserByPhone(phone string) (*entity.SysUser, error) {
 	if m.userErr != nil {
 		return nil, m.userErr
 	}
@@ -45,6 +53,7 @@ func (m *mockUserRepository) GetCompanyConfByCompanyID(companyID uint) (*entity.
 }
 
 func (m *mockUserRepository) CreateSession(session *entity.SysUserSession) error {
+	m.created = session
 	return m.sessionErr
 }
 
@@ -269,5 +278,31 @@ func TestSSO_GetActiveSessions(t *testing.T) {
 	}
 	if len(sessions) != 2 {
 		t.Errorf("Expected 2 sessions, got %d", len(sessions))
+	}
+}
+
+func TestSSO_Login_StoresTokenHashOnly(t *testing.T) {
+	hashed, _ := bcrypt.GenerateFromPassword([]byte("Password123"), bcrypt.DefaultCost)
+	repo := &mockUserRepository{
+		user: &entity.SysUser{
+			BaseModel: entity.BaseModel{ID: 1, SysCompanyID: 1},
+			Username:  "alice",
+			Password:  string(hashed),
+		},
+	}
+	svc := setupTestSSOService(repo)
+
+	resp, err := svc.Login(&LoginRequest{Username: "alice", Password: "Password123", ClientType: "web"})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if repo.created == nil {
+		t.Fatal("登录应创建会话")
+	}
+	if repo.created.Token != jwt.TokenHash(resp.Token) || repo.created.RefreshToken != jwt.TokenHash(resp.RefreshToken) {
+		t.Error("会话应只保存 token 摘要")
+	}
+	if repo.created.Token == resp.Token || repo.created.RefreshToken == resp.RefreshToken {
+		t.Error("会话不应保存 token 原文")
 	}
 }

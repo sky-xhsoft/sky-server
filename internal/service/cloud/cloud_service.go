@@ -61,6 +61,7 @@ type Service interface {
 	GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	VerifyShareAccess(share *entity.CloudShare, token string) error
+	VerifyShareViewer(ctx context.Context, share *entity.CloudShare, viewerCompanyID uint) error
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
 	UpdateShare(ctx context.Context, shareID uint, req *UpdateShareRequest, userID uint) (*entity.CloudShare, error)
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
@@ -155,7 +156,7 @@ type ShareInfo struct {
 	ResourceType string              `json:"resourceType"`
 	File         *entity.CloudItem   `json:"file,omitempty"`
 	Folder       *entity.CloudFolder `json:"folder,omitempty"`
-	Sharer       string              `json:"sharer"` // 分享者名称
+	Sharer       string              `json:"sharer"`                // 分享者名称
 	AccessToken  string              `json:"accessToken,omitempty"` // 加密分享验证通过后签发的访问凭证（下载/预览/浏览需携带）
 }
 
@@ -997,8 +998,8 @@ func (s *service) GetShareInfo(ctx context.Context, shareCode string, password s
 		return info, nil
 	}
 
-	// 加密分享验证通过：签发访问凭证
-	if needPassword {
+	// 加密分享验证通过、私密分享（访问者已由调用方校验）：签发访问凭证
+	if shareNeedsAccessToken(&share) {
 		token, err := issueShareAccessToken(&share, time.Now())
 		if err != nil {
 			return nil, errors.Wrap(errors.ErrInternal, "签发访问凭证失败", err)

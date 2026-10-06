@@ -597,6 +597,10 @@ func (h *CloudHandler) GetShareInfo(c *gin.Context) {
 	code := c.Param("code")
 	password := c.Query("password")
 
+	if !h.checkShareViewer(c, code) {
+		return
+	}
+
 	shareInfo, err := h.cloudService.GetShareInfo(c.Request.Context(), code, password)
 	if err != nil {
 		writeShareError(c, "获取分享信息失败: ", err)
@@ -622,6 +626,10 @@ func (h *CloudHandler) AccessShare(c *gin.Context) {
 	var req AccessShareRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	if !h.checkShareViewer(c, code) {
 		return
 	}
 
@@ -654,6 +662,30 @@ func writeShareError(c *gin.Context, prefix string, err error) {
 	utils.InternalError(c, prefix+err.Error())
 }
 
+// shareViewerCompanyID 访问者所在公司（可选鉴权解析出的登录用户），未登录为 0
+func shareViewerCompanyID(c *gin.Context) uint {
+	if v, ok := c.Get("companyID"); ok {
+		if id, ok := v.(uint); ok {
+			return id
+		}
+	}
+	return 0
+}
+
+// checkShareViewer 私密分享先校验访问者，失败时已写入错误响应
+func (h *CloudHandler) checkShareViewer(c *gin.Context, code string) bool {
+	share, err := h.cloudService.GetShareByCode(c.Request.Context(), code)
+	if err != nil {
+		writeShareError(c, "获取分享信息失败: ", err)
+		return false
+	}
+	if err := h.cloudService.VerifyShareViewer(c.Request.Context(), share, shareViewerCompanyID(c)); err != nil {
+		writeShareError(c, "", err)
+		return false
+	}
+	return true
+}
+
 // shareAccessToken 读取加密分享访问凭证：优先请求头，其次查询参数（<img>/<video> 等无法设置请求头）
 func shareAccessToken(c *gin.Context) string {
 	if token := c.GetHeader("X-Share-Token"); token != "" {
@@ -679,7 +711,11 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 		writeShareError(c, "获取分享信息失败: ", err)
 		return
 	}
-	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareViewer(c.Request.Context(), share, shareViewerCompanyID(c)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+	// 加密/私密分享须携带签发的访问凭证
 	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
 		writeShareError(c, "", err)
 		return
@@ -748,7 +784,11 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 		writeShareError(c, "获取分享信息失败: ", err)
 		return
 	}
-	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareViewer(c.Request.Context(), share, shareViewerCompanyID(c)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+	// 加密/私密分享须携带签发的访问凭证
 	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
 		writeShareError(c, "", err)
 		return
@@ -811,7 +851,11 @@ func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
 		writeShareError(c, "获取分享信息失败: ", err)
 		return
 	}
-	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareViewer(c.Request.Context(), share, shareViewerCompanyID(c)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+	// 加密/私密分享须携带签发的访问凭证
 	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
 		writeShareError(c, "", err)
 		return
@@ -870,7 +914,11 @@ func (h *CloudHandler) GetShareFolderContent(c *gin.Context) {
 		writeShareError(c, "获取分享信息失败: ", err)
 		return
 	}
-	// 加密分享须携带验证密码后签发的访问凭证
+	if err := h.cloudService.VerifyShareViewer(c.Request.Context(), share, shareViewerCompanyID(c)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+	// 加密/私密分享须携带签发的访问凭证
 	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
 		writeShareError(c, "", err)
 		return

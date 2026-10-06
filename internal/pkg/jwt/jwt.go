@@ -2,6 +2,8 @@ package jwt
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -163,8 +165,8 @@ func (j *JWT) IsBlacklisted(tokenString string) bool {
 	}
 
 	ctx := context.Background()
-	key := j.keyPrefix + tokenString
-	exists, err := j.redisCli.Exists(ctx, key).Result()
+	// 新黑名单按哈希作键；同时检查原始 token 作键的旧记录（升级前加入黑名单、尚未过期的 token）
+	exists, err := j.redisCli.Exists(ctx, j.keyPrefix+TokenHash(tokenString), j.keyPrefix+tokenString).Result()
 	if err != nil {
 		// Redis出错时，默认不阻止访问（降级处理）
 		return false
@@ -180,9 +182,21 @@ func (j *JWT) BlacklistToken(tokenString string, expiration time.Duration) error
 		return nil
 	}
 
-	ctx := context.Background()
-	key := j.keyPrefix + tokenString
-	return j.redisCli.Set(ctx, key, "1", expiration).Err()
+	return j.BlacklistTokenHash(TokenHash(tokenString), expiration)
+}
+
+// BlacklistTokenHash 按 token 哈希加入黑名单（会话表只保存哈希时使用）
+func (j *JWT) BlacklistTokenHash(tokenHash string, expiration time.Duration) error {
+	if j.redisCli == nil {
+		return nil
+	}
+	return j.redisCli.Set(context.Background(), j.keyPrefix+tokenHash, "1", expiration).Err()
+}
+
+// TokenHash 返回 token 的 SHA-256 十六进制摘要；会话表与黑名单只保存摘要，不保存 token 原文
+func TokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 // BlacklistTokenByClaims 根据Claims将Token加入黑名单

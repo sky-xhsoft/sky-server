@@ -2,6 +2,7 @@ package sso
 
 import (
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -183,8 +184,8 @@ func (s *service) Login(req *LoginRequest) (*LoginResponse, error) {
 	session := &entity.SysUserSession{
 		UserID:         user.ID,
 		CompanyID:      user.SysCompanyID,
-		Token:          token,
-		RefreshToken:   refreshToken,
+		Token:          jwt.TokenHash(token), // 只存摘要，不存 token 原文
+		RefreshToken:   jwt.TokenHash(refreshToken),
 		ClientType:     req.ClientType,
 		DeviceID:       deviceID,
 		DeviceName:     req.DeviceName,
@@ -277,7 +278,7 @@ func (s *service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 	// 更新会话中的Token
 	session, err := s.userRepo.GetSessionByDeviceID(claims.UserID, claims.DeviceID)
 	if err == nil {
-		session.Token = newToken
+		session.Token = jwt.TokenHash(newToken)
 		session.LastActiveTime = time.Now()
 		s.userRepo.UpdateSession(session)
 	}
@@ -286,6 +287,14 @@ func (s *service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 		Token:     newToken,
 		ExpiresIn: int(s.accessTokenExpire.Seconds()),
 	}, nil
+}
+
+// blacklistStoredToken 将会话表中保存的 token 加入黑名单：新记录保存的是摘要，升级前的旧记录保存的是 JWT 原文
+func (s *service) blacklistStoredToken(stored string, expiration time.Duration) error {
+	if strings.HasPrefix(stored, "eyJ") {
+		return s.jwtUtil.BlacklistToken(stored, expiration)
+	}
+	return s.jwtUtil.BlacklistTokenHash(stored, expiration)
 }
 
 // Logout 登出（单个设备）
@@ -308,7 +317,7 @@ func (s *service) Logout(userID uint, deviceID string, token string) error {
 
 	// 同时将刷新token加入黑名单
 	if session.RefreshToken != "" {
-		_ = s.jwtUtil.BlacklistToken(session.RefreshToken, s.refreshTokenExpire)
+		_ = s.blacklistStoredToken(session.RefreshToken, s.refreshTokenExpire)
 	}
 
 	return s.userRepo.DeleteSession(session.ID)
@@ -322,10 +331,10 @@ func (s *service) LogoutAll(userID uint) error {
 		// 将所有会话的 token 加入黑名单
 		for _, session := range sessions {
 			if session.Token != "" {
-				_ = s.jwtUtil.BlacklistToken(session.Token, s.accessTokenExpire)
+				_ = s.blacklistStoredToken(session.Token, s.accessTokenExpire)
 			}
 			if session.RefreshToken != "" {
-				_ = s.jwtUtil.BlacklistToken(session.RefreshToken, s.refreshTokenExpire)
+				_ = s.blacklistStoredToken(session.RefreshToken, s.refreshTokenExpire)
 			}
 		}
 	}
@@ -365,12 +374,12 @@ func (s *service) KickDevice(userID uint, deviceID string) error {
 
 	// 将刷新token加入黑名单
 	if session.RefreshToken != "" {
-		_ = s.jwtUtil.BlacklistToken(session.RefreshToken, s.refreshTokenExpire)
+		_ = s.blacklistStoredToken(session.RefreshToken, s.refreshTokenExpire)
 	}
 
 	// 也将会话中的token加入黑名单
 	if session.Token != "" {
-		_ = s.jwtUtil.BlacklistToken(session.Token, s.accessTokenExpire)
+		_ = s.blacklistStoredToken(session.Token, s.accessTokenExpire)
 	}
 
 	return s.userRepo.DeleteSession(session.ID)

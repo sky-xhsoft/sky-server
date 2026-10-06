@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"gorm.io/gorm"
 )
@@ -72,7 +73,8 @@ func (r *userRepository) GetActiveSessions(userID uint) ([]*entity.SysUserSessio
 
 func (r *userRepository) GetSessionByToken(token string) (*entity.SysUserSession, error) {
 	var session entity.SysUserSession
-	err := r.db.Where("TOKEN = ? AND IS_ACTIVE = ?", token, "Y").First(&session).Error
+	// 会话表只保存 token 摘要
+	err := r.db.Where("TOKEN = ? AND IS_ACTIVE = ?", jwt.TokenHash(token), "Y").First(&session).Error
 	if err != nil {
 		return nil, err
 	}

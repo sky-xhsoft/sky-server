@@ -7,9 +7,9 @@ type SysUserSession struct {
 	ID             uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID         uint      `gorm:"column:USER_ID;index:idx_session_user;not null" json:"userId"`
 	CompanyID      uint      `gorm:"column:COMPANY_ID;not null" json:"companyId"`
-	Token          string    `gorm:"column:TOKEN;size:500;index:idx_session_token" json:"token"`
-	RefreshToken   string    `gorm:"column:REFRESH_TOKEN;size:500" json:"refreshToken"`
-	ClientType     string    `gorm:"column:CLIENT_TYPE;size:20" json:"clientType"` // web, mobile, desktop
+	Token          string    `gorm:"column:TOKEN;size:500;index:idx_session_token" json:"-"` // SHA-256 摘要，不保存原文
+	RefreshToken   string    `gorm:"column:REFRESH_TOKEN;size:500" json:"-"`                 // SHA-256 摘要，不保存原文
+	ClientType     string    `gorm:"column:CLIENT_TYPE;size:20" json:"clientType"`           // web, mobile, desktop
 	DeviceID       string    `gorm:"column:DEVICE_ID;size:255;uniqueIndex:idx_session_device" json:"deviceId"`
 	DeviceName     string    `gorm:"column:DEVICE_NAME;size:255" json:"deviceName"`
 	IPAddress      string    `gorm:"column:IP_ADDRESS;size:50" json:"ipAddress"`

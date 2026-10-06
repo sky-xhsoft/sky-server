@@ -59,3 +59,15 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// OptionalAuth 可选鉴权：未携带令牌按匿名放行；携带了令牌则必须有效（无效返回 401，前端可刷新令牌后重试）
+func OptionalAuth(jwtUtil *jwt.JWT) gin.HandlerFunc {
+	required := AuthRequired(jwtUtil)
+	return func(c *gin.Context) {
+		if c.GetHeader("Authorization") == "" {
+			c.Next()
+			return
+		}
+		required(c)
+	}
+}

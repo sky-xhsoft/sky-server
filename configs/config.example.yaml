@@ -239,3 +239,9 @@ tencentCloud:
     callbackURL: "https://your-domain.com/api/v1/live/callback"
 
     cdnDomain: ""
+
+# 过期数据定时清理：过期会话、超过保留期的审计日志、已过期分享状态
+housekeeping:
+  intervalSeconds: 3600
+  # 审计日志保留天数，0 表示不删除
+  auditRetentionDays: 180

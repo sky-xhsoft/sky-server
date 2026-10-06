@@ -34,26 +34,10 @@ func NewService(db *gorm.DB) Service {
 
 // GetMenuTree 获取完整菜单树
 func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType string) ([]*entity.MenuNode, error) {
-	// 1. 查询所有子系统（一级菜单）
-	var subsystems []entity.SysSubsystem
-	query := s.db.WithContext(ctx).
-		Where("IS_ACTIVE = ?", "Y")
-
-	// 三个系统单独区分：live → 视频直播；cloud → 云存储；system → 系统管理（KEY 为 system 或 NULL）
-	// 后台管理类通用子系统（KEY=system/NULL）只归属「系统中心」，不随其他系统菜单混入
-	if systemType == "system" {
-		query = query.Where("(`KEY` IS NULL OR `KEY` = ?)", systemType)
-	} else if systemType == "live" || systemType == "cloud" {
-		query = query.Where("`KEY` = ?", systemType)
-	} else {
-		// 未指定系统类型，返回所有子系统
-		query = query.Where("1=1")
-	}
-
-	if err := query.
-		Order("ORDERNO ASC, ID ASC").
-		Find(&subsystems).Error; err != nil {
-		return nil, fmt.Errorf("查询子系统失败: %w", err)
+	// 1. 查询所属系统的子系统（一级菜单）
+	subsystems, err := s.findSubsystems(ctx, systemType)
+	if err != nil {
+		return nil, err
 	}
 
 	// 2. 查询所有表类别（二级菜单）
@@ -81,6 +65,24 @@ func (s *service) GetMenuTree(ctx context.Context, companyID uint, systemType st
 		subsystemIDs[sub.ID] = true
 	}
 	return s.buildMenuTree(subsystemIDs, categories, tables), nil
+}
+
+// findSubsystems 查询启用的子系统，按系统类型过滤
+// 三个系统单独区分：live → 视频直播；cloud → 云存储；system → 系统管理（KEY 为 system 或 NULL）
+// 后台管理类通用子系统（KEY=system/NULL）只归属「系统中心」，不随其他系统菜单混入；未指定系统类型返回全部
+func (s *service) findSubsystems(ctx context.Context, systemType string) ([]entity.SysSubsystem, error) {
+	query := s.db.WithContext(ctx).Where("IS_ACTIVE = ?", "Y")
+	switch systemType {
+	case "system":
+		query = query.Where("(`KEY` IS NULL OR `KEY` = ?)", systemType)
+	case "live", "cloud":
+		query = query.Where("`KEY` = ?", systemType)
+	}
+	var subsystems []entity.SysSubsystem
+	if err := query.Order("ORDERNO ASC, ID ASC").Find(&subsystems).Error; err != nil {
+		return nil, fmt.Errorf("查询子系统失败: %w", err)
+	}
+	return subsystems, nil
 }
 
 // GetSubsystems 获取全部启用的子系统列表
@@ -150,13 +152,10 @@ func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint, s
 		return nil, fmt.Errorf("查询目录表失败: %w", err)
 	}
 
-	// 4. 查询所有子系统
-	var subsystems []entity.SysSubsystem
-	if err := s.db.WithContext(ctx).
-		Where("IS_ACTIVE = ?", "Y").
-		Order("ORDERNO ASC, ID ASC").
-		Find(&subsystems).Error; err != nil {
-		return nil, fmt.Errorf("查询子系统失败: %w", err)
+	// 4. 查询所属系统的子系统（与管理员一致，按系统类型过滤）
+	subsystems, err := s.findSubsystems(ctx, systemType)
+	if err != nil {
+		return nil, err
 	}
 
 	// 5. 查询所有表类别

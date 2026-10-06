@@ -96,13 +96,18 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	// 健康检查
 	engine.GET("/health", middleware.HealthCheck())
 
-	// 指标接口
-	engine.GET("/metrics", middleware.MetricsStats())
-	engine.GET("/metrics/prometheus", middleware.PrometheusMetrics())
-	engine.POST("/metrics/reset", middleware.ResetMetrics)
+	// 指标接口：release 模式下需要登录（接口统计会暴露路由与流量），重置统计始终需要登录
+	isRelease := cfg.App.Mode == "release"
+	metricsGuard := func(c *gin.Context) { c.Next() }
+	if isRelease {
+		metricsGuard = middleware.AuthRequired(jwtUtil)
+	}
+	engine.GET("/metrics", metricsGuard, middleware.MetricsStats())
+	engine.GET("/metrics/prometheus", metricsGuard, middleware.PrometheusMetrics())
+	engine.POST("/metrics/reset", middleware.AuthRequired(jwtUtil), middleware.ResetMetrics)
 
-	// Swagger文档
-	if cfg.Swagger.Enabled {
+	// Swagger文档：release 模式下强制关闭
+	if cfg.Swagger.Enabled && !isRelease {
 		engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
 
@@ -575,6 +580,8 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 
 	// ==================== 分享公开接口（不需要认证）====================
 	publicShares := rg.Group("/cloud/shares")
+	// 可选鉴权：私密分享需识别访问者所在公司
+	publicShares.Use(middleware.OptionalAuth(jwtUtil))
 	{
 		// 获取分享信息（不需要认证）
 		publicShares.GET("/:code", cloudHandler.GetShareInfo)
