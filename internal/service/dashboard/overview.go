@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -130,9 +131,10 @@ func (s *service) GetSystemOverview(ctx context.Context, companyID uint, days in
 
 	var events []struct {
 		Action    string    `gorm:"column:ACTION"`
+		Path      string    `gorm:"column:PATH"`
 		CreatedAt time.Time `gorm:"column:CREATED_AT"`
 	}
-	if err := companyAudit().Select("audit_log.ACTION, audit_log.CREATED_AT").
+	if err := companyAudit().Select("audit_log.ACTION, audit_log.PATH, audit_log.CREATED_AT").
 		Where("audit_log.CREATED_AT >= ?", start).Scan(&events).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "统计操作趋势失败", err)
 	}
@@ -141,8 +143,13 @@ func (s *service) GetSystemOverview(ctx context.Context, companyID uint, days in
 		switch e.Action {
 		case "login":
 			logins = append(logins, e.CreatedAt)
-		case "logout":
+		case "logout", "read", "query":
+			// 历史上审计过的读操作不计入操作次数
 		default:
+			// 历史上 POST 形式的查询/搜索被记为写操作，同样排除
+			if strings.HasSuffix(e.Path, "/query") || strings.HasSuffix(e.Path, "/search") {
+				continue
+			}
 			ops = append(ops, e.CreatedAt)
 		}
 	}
@@ -152,7 +159,8 @@ func (s *service) GetSystemOverview(ctx context.Context, companyID uint, days in
 
 	if err := companyAudit().
 		Select("audit_log.ID AS id, audit_log.USERNAME AS username, audit_log.ACTION AS action, audit_log.PATH AS target, audit_log.CREATED_AT AS time").
-		Where("audit_log.ACTION NOT IN ('login', 'logout')").
+		Where("audit_log.ACTION NOT IN ('login', 'logout', 'read', 'query')").
+		Where("audit_log.PATH NOT LIKE '%/query' AND audit_log.PATH NOT LIKE '%/search'").
 		Order("audit_log.CREATED_AT DESC").Limit(5).Scan(&ov.RecentOps).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询最近操作失败", err)
 	}

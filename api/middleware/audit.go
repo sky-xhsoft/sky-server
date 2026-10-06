@@ -16,7 +16,7 @@ import (
 func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 只审计写操作：读请求（含状态轮询）占审计量七成以上，且不改变数据
-		if !shouldAudit(c.Request.Method) {
+		if !shouldAudit(c.Request.Method, c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -115,10 +115,15 @@ func (w *responseBodyWriter) Write(b []byte) (int, error) {
 }
 
 // shouldAudit 判断是否需要审计：只记录会改变数据的请求
-func shouldAudit(method string) bool {
+// 通用数据的查询/搜索接口用 POST 传条件，属于读操作，同样不审计（原先被记为“新增”）
+func shouldAudit(method, path string) bool {
 	switch method {
 	case "GET", "HEAD", "OPTIONS":
 		return false
+	case "POST":
+		if strings.HasSuffix(path, "/query") || strings.HasSuffix(path, "/search") {
+			return false
+		}
 	}
 	return true
 }
