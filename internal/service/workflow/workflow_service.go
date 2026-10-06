@@ -413,15 +413,13 @@ func (s *service) moveToNext(ctx context.Context, instance *entity.WfInstance, c
 
 // evaluateCondition 评估流转条件
 func (s *service) evaluateCondition(condition string, variables map[string]interface{}) bool {
-	// 如果没有条件,默认为true
-	if condition == "" {
-		return true
+	// 原实现恒为 true，条件分支不起作用（总是走第一条流转）
+	ok, err := evalCondition(condition, variables)
+	if err != nil {
+		// 条件写错时不走该分支，由后续“没有符合条件的流转”报错提示
+		return false
 	}
-
-	// TODO: 实现复杂的条件表达式评估
-	// 简单实现：支持 变量名==值 的格式
-	// 生产环境应使用表达式引擎如 govaluate
-	return true
+	return ok
 }
 
 // createUserTask 创建用户任务
@@ -724,7 +722,7 @@ func (s *service) TransferTask(ctx context.Context, taskID, fromUserID, toUserID
 		return errors.New(errors.ErrValidation, "任务已处理")
 	}
 
-	task.AssigneeID = toUserID
+	// 原任务保留原处理人，便于追溯是谁转交的；新任务分配给接收人
 	task.Status = "transferred"
 	task.Comment = comment
 
