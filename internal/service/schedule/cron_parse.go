@@ -22,40 +22,53 @@ func parseField(field string, min, max int) (map[int]bool, error) {
 		}
 		return allowed, nil
 	}
-	// 逗号分隔列表
+	// 逗号分隔列表；每项为 *、a、a-b，可带步长 /n（*/n、a-b/n、a/n 表示从 a 到上限每 n）
 	for _, part := range strings.Split(field, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		// 步长
 		step := 1
 		rangePart := part
 		if idx := strings.Index(part, "/"); idx >= 0 {
-			step, _ = strconv.Atoi(part[idx+1:])
-			rangePart = part[:idx]
-			if step <= 0 {
-				step = 1
+			n, err := strconv.Atoi(part[idx+1:])
+			if err != nil || n <= 0 {
+				return nil, fmt.Errorf("步长非法: %q", part)
 			}
+			step = n
+			rangePart = part[:idx]
 		}
 		var lo, hi int
-		if strings.Contains(rangePart, "-") {
+		switch {
+		case rangePart == "*":
+			lo, hi = min, max
+		case strings.Contains(rangePart, "-"):
 			segs := strings.SplitN(rangePart, "-", 2)
-			lo, _ = strconv.Atoi(segs[0])
-			hi, _ = strconv.Atoi(segs[1])
-		} else {
-			lo, _ = strconv.Atoi(rangePart)
-			hi = lo
+			a, err1 := strconv.Atoi(segs[0])
+			b, err2 := strconv.Atoi(segs[1])
+			if err1 != nil || err2 != nil {
+				return nil, fmt.Errorf("范围非法: %q", part)
+			}
+			lo, hi = a, b
+		default:
+			v, err := strconv.Atoi(rangePart)
+			if err != nil {
+				return nil, fmt.Errorf("取值非法: %q", part)
+			}
+			lo, hi = v, v
+			if step > 1 {
+				hi = max
+			}
 		}
-		if lo < min {
-			lo = min
-		}
-		if hi > max {
-			hi = max
+		if lo < min || hi > max || lo > hi {
+			return nil, fmt.Errorf("取值超出范围 %d-%d: %q", min, max, part)
 		}
 		for v := lo; v <= hi; v += step {
 			allowed[v] = true
 		}
+	}
+	if len(allowed) == 0 {
+		return nil, fmt.Errorf("空字段")
 	}
 	return allowed, nil
 }
@@ -63,6 +76,8 @@ func parseField(field string, min, max int) (map[int]bool, error) {
 // cronSpec 解析后的 cron 计划
 type cronSpec struct {
 	min, hour, dom, mon, dow map[int]bool
+	// 日/周字段是否以 * 开头（不受限）。标准 cron：两者都受限时任一满足即可
+	domAny, dowAny bool
 }
 
 func parseCron(expr string) (*cronSpec, error) {
@@ -94,20 +109,35 @@ func parseCron(expr string) (*cronSpec, error) {
 	if dow[7] {
 		dow[0] = true
 	}
-	return &cronSpec{min: min, hour: hour, dom: dom, mon: mon, dow: dow}, nil
+	return &cronSpec{min: min, hour: hour, dom: dom, mon: mon, dow: dow,
+		domAny: strings.HasPrefix(fields[2], "*"), dowAny: strings.HasPrefix(fields[4], "*")}, nil
 }
 
 // next 计算 from 之后(>from)的下一次匹配时间
 func (c *cronSpec) next(from time.Time) (time.Time, bool) {
 	t := from.Add(time.Minute).Truncate(time.Minute)
 	for i := 0; i < 366*24*60; i++ { // 上限约一年
-		if c.mon[int(t.Month())] && c.dom[t.Day()] && c.dow[int(t.Weekday())] &&
-			c.hour[t.Hour()] && c.min[t.Minute()] {
+		if c.mon[int(t.Month())] && c.dayMatches(t) && c.hour[t.Hour()] && c.min[t.Minute()] {
 			return t, true
 		}
 		t = t.Add(time.Minute)
 	}
 	return time.Time{}, false
+}
+
+// dayMatches 日与周的组合判断（与标准 cron 一致）
+func (c *cronSpec) dayMatches(t time.Time) bool {
+	dom, dow := c.dom[t.Day()], c.dow[int(t.Weekday())]
+	switch {
+	case c.domAny && c.dowAny:
+		return true
+	case c.domAny:
+		return dow
+	case c.dowAny:
+		return dom
+	default:
+		return dom || dow
+	}
 }
 
 // NextRunAfter 解析 cron 并计算 from 之后的下一次运行时间(调度器与 API 共用)
