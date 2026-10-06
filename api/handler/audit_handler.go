@@ -104,7 +104,7 @@ func (h *AuditHandler) QueryLogs(c *gin.Context) {
 		SortOrder:  req.SortOrder,
 	}
 
-	logs, total, err := h.auditService.QueryLogs(c.Request.Context(), queryReq)
+	logs, total, err := h.auditService.QueryLogs(withCompanyID(c), queryReq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.ErrDatabase,
@@ -142,7 +142,7 @@ func (h *AuditHandler) GetLog(c *gin.Context) {
 		return
 	}
 
-	log, err := h.auditService.GetLog(c.Request.Context(), uint(id))
+	log, err := h.auditService.GetLog(withCompanyID(c), uint(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.ErrDatabase,
@@ -178,7 +178,7 @@ func (h *AuditHandler) GetUserLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	logs, total, err := h.auditService.GetUserLogs(c.Request.Context(), uint(userID), page, pageSize)
+	logs, total, err := h.auditService.GetUserLogs(withCompanyID(c), uint(userID), page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.ErrDatabase,
@@ -212,7 +212,7 @@ func (h *AuditHandler) GetResourceLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	logs, total, err := h.auditService.GetResourceLogs(c.Request.Context(), resource, resourceID, page, pageSize)
+	logs, total, err := h.auditService.GetResourceLogs(withCompanyID(c), resource, resourceID, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.ErrDatabase,
@@ -285,7 +285,7 @@ func (h *AuditHandler) GetStatistics(c *gin.Context) {
 		GroupBy:   req.GroupBy,
 	}
 
-	stats, err := h.auditService.GetStatistics(c.Request.Context(), statsReq)
+	stats, err := h.auditService.GetStatistics(withCompanyID(c), statsReq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.ErrDatabase,
@@ -333,7 +333,7 @@ func (h *AuditHandler) CleanExpiredLogs(c *gin.Context) {
 		return
 	}
 
-	count, err := h.auditService.CleanExpiredLogs(c.Request.Context(), beforeDate)
+	count, err := h.auditService.CleanExpiredLogs(withCompanyID(c), beforeDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    errors.ErrDatabase,

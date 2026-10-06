@@ -92,6 +92,21 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	engine.Use(middleware.ErrorHandler())
 	// 域名多租户识别中间件（根据请求域名自动识别公司）
 	engine.Use(middleware.DomainTenant(db))
+	// 认证中间件校验账号是否停用、是否管理员
+	middleware.SetUserStatusLookup(func(userID uint) (bool, bool, error) {
+		var row struct {
+			IsActive string `gorm:"column:IS_ACTIVE"`
+			IsAdmin  string `gorm:"column:IS_ADMIN"`
+		}
+		res := db.Table("sys_user").Select("IS_ACTIVE, IS_ADMIN").Where("ID = ?", userID).Limit(1).Scan(&row)
+		if res.Error != nil {
+			return false, false, res.Error
+		}
+		if res.RowsAffected == 0 {
+			return false, false, nil
+		}
+		return row.IsActive == "Y", row.IsAdmin == "Y", nil
+	})
 
 	// 健康检查
 	engine.GET("/health", middleware.HealthCheck())
@@ -104,7 +119,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	}
 	engine.GET("/metrics", metricsGuard, middleware.MetricsStats())
 	engine.GET("/metrics/prometheus", metricsGuard, middleware.PrometheusMetrics())
-	engine.POST("/metrics/reset", middleware.AuthRequired(jwtUtil), middleware.ResetMetrics)
+	engine.POST("/metrics/reset", middleware.AuthRequired(jwtUtil), middleware.AdminRequired(), middleware.ResetMetrics)
 
 	// Swagger文档：release 模式下强制关闭
 	if cfg.Swagger.Enabled && !isRelease {
@@ -197,7 +212,7 @@ func registerCloudStorageConfigRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, sto
 	storageConfigHandler := handler.NewCloudStorageConfigHandler(storageConfigService)
 
 	configs := rg.Group("/cloud/storage/config")
-	configs.Use(middleware.AuthRequired(jwtUtil))
+	configs.Use(middleware.AuthRequired(jwtUtil), middleware.AdminRequired())
 	{
 		configs.POST("", storageConfigHandler.CreateConfig)
 		configs.PUT("/:id", storageConfigHandler.UpdateConfig)
@@ -267,7 +282,7 @@ func registerMetadataRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, metadataServi
 		metadata.GET("/table-by-name/:tableName", metadataHandler.GetTable)
 
 		// 缓存管理
-		metadata.POST("/refresh", metadataHandler.RefreshCache)
+		metadata.POST("/refresh", middleware.AdminRequired(), metadataHandler.RefreshCache)
 		metadata.GET("/version", metadataHandler.GetMetadataVersion)
 
 		// 外键接口
@@ -286,7 +301,7 @@ func registerDictRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, dictService dict.
 		dicts.GET("/:dictId/items", dictHandler.GetDictItems)
 		dicts.GET("/name/:dictName/items", dictHandler.GetDictItemsByName)
 		dicts.GET("/:dictId/default", dictHandler.GetDefaultValue)
-		dicts.POST("/refresh", dictHandler.RefreshCache)
+		dicts.POST("/refresh", middleware.AdminRequired(), dictHandler.RefreshCache)
 	}
 }
 
@@ -300,7 +315,7 @@ func registerSequenceRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, sequenceServi
 		sequences.POST("/:seqName/next", sequenceHandler.NextValue)
 		sequences.POST("/batch", sequenceHandler.BatchNextValue)
 		sequences.GET("/:seqName/current", sequenceHandler.GetCurrentValue)
-		sequences.POST("/:seqName/reset", sequenceHandler.ResetSequence)
+		sequences.POST("/:seqName/reset", middleware.AdminRequired(), sequenceHandler.ResetSequence)
 	}
 }
 
@@ -362,9 +377,9 @@ func registerScheduleRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, sched *schedu
 	sr := rg.Group("/schedule")
 	sr.Use(middleware.AuthRequired(jwtUtil))
 	{
-		sr.POST("/:id/run", scheduleHandler.Run)
+		sr.POST("/:id/run", middleware.AdminRequired(), scheduleHandler.Run)
 		sr.POST("/cron-verify", scheduleHandler.CronVerify)
-		sr.GET("/:id/logs", scheduleHandler.Logs)
+		sr.GET("/:id/logs", middleware.AdminRequired(), scheduleHandler.Logs)
 	}
 }
 
@@ -392,28 +407,28 @@ func registerWorkflowRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, workflowServi
 		// 流程定义管理
 		definitions := workflow.Group("/definitions")
 		{
-			definitions.POST("", workflowHandler.CreateDefinition)
+			definitions.POST("", middleware.AdminRequired(), workflowHandler.CreateDefinition)
 			definitions.GET("", workflowHandler.ListDefinitions)
 			definitions.GET("/:id", workflowHandler.GetDefinition)
-			definitions.PUT("/:id", workflowHandler.UpdateDefinition)
-			definitions.POST("/:id/publish", workflowHandler.PublishDefinition)
+			definitions.PUT("/:id", middleware.AdminRequired(), workflowHandler.UpdateDefinition)
+			definitions.POST("/:id/publish", middleware.AdminRequired(), workflowHandler.PublishDefinition)
 		}
 
 		// 流程节点管理
 		nodes := workflow.Group("/nodes")
 		{
-			nodes.POST("", workflowHandler.CreateNode)
+			nodes.POST("", middleware.AdminRequired(), workflowHandler.CreateNode)
 			nodes.GET("", workflowHandler.GetNodes)
-			nodes.PUT("/:id", workflowHandler.UpdateNode)
-			nodes.DELETE("/:id", workflowHandler.DeleteNode)
+			nodes.PUT("/:id", middleware.AdminRequired(), workflowHandler.UpdateNode)
+			nodes.DELETE("/:id", middleware.AdminRequired(), workflowHandler.DeleteNode)
 		}
 
 		// 流程流转管理
 		transitions := workflow.Group("/transitions")
 		{
-			transitions.POST("", workflowHandler.CreateTransition)
+			transitions.POST("", middleware.AdminRequired(), workflowHandler.CreateTransition)
 			transitions.GET("", workflowHandler.GetTransitions)
-			transitions.DELETE("/:id", workflowHandler.DeleteTransition)
+			transitions.DELETE("/:id", middleware.AdminRequired(), workflowHandler.DeleteTransition)
 		}
 
 		// 流程实例管理
@@ -422,7 +437,7 @@ func registerWorkflowRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, workflowServi
 			instances.POST("/start", workflowHandler.StartProcess)
 			instances.GET("", workflowHandler.ListInstances)
 			instances.GET("/:id", workflowHandler.GetInstance)
-			instances.POST("/:id/terminate", workflowHandler.TerminateInstance)
+			instances.POST("/:id/terminate", middleware.AdminRequired(), workflowHandler.TerminateInstance)
 		}
 
 		// 任务管理
@@ -442,7 +457,7 @@ func registerAuditRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, auditService aud
 	auditHandler := handler.NewAuditHandler(auditService)
 
 	audit := rg.Group("/audit")
-	audit.Use(middleware.AuthRequired(jwtUtil))
+	audit.Use(middleware.AuthRequired(jwtUtil), middleware.AdminRequired())
 	{
 		audit.GET("/logs", auditHandler.QueryLogs)
 		audit.GET("/logs/:id", auditHandler.GetLog)
@@ -458,10 +473,11 @@ func registerGroupsRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, groupService gr
 	groupHandler := handler.NewGroupsHandler(groupService)
 
 	groupsRg := rg.Group("/groups")
-	groupsRg.Use(middleware.AuthRequired(jwtUtil))
+	groupsRg.Use(middleware.AuthRequired(jwtUtil), middleware.AdminRequired())
 	{
 		groupsRg.POST("", groupHandler.CreateGroup)
 		groupsRg.GET("", groupHandler.ListGroups)
+		groupsRg.GET("/matrix", groupHandler.GetPermissionMatrix) // 权限管理页使用（与 /permissions/matrix 相同）
 		groupsRg.GET("/:id", groupHandler.GetGroup)
 		groupsRg.PUT("/:id", groupHandler.UpdateGroup)
 		groupsRg.DELETE("/:id", groupHandler.DeleteGroup)
@@ -469,6 +485,7 @@ func registerGroupsRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, groupService gr
 		groupsRg.GET("/:id/permissions", groupHandler.GetGroupPermissions)
 		groupsRg.POST("/users/:userId", groupHandler.AssignGroupsToUser)
 		groupsRg.GET("/users/:userId", groupHandler.GetUserGroups)
+		groupsRg.DELETE("/users/:userId", groupHandler.RemoveUserGroups)
 	}
 
 	// 权限检查接口
@@ -477,7 +494,7 @@ func registerGroupsRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, groupService gr
 	{
 		perms.POST("/check", groupHandler.CheckPermission)
 		perms.GET("/user", groupHandler.GetUserPermission)
-		perms.GET("/matrix", groupHandler.GetPermissionMatrix)
+		perms.GET("/matrix", middleware.AdminRequired(), groupHandler.GetPermissionMatrix)
 	}
 }
 
@@ -486,7 +503,7 @@ func registerDirectoryRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, groupService
 	dirHandler := handler.NewDirectoryHandler(groupService)
 
 	dirs := rg.Group("/directories")
-	dirs.Use(middleware.AuthRequired(jwtUtil))
+	dirs.Use(middleware.AuthRequired(jwtUtil), middleware.AdminRequired())
 	{
 		dirs.POST("", dirHandler.CreateDirectory)
 		dirs.GET("", dirHandler.ListDirectories)
@@ -508,7 +525,7 @@ func registerMenuRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, menuService menu.
 	menus.Use(middleware.AuthRequired(jwtUtil))
 	{
 		// 获取完整菜单树（管理员用）
-		menus.GET("/tree", menuHandler.GetMenuTree)
+		menus.GET("/tree", middleware.AdminRequired(), menuHandler.GetMenuTree)
 
 		// 获取用户权限过滤后的菜单树
 		menus.GET("/user/tree", menuHandler.GetUserMenuTree)
@@ -557,7 +574,7 @@ func registerMessageRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, messageService
 		messages.POST("/send", messageHandler.SendMessage)
 		messages.POST("/send/template", messageHandler.SendTemplateMessage)
 		messages.POST("/send/batch", messageHandler.SendBatchMessage)
-		messages.POST("/send/all", messageHandler.SendToAll)
+		messages.POST("/send/all", middleware.AdminRequired(), messageHandler.SendToAll)
 
 		// 消息查询
 		messages.GET("/:id", messageHandler.GetMessage)
@@ -716,7 +733,7 @@ func registerWebSocketRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, wsManager *w
 		// WebSocket管理接口（需要认证）
 		wsGroup.GET("/online/users", middleware.AuthRequired(jwtUtil), wsHandler.GetOnlineUsers)
 		wsGroup.GET("/online/check", middleware.AuthRequired(jwtUtil), wsHandler.CheckUserOnline)
-		wsGroup.POST("/broadcast", middleware.AuthRequired(jwtUtil), wsHandler.BroadcastMessage)
+		wsGroup.POST("/broadcast", middleware.AuthRequired(jwtUtil), middleware.AdminRequired(), wsHandler.BroadcastMessage)
 	}
 }
 
@@ -775,15 +792,15 @@ func registerLanguageRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, languageServi
 			// 翻译列表（分页）
 			authenticated.GET("/translations", languageHandler.ListTranslations)
 			// 添加翻译
-			authenticated.POST("/translations", languageHandler.AddTranslation)
+			authenticated.POST("/translations", middleware.AdminRequired(), languageHandler.AddTranslation)
 			// 更新翻译
-			authenticated.PUT("/translations/:id", languageHandler.UpdateTranslation)
+			authenticated.PUT("/translations/:id", middleware.AdminRequired(), languageHandler.UpdateTranslation)
 			// 删除翻译
-			authenticated.DELETE("/translations/:id", languageHandler.DeleteTranslation)
+			authenticated.DELETE("/translations/:id", middleware.AdminRequired(), languageHandler.DeleteTranslation)
 			// 导出翻译
 			authenticated.GET("/translations/export", languageHandler.ExportTranslations)
 			// 导入翻译
-			authenticated.POST("/translations/import", languageHandler.ImportTranslations)
+			authenticated.POST("/translations/import", middleware.AdminRequired(), languageHandler.ImportTranslations)
 		}
 	}
 }

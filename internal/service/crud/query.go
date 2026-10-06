@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/domain/search"
+	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
@@ -58,6 +59,8 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 
 	// 添加ID条件
 	query = query.Where("ID = ?", id)
+	// 公司隔离：与列表一致，只能读取本公司或公共数据
+	query = s.applyCompanyScope(query, table.Name, columns, userID)
 	logger.Debug("GetOne table and ID", zap.String("table", table.Name), zap.Uint("id", id))
 
 	// 添加数据过滤条件
@@ -105,6 +108,27 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	}
 
 	return result, nil
+}
+
+// applyCompanyScope 公司隔离：表有 SYS_COMPANY_ID 字段时只返回本公司与公共（0/-1）数据。
+// 豁免：附属配置/子表（如 SYS_COMPANY_CONF 公司配置）不按当前用户公司隔离，
+// 其可见性由所在公司的详情页上下文决定（外部已按外键过滤）
+func (s *service) applyCompanyScope(query *gorm.DB, tableName string, columns []*entity.SysColumn, userID uint) *gorm.DB {
+	for _, rt := range []string{"SYS_COMPANY_CONF"} {
+		if strings.EqualFold(tableName, rt) {
+			return query
+		}
+	}
+	for _, col := range columns {
+		if col.DbName == "SYS_COMPANY_ID" {
+			user, userErr := s.userRepo.GetUserByID(userID)
+			if userErr == nil && user != nil {
+				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", user.SysCompanyID)
+			}
+			break
+		}
+	}
+	return query
 }
 
 // GetList 查询列表
@@ -189,26 +213,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	// 例如：filters: { IS_ACTIVE: 'Y' }
 
 	// 添加公司过滤（如果表有 SYS_COMPANY_ID 字段）
-	// 豁免：附属配置/子表（如 SYS_COMPANY_CONF 公司配置）不按当前用户公司隔离，
-	// 其可见性由所在公司的详情页上下文决定（外部已按外键过滤）
-	skipCompanyScope := false
-	for _, rt := range []string{"SYS_COMPANY_CONF"} {
-		if strings.EqualFold(table.Name, rt) {
-			skipCompanyScope = true
-			break
-		}
-	}
-	if !skipCompanyScope {
-		for _, col := range columns {
-			if col.DbName == "SYS_COMPANY_ID" {
-				user, userErr := s.userRepo.GetUserByID(userID)
-				if userErr == nil && user != nil {
-					query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", user.SysCompanyID)
-				}
-				break
-			}
-		}
-	}
+	query = s.applyCompanyScope(query, table.Name, columns, userID)
 
 	// 添加过滤条件
 	if req.Filters != nil && len(req.Filters) > 0 {
@@ -363,15 +368,7 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 		}
 	}
 
-	for _, col := range columns {
-		if col.DbName == "SYS_COMPANY_ID" {
-			user, userErr := s.userRepo.GetUserByID(userID)
-			if userErr == nil && user != nil {
-				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", user.SysCompanyID)
-			}
-			break
-		}
-	}
+	query = s.applyCompanyScope(query, table.Name, columns, userID)
 
 	// 应用高级搜索条件
 	if req.HasFilters() {

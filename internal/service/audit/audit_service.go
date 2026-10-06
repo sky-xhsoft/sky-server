@@ -3,9 +3,11 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/contextutil"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -195,7 +197,7 @@ func (s *service) QueryLogs(ctx context.Context, req *QueryRequest) ([]*entity.A
 		req.PageSize = 100
 	}
 
-	query := s.db.WithContext(ctx).Model(&entity.AuditLog{})
+	query := s.scoped(ctx)
 
 	// 应用过滤条件
 	if req.UserID > 0 {
@@ -232,10 +234,10 @@ func (s *service) QueryLogs(ctx context.Context, req *QueryRequest) ([]*entity.A
 		return nil, 0, errors.Wrap(errors.ErrDatabase, "查询审计日志总数失败", err)
 	}
 
-	// 排序
+	// 排序（字段白名单，防止拼接注入）
 	sortBy := "CREATED_AT"
-	if req.SortBy != "" {
-		sortBy = req.SortBy
+	if col, ok := auditSortColumns[strings.ToUpper(req.SortBy)]; ok {
+		sortBy = col
 	}
 	sortOrder := "DESC"
 	if req.SortOrder == "ASC" {
@@ -256,7 +258,7 @@ func (s *service) QueryLogs(ctx context.Context, req *QueryRequest) ([]*entity.A
 // GetLog 获取单条日志
 func (s *service) GetLog(ctx context.Context, id uint) (*entity.AuditLog, error) {
 	var log entity.AuditLog
-	if err := s.db.WithContext(ctx).First(&log, id).Error; err != nil {
+	if err := s.scoped(ctx).First(&log, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "审计日志不存在")
 		}
@@ -287,7 +289,7 @@ func (s *service) GetResourceLogs(ctx context.Context, resource, resourceID stri
 
 // GetStatistics 获取统计信息
 func (s *service) GetStatistics(ctx context.Context, req *StatisticsRequest) (*Statistics, error) {
-	query := s.db.WithContext(ctx).Model(&entity.AuditLog{})
+	query := s.scoped(ctx)
 
 	if !req.StartTime.IsZero() {
 		query = query.Where("CREATED_AT >= ?", req.StartTime)
@@ -307,10 +309,10 @@ func (s *service) GetStatistics(ctx context.Context, req *StatisticsRequest) (*S
 	query.Count(&stats.TotalCount)
 
 	// 成功/失败统计
-	s.db.WithContext(ctx).Model(&entity.AuditLog{}).
+	s.scoped(ctx).
 		Where("STATUS = ?", entity.StatusSuccess).
 		Count(&stats.SuccessCount)
-	s.db.WithContext(ctx).Model(&entity.AuditLog{}).
+	s.scoped(ctx).
 		Where("STATUS = ?", entity.StatusFailure).
 		Count(&stats.FailureCount)
 
@@ -377,9 +379,24 @@ func (s *service) GetStatistics(ctx context.Context, req *StatisticsRequest) (*S
 	return stats, nil
 }
 
+// auditSortColumns 允许排序的字段
+var auditSortColumns = map[string]string{
+	"CREATED_AT": "CREATED_AT", "ID": "ID", "USERNAME": "USERNAME", "ACTION": "ACTION",
+	"RESOURCE": "RESOURCE", "STATUS": "STATUS", "DURATION": "DURATION",
+}
+
+// scoped 审计日志基础查询：请求带公司ID时只包含该公司用户产生的日志
+func (s *service) scoped(ctx context.Context) *gorm.DB {
+	q := s.db.WithContext(ctx).Model(&entity.AuditLog{})
+	if company, ok := ctx.Value(contextutil.CompanyIDKey).(uint); ok && company > 0 {
+		q = q.Where("USER_ID IN (SELECT ID FROM sys_user WHERE SYS_COMPANY_ID = ?)", company)
+	}
+	return q
+}
+
 // CleanExpiredLogs 清理过期日志
 func (s *service) CleanExpiredLogs(ctx context.Context, beforeDate time.Time) (int64, error) {
-	result := s.db.WithContext(ctx).
+	result := s.scoped(ctx).
 		Where("CREATED_AT < ?", beforeDate).
 		Delete(&entity.AuditLog{})
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/config"
@@ -13,12 +14,19 @@ import (
 
 // securityWarnings release 模式下的弱配置检查
 func securityWarnings(cfg *config.Config) []string {
-	if cfg.App.Mode != "release" {
-		return nil
-	}
 	var warnings []string
+	// 回调密钥为空时 debug 模式会接受未签名的直播回调，任何模式都提示
+	if cfg.TencentCloud.CallbackKey == "" {
+		warnings = append(warnings, "tencentCloud.callbackKey 未配置：release 模式将拒绝全部直播回调，debug 模式不校验回调签名")
+	}
+	if cfg.App.Mode != "release" {
+		return warnings
+	}
 	if len(cfg.JWT.Secret) < 32 {
 		warnings = append(warnings, "jwt.secret 少于 32 位，容易被暴力破解")
+	}
+	if lower := strings.ToLower(cfg.JWT.Secret); strings.HasPrefix(lower, "dev") || strings.Contains(lower, "change") || strings.Contains(lower, "secret") {
+		warnings = append(warnings, "jwt.secret 看起来是开发/示例默认值，请更换为随机密钥")
 	}
 	if cfg.Database.MySQL.Username == "root" {
 		warnings = append(warnings, "数据库使用 root 账号，建议改用仅有本库权限的专用账号")

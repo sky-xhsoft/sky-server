@@ -1,7 +1,10 @@
 package entity
 
 import (
+	"strconv"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // LiveCallbackEvent 直播回调事件
@@ -21,6 +24,26 @@ type LiveCallbackEvent struct {
 	SysCompanyID int64     `gorm:"column:SYS_COMPANY_ID;not null;index" json:"sysCompanyId"`
 	IsActive     string    `gorm:"column:IS_ACTIVE;type:char(1);default:'Y'" json:"isActive"`
 	RoomName     string    `gorm:"column:ROOM_NAME;type:varchar(255)" json:"roomName"` // 直播间名称
+}
+
+// BeforeCreate 未指定公司时按流名称（即直播间ID）找到直播间，归属到直播间所在公司；找不到则为 0
+func (e *LiveCallbackEvent) BeforeCreate(tx *gorm.DB) error {
+	if e.SysCompanyID != 0 {
+		return nil
+	}
+	for _, name := range []string{e.StreamName, e.StreamID} {
+		roomID, err := strconv.ParseInt(name, 10, 64)
+		if err != nil || roomID <= 0 {
+			continue
+		}
+		var company int64
+		res := tx.Session(&gorm.Session{NewDB: true}).Table("live_room").Select("SYS_COMPANY_ID").Where("ID = ?", roomID).Limit(1).Scan(&company)
+		if res.Error == nil && res.RowsAffected > 0 {
+			e.SysCompanyID = company
+			return nil
+		}
+	}
+	return nil
 }
 
 // TableName 指定表名

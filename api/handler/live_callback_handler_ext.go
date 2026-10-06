@@ -32,7 +32,7 @@ func (h *LiveCallbackHandler) HandleSmartErase(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("智能擦除事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -78,7 +78,6 @@ func (h *LiveCallbackHandler) HandleSmartErase(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -107,7 +106,7 @@ func (h *LiveCallbackHandler) HandleSubtitle(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("直播字幕事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -152,7 +151,6 @@ func (h *LiveCallbackHandler) HandleSubtitle(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -181,7 +179,7 @@ func (h *LiveCallbackHandler) HandleSummary(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("直播摘要事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -226,7 +224,6 @@ func (h *LiveCallbackHandler) HandleSummary(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -265,7 +262,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 		return
 	}
 
-	if event.Sign != "" && h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if event.Sign != "" && !h.checkSign(event.T, event.Sign) {
 		logger.Warn("高光切片事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -331,7 +328,6 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 			ClientIP:     c.ClientIP(),
 			Sign:         event.Sign,
 			TValue:       event.T,
-			SysCompanyID: 1,
 			IsActive:     "Y",
 			RoomName:     room.RoomName,
 		}
@@ -496,7 +492,7 @@ func (h *LiveCallbackHandler) HandlePushException(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("推流异常事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -541,7 +537,6 @@ func (h *LiveCallbackHandler) HandlePushException(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -570,7 +565,7 @@ func (h *LiveCallbackHandler) HandleRecordException(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("录制异常事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -615,7 +610,6 @@ func (h *LiveCallbackHandler) HandleRecordException(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -644,7 +638,7 @@ func (h *LiveCallbackHandler) HandlePullStream(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("拉流转推事件签名验证失败", zap.String("taskId", event.TaskID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -677,7 +671,6 @@ func (h *LiveCallbackHandler) HandlePullStream(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -706,7 +699,7 @@ func (h *LiveCallbackHandler) HandleMonitor(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("监播事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -752,7 +745,6 @@ func (h *LiveCallbackHandler) HandleMonitor(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}

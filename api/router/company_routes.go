@@ -23,7 +23,7 @@ func registerCompanyRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, companyService
 		config.Use(middleware.AuthRequired(jwtUtil))
 		{
 			config.GET("", companyHandler.GetCompanyConfig)
-			config.PUT("", companyHandler.UpdateCompanyConfig)
+			config.PUT("", middleware.AdminRequired(), companyHandler.UpdateCompanyConfig)
 		}
 	}
 }

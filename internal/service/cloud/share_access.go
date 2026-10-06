@@ -97,3 +97,34 @@ func (s *service) VerifyShareViewer(ctx context.Context, share *entity.CloudShar
 	}
 	return nil
 }
+
+// maxShareDepth 校验分享范围时向上查找的最大层级（防止异常数据形成环导致死循环）
+const maxShareDepth = 64
+
+// VerifyShareItem 校验要访问的条目位于分享范围内：
+// 文件分享只能访问被分享的文件本身；文件夹分享只能访问该文件夹及其子孙条目，且须属于分享者、未删除
+func (s *service) VerifyShareItem(ctx context.Context, share *entity.CloudShare, itemID uint) error {
+	if itemID == share.ResourceID {
+		return nil
+	}
+	notInShare := errors.New(errors.ErrResourceNotFound, "文件不在该分享中")
+	if share.ResourceType != "folder" {
+		return notInShare
+	}
+	current := itemID
+	for depth := 0; depth < maxShareDepth; depth++ {
+		var item entity.CloudItem
+		if err := s.db.WithContext(ctx).Select("ID, PARENT_ID, OWNER_ID").
+			Where("ID = ? AND IS_ACTIVE = ?", current, "Y").First(&item).Error; err != nil {
+			return notInShare
+		}
+		if item.OwnerID != share.SharerID || item.ParentID == nil {
+			return notInShare
+		}
+		if *item.ParentID == share.ResourceID {
+			return nil
+		}
+		current = *item.ParentID
+	}
+	return notInShare
+}

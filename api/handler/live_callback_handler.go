@@ -370,6 +370,15 @@ type MonitorEvent struct {
 // callbackSignValidityWindow 回调签名有效窗口（秒），与注释声明的默认有效期一致
 const callbackSignValidityWindow = 10 * time.Minute
 
+// checkSign 回调签名校验：未配置回调密钥时，release 模式一律拒绝（防止伪造回调），
+// debug 模式放行以便本地联调（启动时会告警）
+func (h *LiveCallbackHandler) checkSign(t int64, sign string) bool {
+	if h.callbackKey == "" {
+		return h.cfg == nil || h.cfg.App.Mode != "release"
+	}
+	return h.verifySign(t, sign)
+}
+
 // verifySign 验证回调签名
 func (h *LiveCallbackHandler) verifySign(t int64, sign string) bool {
 	// 时间戳(t 为未来到期时间)必须落在有效窗口内：
@@ -410,7 +419,7 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 	}
 
 	// 验证签名
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("推流事件签名验证失败",
 			zap.String("streamId", event.StreamID),
 			zap.String("sign", event.Sign))
@@ -464,7 +473,6 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1, // TODO: 从上下文获取公司ID
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -495,7 +503,7 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 	}
 
 	// 验证签名
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("断流事件签名验证失败",
 			zap.String("streamId", event.StreamID),
 			zap.String("sign", event.Sign))
@@ -550,7 +558,6 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1, // TODO: 从上下文获取公司ID
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -581,7 +588,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 	}
 
 	// 验证签名
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("录制文件事件签名验证失败",
 			zap.String("streamId", event.StreamID),
 			zap.String("sign", event.Sign))
@@ -652,7 +659,6 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1, // TODO: 从上下文获取公司ID
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -811,7 +817,7 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 	}
 
 	// 验证签名
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("录制状态事件签名验证失败",
 			zap.String("streamId", event.StreamID),
 			zap.String("sign", event.Sign))
@@ -866,7 +872,6 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1, // TODO: 从上下文获取公司ID
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -905,7 +910,7 @@ func (h *LiveCallbackHandler) DeleteCallbackEvent(c *gin.Context) {
 	}
 
 	// 软删除事件（将IsActive设置为N）
-	if err := h.db.Model(&entity.LiveCallbackEvent{}).Where("ID = ?", eventID).Update("IS_ACTIVE", "N").Error; err != nil {
+	if err := h.db.Model(&entity.LiveCallbackEvent{}).Where("ID = ? AND SYS_COMPANY_ID = ?", eventID, c.GetUint("companyID")).Update("IS_ACTIVE", "N").Error; err != nil {
 		logger.Error("删除回调事件失败", zap.Error(err))
 		utils.InternalError(c, "删除失败")
 		return
@@ -938,7 +943,7 @@ func (h *LiveCallbackHandler) BatchDeleteCallbackEvents(c *gin.Context) {
 	}
 
 	// 软删除事件（将IsActive设置为N）
-	if err := h.db.Model(&entity.LiveCallbackEvent{}).Where("ID IN ?", ids).Update("IS_ACTIVE", "N").Error; err != nil {
+	if err := h.db.Model(&entity.LiveCallbackEvent{}).Where("ID IN ? AND SYS_COMPANY_ID = ?", ids, c.GetUint("companyID")).Update("IS_ACTIVE", "N").Error; err != nil {
 		logger.Error("批量删除回调事件失败", zap.Error(err))
 		utils.InternalError(c, "删除失败")
 		return
@@ -980,6 +985,10 @@ func (h *LiveCallbackHandler) QueryCallbackEvents(c *gin.Context) {
 
 	// 构建查询
 	query := h.db.Model(&entity.LiveCallbackEvent{}).Where("IS_ACTIVE = ?", "Y")
+	// 只能查看本公司直播间产生的回调事件
+	if companyID, ok := c.Get("companyID"); ok {
+		query = query.Where("SYS_COMPANY_ID = ?", companyID)
+	}
 
 	// 按 ID 精确查询（录制回放/高光片段预览页只取指定的一条）
 	if id := c.Query("id"); id != "" {
@@ -1055,7 +1064,7 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("截图事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -1101,7 +1110,6 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -1130,7 +1138,7 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("画面审核事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -1176,7 +1184,6 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -1205,7 +1212,7 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("音频审核事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -1251,7 +1258,6 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -1280,7 +1286,7 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("质检事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -1326,7 +1332,6 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -1355,7 +1360,7 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("评测阈值事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -1401,7 +1406,6 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}
@@ -1430,7 +1434,7 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 		return
 	}
 
-	if h.callbackKey != "" && !h.verifySign(event.T, event.Sign) {
+	if !h.checkSign(event.T, event.Sign) {
 		logger.Warn("评测平均分事件签名验证失败", zap.String("streamId", event.StreamID))
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid signature"})
 		return
@@ -1475,7 +1479,6 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 		EventData:    string(eventData),
 		Sign:         event.Sign,
 		TValue:       event.T,
-		SysCompanyID: 1,
 		RoomName:     room.RoomName,
 		IsActive:     "Y",
 	}

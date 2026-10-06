@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"net/http"
 	"strconv"
 
@@ -79,9 +80,9 @@ func (h *GroupsHandler) CreateGroup(c *gin.Context) {
 		Sgrade:      req.Sgrade,
 	}
 
-	if err := h.groupService.CreateGroup(c.Request.Context(), group); err != nil {
+	if err := h.groupService.CreateGroup(withCompanyID(c), group); err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -145,9 +146,9 @@ func (h *GroupsHandler) UpdateGroup(c *gin.Context) {
 		Sgrade:      req.Sgrade,
 	}
 
-	if err := h.groupService.UpdateGroup(c.Request.Context(), group); err != nil {
+	if err := h.groupService.UpdateGroup(withCompanyID(c), group); err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -186,9 +187,9 @@ func (h *GroupsHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	if err := h.groupService.DeleteGroup(c.Request.Context(), uint(id)); err != nil {
+	if err := h.groupService.DeleteGroup(withCompanyID(c), uint(id)); err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -227,7 +228,7 @@ func (h *GroupsHandler) GetGroup(c *gin.Context) {
 		return
 	}
 
-	group, err := h.groupService.GetGroup(c.Request.Context(), uint(id))
+	group, err := h.groupService.GetGroup(withCompanyID(c), uint(id))
 	if err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -279,10 +280,10 @@ func (h *GroupsHandler) ListGroups(c *gin.Context) {
 		}
 	}
 
-	groupList, total, err := h.groupService.ListGroups(c.Request.Context(), req)
+	groupList, total, err := h.groupService.ListGroups(withCompanyID(c), req)
 	if err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -337,9 +338,9 @@ func (h *GroupsHandler) AssignPermissions(c *gin.Context) {
 		return
 	}
 
-	if err := h.groupService.AssignPermissions(c.Request.Context(), uint(id), req.Permissions); err != nil {
+	if err := h.groupService.AssignPermissions(withCompanyID(c), uint(id), req.Permissions); err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -378,10 +379,10 @@ func (h *GroupsHandler) GetGroupPermissions(c *gin.Context) {
 		return
 	}
 
-	permissions, err := h.groupService.GetGroupPermissions(c.Request.Context(), uint(id))
+	permissions, err := h.groupService.GetGroupPermissions(withCompanyID(c), uint(id))
 	if err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -431,9 +432,9 @@ func (h *GroupsHandler) AssignGroupsToUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.groupService.AssignGroupsToUser(c.Request.Context(), uint(userID), req.DirectoryIDs); err != nil {
+	if err := h.groupService.AssignGroupsToUser(withCompanyID(c), uint(userID), req.DirectoryIDs); err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -472,10 +473,10 @@ func (h *GroupsHandler) GetUserGroups(c *gin.Context) {
 		return
 	}
 
-	groupList, err := h.groupService.GetUserGroups(c.Request.Context(), uint(userID))
+	groupList, err := h.groupService.GetUserGroups(withCompanyID(c), uint(userID))
 	if err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -640,7 +641,7 @@ func (h *GroupsHandler) GetPermissionMatrix(c *gin.Context) {
 	matrix, err := h.groupService.GetPermissionMatrix(withCompanyID(c))
 	if err != nil {
 		if appErr, ok := err.(*errors.AppError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(utils.HTTPStatusFor(appErr), gin.H{
 				"code":    appErr.Code,
 				"message": appErr.Message,
 			})
@@ -658,4 +659,39 @@ func (h *GroupsHandler) GetPermissionMatrix(c *gin.Context) {
 		"message": "success",
 		"data":    matrix,
 	})
+}
+
+// RemoveUserGroupsRequest 移除用户权限组请求（兼容单个 directoryId 与多个 directoryIds）
+type RemoveUserGroupsRequest struct {
+	DirectoryID  uint   `json:"directoryId"`
+	DirectoryIDs []uint `json:"directoryIds"`
+}
+
+// RemoveUserGroups 移除用户的权限组
+// @Router /groups/users/{userId} [delete]
+// @Security BearerAuth
+func (h *GroupsHandler) RemoveUserGroups(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Param("userId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": errors.ErrInvalidParam, "message": "无效的用户ID"})
+		return
+	}
+	var req RemoveUserGroupsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": errors.ErrInvalidParam, "message": "参数错误: " + err.Error()})
+		return
+	}
+	ids := req.DirectoryIDs
+	if req.DirectoryID > 0 {
+		ids = append(ids, req.DirectoryID)
+	}
+	if len(ids) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": errors.ErrInvalidParam, "message": "请指定要移除的权限组"})
+		return
+	}
+	if err := h.groupService.RemoveUserGroups(withCompanyID(c), uint(userID), ids); err != nil {
+		utils.FailFromError(c, "移除权限组失败: ", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
 }

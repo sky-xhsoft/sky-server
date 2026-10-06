@@ -25,7 +25,7 @@ func registerLiveDomainRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, service live
 		domains.POST("", domainHandler.AddDomain)                        // 添加域名
 		domains.GET("", domainHandler.ListDomains)                       // 查询域名列表
 		domains.GET("/verify", domainHandler.VerifyDomainOwner)          // 验证域名归属
-		domains.GET("/:domainName/auth", domainHandler.GetDomainAuthKey) // 查询域名鉴权配置
+		domains.GET("/:domainName/auth", middleware.AdminRequired(), domainHandler.GetDomainAuthKey) // 查询域名鉴权配置（含推流主密钥，仅管理员）
 		domains.GET("/:domainName", domainHandler.GetDomain)             // 查询域名信息
 		domains.DELETE("/:domainName", domainHandler.DeleteDomain)       // 删除域名
 		domains.POST("/:domainName/enable", domainHandler.EnableDomain)  // 启用域名

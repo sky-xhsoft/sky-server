@@ -130,6 +130,9 @@ func NewService(db *gorm.DB) Service {
 
 // CreateGroup 创建权限组
 func (s *service) CreateGroup(ctx context.Context, group *entity.SysGroups) error {
+	if company, ok := scopeCompany(ctx); ok {
+		group.SysCompanyID = company
+	}
 	if err := s.db.WithContext(ctx).Create(group).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "创建权限组失败", err)
 	}
@@ -138,10 +141,15 @@ func (s *service) CreateGroup(ctx context.Context, group *entity.SysGroups) erro
 
 // UpdateGroup 更新权限组
 func (s *service) UpdateGroup(ctx context.Context, group *entity.SysGroups) error {
-	// 检查权限组是否存在
-	if _, err := s.GetGroup(ctx, group.ID); err != nil {
+	// 检查权限组是否存在且属于本公司
+	existing, err := s.GetGroup(ctx, group.ID)
+	if err != nil {
 		return err
 	}
+	if err := checkGroupScope(ctx, existing, true); err != nil {
+		return err
+	}
+	group.SysCompanyID = existing.SysCompanyID
 
 	if err := s.db.WithContext(ctx).Model(&entity.SysGroups{}).
 		Where("ID = ?", group.ID).Updates(group).Error; err != nil {
@@ -152,8 +160,12 @@ func (s *service) UpdateGroup(ctx context.Context, group *entity.SysGroups) erro
 
 // DeleteGroup 删除权限组
 func (s *service) DeleteGroup(ctx context.Context, id uint) error {
-	// 检查权限组是否存在
-	if _, err := s.GetGroup(ctx, id); err != nil {
+	// 检查权限组是否存在且属于本公司
+	group, err := s.GetGroup(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := checkGroupScope(ctx, group, true); err != nil {
 		return err
 	}
 
@@ -199,6 +211,9 @@ func (s *service) GetGroup(ctx context.Context, id uint) (*entity.SysGroups, err
 		}
 		return nil, errors.Wrap(errors.ErrDatabase, "查询权限组失败", err)
 	}
+	if err := checkGroupScope(ctx, &group, false); err != nil {
+		return nil, err
+	}
 	return &group, nil
 }
 
@@ -215,6 +230,9 @@ func (s *service) ListGroups(ctx context.Context, req *ListGroupsRequest) ([]*en
 	}
 
 	query := s.db.WithContext(ctx).Model(&entity.SysGroups{}).Where("IS_ACTIVE = ?", "Y")
+	if company, ok := scopeCompany(ctx); ok {
+		query = query.Where("SYS_COMPANY_ID IN (?, 0, -1)", company)
+	}
 
 	// 应用过滤条件
 	if req.Name != "" {
@@ -401,8 +419,12 @@ func (s *service) buildDirectoryTree(dirs []*entity.SysDirectory, parentID uint)
 
 // AssignPermissions 分配权限给权限组
 func (s *service) AssignPermissions(ctx context.Context, groupID uint, permissions []*GroupPermission) error {
-	// 检查权限组是否存在
-	if _, err := s.GetGroup(ctx, groupID); err != nil {
+	// 检查权限组是否存在且属于本公司
+	group, err := s.GetGroup(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	if err := checkGroupScope(ctx, group, true); err != nil {
 		return err
 	}
 
@@ -436,6 +458,9 @@ func (s *service) AssignPermissions(ctx context.Context, groupID uint, permissio
 
 // GetGroupPermissions 获取权限组权限
 func (s *service) GetGroupPermissions(ctx context.Context, groupID uint) ([]*entity.SysGroupPrem, error) {
+	if _, err := s.GetGroup(ctx, groupID); err != nil {
+		return nil, err
+	}
 	var permissions []*entity.SysGroupPrem
 	if err := s.db.WithContext(ctx).
 		Where("SYS_GROUPS_ID = ? AND IS_ACTIVE = ?", groupID, "Y").
@@ -447,6 +472,13 @@ func (s *service) GetGroupPermissions(ctx context.Context, groupID uint) ([]*ent
 
 // RemovePermissions 移除权限组权限
 func (s *service) RemovePermissions(ctx context.Context, groupID uint, directoryIDs []uint) error {
+	group, err := s.GetGroup(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	if err := checkGroupScope(ctx, group, true); err != nil {
+		return err
+	}
 	if err := s.db.WithContext(ctx).Model(&entity.SysGroupPrem{}).
 		Where("SYS_GROUPS_ID = ? AND SYS_DIRECTORY_ID IN ?", groupID, directoryIDs).
 		Update("IS_ACTIVE", "N").Error; err != nil {
@@ -457,6 +489,12 @@ func (s *service) RemovePermissions(ctx context.Context, groupID uint, directory
 
 // AssignGroupsToUser 分配权限组给用户
 func (s *service) AssignGroupsToUser(ctx context.Context, userID uint, directoryIDs []uint) error {
+	if err := s.checkUserScope(ctx, userID); err != nil {
+		return err
+	}
+	if err := s.checkGroupsReadable(ctx, directoryIDs); err != nil {
+		return err
+	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// 先删除原有分配
 		if err := tx.Model(&entity.SysUserGroups{}).
@@ -485,6 +523,9 @@ func (s *service) AssignGroupsToUser(ctx context.Context, userID uint, directory
 
 // GetUserGroups 获取用户权限组
 func (s *service) GetUserGroups(ctx context.Context, userID uint) ([]*entity.SysGroups, error) {
+	if err := s.checkUserScope(ctx, userID); err != nil {
+		return nil, err
+	}
 	var groups []*entity.SysGroups
 	err := s.db.WithContext(ctx).
 		Table("sys_groups").
@@ -500,6 +541,9 @@ func (s *service) GetUserGroups(ctx context.Context, userID uint) ([]*entity.Sys
 
 // RemoveUserGroups 移除用户权限组
 func (s *service) RemoveUserGroups(ctx context.Context, userID uint, directoryIDs []uint) error {
+	if err := s.checkUserScope(ctx, userID); err != nil {
+		return err
+	}
 	if err := s.db.WithContext(ctx).Model(&entity.SysUserGroups{}).
 		Where("SYS_USER_ID = ? AND SYS_DIRECTORY_ID IN ?", userID, directoryIDs).
 		Update("IS_ACTIVE", "N").Error; err != nil {

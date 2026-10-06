@@ -61,6 +61,8 @@ type Service interface {
 	GetUserShares(ctx context.Context, userID uint) ([]*entity.CloudShare, error)
 	AccessShare(ctx context.Context, shareCode string, password string) (*ShareInfo, error)
 	VerifyShareAccess(share *entity.CloudShare, token string) error
+	// VerifyShareItem 校验条目位于分享范围内（文件夹分享浏览子目录、下载/预览其中的文件前调用）
+	VerifyShareItem(ctx context.Context, share *entity.CloudShare, itemID uint) error
 	VerifyShareViewer(ctx context.Context, share *entity.CloudShare, viewerCompanyID uint) error
 	CancelShare(ctx context.Context, shareID uint, userID uint) error
 	UpdateShare(ctx context.Context, shareID uint, req *UpdateShareRequest, userID uint) (*entity.CloudShare, error)

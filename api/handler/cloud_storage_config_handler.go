@@ -154,7 +154,7 @@ func (h *CloudStorageConfigHandler) CreateConfig(c *gin.Context) {
 
 	// 转换为实体
 	config := &entity.CloudStorageConfig{
-		SysCompanyID:             req.SysCompanyID,
+		SysCompanyID:             c.GetUint("companyID"), // 只能配置本公司
 		StorageType:              req.StorageType,
 		LocalBasePath:            req.LocalBasePath,
 		LocalBaseURL:             req.LocalBaseURL,
@@ -213,6 +213,11 @@ func (h *CloudStorageConfigHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
+	if !h.ownsConfig(c, uint(id)) {
+		utils.NotFound(c, "存储配置不存在")
+		return
+	}
+
 	logger.Info("更新存储配置请求",
 		zap.Uint("id", uint(id)),
 		zap.Uint("sysCompanyId", req.SysCompanyID),
@@ -221,7 +226,7 @@ func (h *CloudStorageConfigHandler) UpdateConfig(c *gin.Context) {
 	// 转换为实体
 	config := &entity.CloudStorageConfig{
 		ID:                       uint(id),
-		SysCompanyID:             req.SysCompanyID,
+		SysCompanyID:             c.GetUint("companyID"), // 只能配置本公司
 		StorageType:              req.StorageType,
 		LocalBasePath:            req.LocalBasePath,
 		LocalBaseURL:             req.LocalBaseURL,
@@ -275,6 +280,10 @@ func (h *CloudStorageConfigHandler) GetCompanyConfig(c *gin.Context) {
 		return
 	}
 
+	if uint(companyID) != c.GetUint("companyID") {
+		utils.NotFound(c, "存储配置不存在")
+		return
+	}
 	logger.Debug("获取公司存储配置", zap.Uint("companyId", uint(companyID)))
 
 	config, err := h.storageConfigService.GetCompanyConfig(c.Request.Context(), uint(companyID))
@@ -315,9 +324,12 @@ func (h *CloudStorageConfigHandler) GetAllConfigs(c *gin.Context) {
 		return
 	}
 
-	// 转换为响应列表
+	// 转换为响应列表（只返回本公司配置）
 	var responses []*ConfigResponse
 	for _, config := range configs {
+		if config.SysCompanyID != c.GetUint("companyID") {
+			continue
+		}
 		responses = append(responses, toResponse(config))
 	}
 
@@ -325,6 +337,20 @@ func (h *CloudStorageConfigHandler) GetAllConfigs(c *gin.Context) {
 		"data":  responses,
 		"total": len(responses),
 	})
+}
+
+// ownsConfig 配置是否属于当前公司
+func (h *CloudStorageConfigHandler) ownsConfig(c *gin.Context, id uint) bool {
+	configs, err := h.storageConfigService.GetAllConfigs(c.Request.Context())
+	if err != nil {
+		return false
+	}
+	for _, config := range configs {
+		if config.ID == id {
+			return config.SysCompanyID == c.GetUint("companyID")
+		}
+	}
+	return false
 }
 
 // DeleteConfig 删除存储配置
@@ -345,6 +371,10 @@ func (h *CloudStorageConfigHandler) DeleteConfig(c *gin.Context) {
 		return
 	}
 
+	if !h.ownsConfig(c, uint(id)) {
+		utils.NotFound(c, "存储配置不存在")
+		return
+	}
 	logger.Info("删除存储配置请求", zap.Uint("id", uint(id)))
 
 	if err := h.storageConfigService.DeleteConfig(c.Request.Context(), uint(id)); err != nil {
@@ -378,6 +408,10 @@ func (h *CloudStorageConfigHandler) RefreshCache(c *gin.Context) {
 		return
 	}
 
+	if uint(companyID) != c.GetUint("companyID") {
+		utils.Forbidden(c, "只能刷新本公司的存储配置")
+		return
+	}
 	logger.Info("刷新存储配置缓存请求", zap.Uint("companyId", uint(companyID)))
 
 	if err := h.storageConfigService.RefreshCache(c.Request.Context(), uint(companyID)); err != nil {

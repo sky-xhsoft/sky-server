@@ -799,6 +799,11 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 		utils.BadRequest(c, "只能下载文件夹分享中的文件")
 		return
 	}
+	// 文件须位于被分享的文件夹内
+	if err := h.cloudService.VerifyShareItem(c.Request.Context(), share, uint(fileID)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
 
 	// 下载文件
 	reader, fileInfo, err := h.cloudService.DownloadFileByID(c.Request.Context(), uint(fileID))
@@ -864,6 +869,11 @@ func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
 	// 只支持文件夹分享
 	if share.ResourceType != "folder" {
 		utils.BadRequest(c, "只能预览文件夹分享中的文件")
+		return
+	}
+	// 文件须位于被分享的文件夹内
+	if err := h.cloudService.VerifyShareItem(c.Request.Context(), share, uint(fileID)); err != nil {
+		writeShareError(c, "", err)
 		return
 	}
 
@@ -940,6 +950,11 @@ func (h *CloudHandler) GetShareFolderContent(c *gin.Context) {
 			return
 		}
 		pid := uint(id)
+		// 只能浏览被分享的文件夹及其子文件夹
+		if err := h.cloudService.VerifyShareItem(c.Request.Context(), share, pid); err != nil {
+			writeShareError(c, "", err)
+			return
+		}
 		parentID = &pid
 	} else {
 		// 如果没有指定 parentId，使用分享的根文件夹ID
