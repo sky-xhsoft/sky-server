@@ -981,6 +981,10 @@ func (h *LiveCallbackHandler) QueryCallbackEvents(c *gin.Context) {
 	// 构建查询
 	query := h.db.Model(&entity.LiveCallbackEvent{}).Where("IS_ACTIVE = ?", "Y")
 
+	// 按 ID 精确查询（录制回放/高光片段预览页只取指定的一条）
+	if id := c.Query("id"); id != "" {
+		query = query.Where("ID = ?", id)
+	}
 	if eventType != "" {
 		query = query.Where("EVENT_TYPE = ?", eventType)
 	}
