@@ -2,6 +2,7 @@ package crud
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/domain/search"
@@ -129,6 +130,35 @@ func (s *service) applyCompanyScope(query *gorm.DB, tableName string, columns []
 		}
 	}
 	return query
+}
+
+// ensureInCompanyScope 写操作前确认目标记录都在当前用户的公司范围内（与查询一致），否则视为记录不存在。
+// 写操作只按 ID 定位记录，缺少这一步会让有修改/删除权限的用户改动其他公司的数据。
+func (s *service) ensureInCompanyScope(tableName string, tableID uint, userID uint, ids ...uint) error {
+	uniq := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		uniq[id] = true
+	}
+	if len(uniq) == 0 {
+		return nil
+	}
+	columns, err := s.metadataService.GetColumns(tableID)
+	if err != nil {
+		return err
+	}
+	list := make([]uint, 0, len(uniq))
+	for id := range uniq {
+		list = append(list, id)
+	}
+	var n int64
+	q := s.applyCompanyScope(s.db.Table(tableName).Where("ID IN ?", list), tableName, columns, userID)
+	if err := q.Count(&n).Error; err != nil {
+		return errors.Wrap(errors.ErrDatabase, "查询记录失败", err)
+	}
+	if n < int64(len(list)) {
+		return errors.New(errors.ErrResourceNotFound, "记录不存在")
+	}
+	return nil
 }
 
 // GetList 查询列表
@@ -259,8 +289,8 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 				}
 			}
 
-			// 使用安全的排序方式
-			query = query.Order(gorm.Expr("? ?", gorm.Expr(field), gorm.Expr(direction)))
+			// 字段已在白名单中校验；原先嵌套 gorm.Expr 生成的 SQL 不含 ORDER BY，排序不生效
+			query = query.Order(fmt.Sprintf("`%s` %s", fieldUpper, direction))
 		}
 	} else {
 		// 检查是否有ORDERNO字段，如果有则默认按ORDERNO升序排序
@@ -417,7 +447,7 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 				}
 			}
 
-			query = query.Order(gorm.Expr("? ?", gorm.Expr(field), gorm.Expr(direction)))
+			query = query.Order(fmt.Sprintf("`%s` %s", fieldUpper, direction))
 		}
 	} else {
 		hasOrderNo := false

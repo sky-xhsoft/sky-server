@@ -3,6 +3,7 @@ package crud
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -130,6 +131,9 @@ func (s *service) Update(ctx context.Context, tableName string, id uint, data ma
 	if !hasPermission {
 		return errors.New(errors.ErrPermissionDenied, "无修改权限")
 	}
+	if err := s.ensureInCompanyScope(table.Name, table.ID, userID, id); err != nil {
+		return err
+	}
 
 	// 添加ID到数据中供钩子使用
 	data["ID"] = id
@@ -144,6 +148,10 @@ func (s *service) Update(ctx context.Context, tableName string, id uint, data ma
 	processedData, err := s.processFieldsForUpdate(columns, data, userID)
 	if err != nil {
 		return err
+	}
+	// 请求的业务字段全部因不可编辑被跳过时明确报错（原先仍返回“更新成功”，掩盖了 MASK 配置错误）
+	if skipped := skippedUpdateFields(columns, data, processedData); len(skipped) > 0 {
+		return errors.New(errors.ErrInvalidParam, "以下字段不可编辑: "+strings.Join(skipped, "、"))
 	}
 
 	// 添加审计字段
@@ -210,6 +218,9 @@ func (s *service) Delete(ctx context.Context, tableName string, id uint, userID 
 	}
 	if !hasPermission {
 		return errors.New(errors.ErrPermissionDenied, "无删除权限")
+	}
+	if err := s.ensureInCompanyScope(table.Name, table.ID, userID, id); err != nil {
+		return err
 	}
 
 	// 检查外键引用（REF_ON_DELETE 保护）
@@ -312,6 +323,9 @@ func (s *service) BatchDelete(ctx context.Context, tableName string, ids []uint,
 	}
 	if !hasPermission {
 		return errors.New(errors.ErrPermissionDenied, "无删除权限")
+	}
+	if err := s.ensureInCompanyScope(table.Name, table.ID, userID, ids...); err != nil {
+		return err
 	}
 
 	// 检查每个ID的外键引用

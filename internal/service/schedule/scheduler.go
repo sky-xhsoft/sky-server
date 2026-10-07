@@ -72,6 +72,8 @@ func (s *Scheduler) scan() {
 	defer cancel()
 
 	now := time.Now()
+	s.syncNextRun(ctx, now)
+
 	var due []entity.SysSchedule
 	if err := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = 'Y' AND NEXT_RUN_AT IS NOT NULL AND NEXT_RUN_AT <= ?", now).
@@ -83,6 +85,30 @@ func (s *Scheduler) scan() {
 	for i := range due {
 		sc := &due[i]
 		s.exec(ctx, sc)
+	}
+}
+
+// syncNextRun 同步下次运行时间：
+//   - 页面新建/启用的任务 NEXT_RUN_AT 为空，按 cron 补算（原先只有手动执行后才会计算，任务永远不跑）
+//   - 修改 CRON 后若新的下次时间更早，则提前（变得更稀疏的情况会在下次运行后按新 cron 重算）
+func (s *Scheduler) syncNextRun(ctx context.Context, now time.Time) {
+	var tasks []entity.SysSchedule
+	if err := s.db.WithContext(ctx).Select("ID, CRON, NEXT_RUN_AT").
+		Where("IS_ACTIVE = 'Y'").Find(&tasks).Error; err != nil {
+		logger.Warn("schedule sync query failed", zap.Error(err))
+		return
+	}
+	for _, sc := range tasks {
+		next, err := NextRunAfter(sc.Cron, now)
+		if err != nil {
+			continue // cron 无效，保持不运行
+		}
+		if sc.NextRunAt == nil || sc.NextRunAt.After(next) {
+			if err := s.db.WithContext(ctx).Model(&entity.SysSchedule{}).Where("ID = ?", sc.ID).
+				Update("NEXT_RUN_AT", next).Error; err != nil {
+				logger.Warn("schedule next run update failed", zap.Uint("id", sc.ID), zap.Error(err))
+			}
+		}
 	}
 }
 

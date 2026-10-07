@@ -37,7 +37,7 @@ func (h *WorkflowHandler) CreateDefinition(c *gin.Context) {
 	}
 
 	def.IsActive = "Y"
-	if err := h.workflowService.CreateDefinition(c.Request.Context(), &def); err != nil {
+	if err := h.workflowService.CreateDefinition(withCompanyID(c), &def); err != nil {
 		utils.FailFromError(c, "创建流程定义失败: ", err)
 		return
 	}
@@ -60,7 +60,7 @@ func (h *WorkflowHandler) GetDefinition(c *gin.Context) {
 		return
 	}
 
-	def, err := h.workflowService.GetDefinition(c.Request.Context(), uint(id))
+	def, err := h.workflowService.GetDefinition(withCompanyID(c), uint(id))
 	if err != nil {
 		utils.NotFound(c, "流程定义不存在")
 		return
@@ -93,7 +93,7 @@ func (h *WorkflowHandler) UpdateDefinition(c *gin.Context) {
 	}
 
 	def.ID = uint(id)
-	if err := h.workflowService.UpdateDefinition(c.Request.Context(), &def); err != nil {
+	if err := h.workflowService.UpdateDefinition(withCompanyID(c), &def); err != nil {
 		utils.FailFromError(c, "更新流程定义失败: ", err)
 		return
 	}
@@ -116,7 +116,7 @@ func (h *WorkflowHandler) PublishDefinition(c *gin.Context) {
 		return
 	}
 
-	if err := h.workflowService.PublishDefinition(c.Request.Context(), uint(id)); err != nil {
+	if err := h.workflowService.PublishDefinition(withCompanyID(c), uint(id)); err != nil {
 		utils.FailFromError(c, "发布流程定义失败: ", err)
 		return
 	}
@@ -138,7 +138,7 @@ func (h *WorkflowHandler) ListDefinitions(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	defs, total, err := h.workflowService.ListDefinitions(c.Request.Context(), status, page, pageSize)
+	defs, total, err := h.workflowService.ListDefinitions(withCompanyID(c), status, page, pageSize)
 	if err != nil {
 		utils.FailFromError(c, "查询流程定义列表失败: ", err)
 		return
@@ -168,7 +168,7 @@ func (h *WorkflowHandler) CreateNode(c *gin.Context) {
 	}
 
 	node.IsActive = "Y"
-	if err := h.workflowService.CreateNode(c.Request.Context(), &node); err != nil {
+	if err := h.workflowService.CreateNode(withCompanyID(c), &node); err != nil {
 		utils.FailFromError(c, "创建流程节点失败: ", err)
 		return
 	}
@@ -191,7 +191,7 @@ func (h *WorkflowHandler) GetNodes(c *gin.Context) {
 		return
 	}
 
-	nodes, err := h.workflowService.GetNodes(c.Request.Context(), uint(definitionID))
+	nodes, err := h.workflowService.GetNodes(withCompanyID(c), uint(definitionID))
 	if err != nil {
 		utils.FailFromError(c, "查询流程节点失败: ", err)
 		return
@@ -224,7 +224,7 @@ func (h *WorkflowHandler) UpdateNode(c *gin.Context) {
 	}
 
 	node.ID = uint(id)
-	if err := h.workflowService.UpdateNode(c.Request.Context(), &node); err != nil {
+	if err := h.workflowService.UpdateNode(withCompanyID(c), &node); err != nil {
 		utils.FailFromError(c, "更新流程节点失败: ", err)
 		return
 	}
@@ -247,7 +247,7 @@ func (h *WorkflowHandler) DeleteNode(c *gin.Context) {
 		return
 	}
 
-	if err := h.workflowService.DeleteNode(c.Request.Context(), uint(id)); err != nil {
+	if err := h.workflowService.DeleteNode(withCompanyID(c), uint(id)); err != nil {
 		utils.FailFromError(c, "删除流程节点失败: ", err)
 		return
 	}
@@ -271,7 +271,7 @@ func (h *WorkflowHandler) CreateTransition(c *gin.Context) {
 	}
 
 	transition.IsActive = "Y"
-	if err := h.workflowService.CreateTransition(c.Request.Context(), &transition); err != nil {
+	if err := h.workflowService.CreateTransition(withCompanyID(c), &transition); err != nil {
 		utils.FailFromError(c, "创建流程流转失败: ", err)
 		return
 	}
@@ -294,7 +294,7 @@ func (h *WorkflowHandler) GetTransitions(c *gin.Context) {
 		return
 	}
 
-	transitions, err := h.workflowService.GetTransitions(c.Request.Context(), uint(definitionID))
+	transitions, err := h.workflowService.GetTransitions(withCompanyID(c), uint(definitionID))
 	if err != nil {
 		utils.FailFromError(c, "查询流程流转失败: ", err)
 		return
@@ -318,7 +318,7 @@ func (h *WorkflowHandler) DeleteTransition(c *gin.Context) {
 		return
 	}
 
-	if err := h.workflowService.DeleteTransition(c.Request.Context(), uint(id)); err != nil {
+	if err := h.workflowService.DeleteTransition(withCompanyID(c), uint(id)); err != nil {
 		utils.FailFromError(c, "删除流程流转失败: ", err)
 		return
 	}
@@ -349,7 +349,7 @@ func (h *WorkflowHandler) StartProcess(c *gin.Context) {
 	}
 	req.StartUserID = userID.(uint)
 
-	instance, err := h.workflowService.StartProcess(c.Request.Context(), &req)
+	instance, err := h.workflowService.StartProcess(withCompanyID(c), &req)
 	if err != nil {
 		utils.FailFromError(c, "启动流程失败: ", err)
 		return
@@ -373,7 +373,7 @@ func (h *WorkflowHandler) GetInstance(c *gin.Context) {
 		return
 	}
 
-	instance, err := h.workflowService.GetInstance(c.Request.Context(), uint(id))
+	instance, err := h.workflowService.GetInstance(withCompanyID(c), uint(id))
 	if err != nil {
 		utils.NotFound(c, "流程实例不存在")
 		return
@@ -412,7 +412,7 @@ func (h *WorkflowHandler) ListInstances(c *gin.Context) {
 	req.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
 	req.PageSize, _ = strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	instances, total, err := h.workflowService.ListInstances(c.Request.Context(), &req)
+	instances, total, err := h.workflowService.ListInstances(withCompanyID(c), &req)
 	if err != nil {
 		utils.FailFromError(c, "查询流程实例列表失败: ", err)
 		return
@@ -448,7 +448,7 @@ func (h *WorkflowHandler) TerminateInstance(c *gin.Context) {
 		return
 	}
 
-	if err := h.workflowService.TerminateInstance(c.Request.Context(), uint(id), userID.(uint)); err != nil {
+	if err := h.workflowService.TerminateInstance(withCompanyID(c), uint(id), userID.(uint)); err != nil {
 		utils.FailFromError(c, "终止流程失败: ", err)
 		return
 	}
@@ -477,7 +477,7 @@ func (h *WorkflowHandler) ListMyTasks(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 
-	tasks, total, err := h.workflowService.ListMyTasks(c.Request.Context(), userID.(uint), status, page, pageSize)
+	tasks, total, err := h.workflowService.ListMyTasks(withCompanyID(c), userID.(uint), status, page, pageSize)
 	if err != nil {
 		utils.FailFromError(c, "查询任务列表失败: ", err)
 		return
@@ -506,7 +506,7 @@ func (h *WorkflowHandler) GetTask(c *gin.Context) {
 		return
 	}
 
-	task, err := h.workflowService.GetTask(c.Request.Context(), uint(id))
+	task, err := h.workflowService.GetTask(withCompanyID(c), uint(id))
 	if err != nil {
 		utils.NotFound(c, "任务不存在")
 		return
@@ -538,7 +538,7 @@ func (h *WorkflowHandler) CompleteTask(c *gin.Context) {
 	}
 	req.UserID = userID.(uint)
 
-	if err := h.workflowService.CompleteTask(c.Request.Context(), &req); err != nil {
+	if err := h.workflowService.CompleteTask(withCompanyID(c), &req); err != nil {
 		utils.FailFromError(c, "完成任务失败: ", err)
 		return
 	}
@@ -568,7 +568,7 @@ func (h *WorkflowHandler) ClaimTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.workflowService.ClaimTask(c.Request.Context(), uint(id), userID.(uint)); err != nil {
+	if err := h.workflowService.ClaimTask(withCompanyID(c), uint(id), userID.(uint)); err != nil {
 		utils.FailFromError(c, "签收任务失败: ", err)
 		return
 	}
@@ -606,7 +606,7 @@ func (h *WorkflowHandler) TransferTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.workflowService.TransferTask(c.Request.Context(), uint(id), userID.(uint), req.ToUserID, req.Comment); err != nil {
+	if err := h.workflowService.TransferTask(withCompanyID(c), uint(id), userID.(uint), req.ToUserID, req.Comment); err != nil {
 		utils.FailFromError(c, "转交任务失败: ", err)
 		return
 	}

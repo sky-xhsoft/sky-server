@@ -99,11 +99,11 @@ type MessageDetail struct {
 
 // UserMessageItem 用户消息列表项
 type UserMessageItem struct {
-	*entity.SysMessage
-	IsRead     string `json:"isRead"`
-	IsStarred  string `json:"isStarred"`
-	IsArchived string `json:"isArchived"`
-	ReadTime   string `json:"readTime"`
+	entity.SysMessage // 值类型：GORM 扫描不会为内嵌指针分配内存，原先有数据即空指针 panic
+	IsRead     string     `json:"isRead"`
+	IsStarred  string     `json:"isStarred"`
+	IsArchived string     `json:"isArchived"`
+	ReadTime   *time.Time `json:"readTime"`
 }
 
 // SendMessage 发送消息
@@ -124,9 +124,10 @@ func (s *service) SendMessage(ctx context.Context, req *SendMessageRequest, send
 	}
 
 	// 计算过期时间
-	var expireTime string
+	var expireTime *time.Time // 不设过期时为 NULL（原先写入空字符串会被 MySQL 拒绝）
 	if req.ExpireDays > 0 {
-		expireTime = time.Now().AddDate(0, 0, req.ExpireDays).Format("2006-01-02 15:04:05")
+		t := time.Now().AddDate(0, 0, req.ExpireDays)
+		expireTime = &t
 	}
 
 	// 目标ID列表
@@ -231,14 +232,17 @@ func (s *service) GetMessage(ctx context.Context, messageID uint, userID uint) (
 		return nil, errors.Wrap(errors.ErrDatabase, "查询消息失败", err)
 	}
 
-	// 查询用户消息关联
+	// 查询用户消息关联：只有收件人（未删除）或发送人本人可以查看
 	var userMessage entity.SysUserMessage
 	err := s.db.WithContext(ctx).
-		Where("MESSAGE_ID = ? AND USER_ID = ? AND IS_ACTIVE = ?", messageID, userID, "Y").
+		Where("MESSAGE_ID = ? AND USER_ID = ? AND IS_ACTIVE = ? AND DELETED_AT IS NULL", messageID, userID, "Y").
 		First(&userMessage).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询用户消息关联失败", err)
+	}
+	if err == gorm.ErrRecordNotFound && (message.SenderID == nil || *message.SenderID != userID) {
+		return nil, errors.New(errors.ErrResourceNotFound, "消息不存在")
 	}
 
 	return &MessageDetail{
@@ -559,6 +563,22 @@ func (s *service) SendToAll(ctx context.Context, req *SendMessageRequest, sender
 func (s *service) getSenderName(senderID *uint) string {
 	if senderID == nil {
 		return "system"
+	}
+	if s.db == nil {
+		return fmt.Sprintf("user_%d", *senderID)
+	}
+	// 显示真实姓名，没有则用用户名（原先固定为 user_<ID> 占位）
+	var row struct {
+		TrueName string `gorm:"column:TRUE_NAME"`
+		Username string `gorm:"column:USERNAME"`
+	}
+	if err := s.db.Table("sys_user").Select("TRUE_NAME, USERNAME").Where("ID = ?", *senderID).Limit(1).Scan(&row).Error; err == nil {
+		if row.TrueName != "" {
+			return row.TrueName
+		}
+		if row.Username != "" {
+			return row.Username
+		}
 	}
 	return fmt.Sprintf("user_%d", *senderID)
 }

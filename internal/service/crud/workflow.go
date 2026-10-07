@@ -27,6 +27,9 @@ func (s *service) Submit(ctx context.Context, tableName string, id uint, userID 
 	if !hasPermission {
 		return errors.New(errors.ErrPermissionDenied, "没有提交权限")
 	}
+	if err := s.ensureInCompanyScope(table.Name, table.ID, userID, id); err != nil {
+		return err
+	}
 
 	// 检查表是否支持提交操作
 	if !mask.HasAction(table.Mask, mask.ActionSubmit) {
@@ -99,6 +102,9 @@ func (s *service) Unsubmit(ctx context.Context, tableName string, id uint, userI
 	if !hasPermission {
 		return errors.New(errors.ErrPermissionDenied, "没有反提交权限")
 	}
+	if err := s.ensureInCompanyScope(table.Name, table.ID, userID, id); err != nil {
+		return err
+	}
 
 	// 检查表是否支持反提交操作
 	if !mask.HasAction(table.Mask, mask.ActionUnsubmit) {
@@ -168,6 +174,9 @@ func (s *service) Void(ctx context.Context, tableName string, id uint, userID ui
 	}
 	if !hasPermission {
 		return errors.New(errors.ErrPermissionDenied, "没有作废权限")
+	}
+	if err := s.ensureInCompanyScope(table.Name, table.ID, userID, id); err != nil {
+		return err
 	}
 
 	if !mask.HasAction(table.Mask, mask.ActionVoid) {

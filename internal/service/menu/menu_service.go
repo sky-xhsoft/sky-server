@@ -119,7 +119,7 @@ func (s *service) GetUserMenuTree(ctx context.Context, userID, companyID uint, s
 	if err := s.db.WithContext(ctx).
 		Table("sys_user_groups").
 		Where("SYS_USER_ID = ? AND IS_ACTIVE = ?", userID, "Y").
-		Pluck("SYS_GROUPS_ID", &groupIDs).Error; err != nil {
+		Pluck("SYS_DIRECTORY_ID", &groupIDs).Error; err != nil { // sys_user_groups 用 SYS_DIRECTORY_ID 存权限组ID
 		return nil, fmt.Errorf("查询用户权限组失败: %w", err)
 	}
 

@@ -39,6 +39,36 @@ var standardFields = map[string]bool{
 	colIsActive:     true,
 }
 
+// skippedUpdateFields 请求中的业务字段在处理后一个都没有保留时，返回这些字段的显示名；
+// 只要有字段被保留就返回空（部分字段只读属于正常情况）。
+// 密码/加密字段留空表示不修改，不计入。
+func skippedUpdateFields(columns []*entity.SysColumn, data, processed map[string]interface{}) []string {
+	var requested []string
+	for _, col := range columns {
+		if standardFields[col.DbName] {
+			continue
+		}
+		value, ok := data[col.DbName]
+		if !ok {
+			continue
+		}
+		if col.SetValueType == "password" || col.SetValueType == "encrypt" {
+			if s, isStr := value.(string); isStr && s == "" {
+				continue
+			}
+		}
+		if _, kept := processed[col.DbName]; kept {
+			return nil
+		}
+		name := col.DisplayName
+		if name == "" {
+			name = col.DbName
+		}
+		requested = append(requested, name)
+	}
+	return requested
+}
+
 // buildSelectFields 构建查询字段列表（根据MASK控制）
 func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, operation string) (string, error) {
 	var fields []string

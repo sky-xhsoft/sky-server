@@ -36,12 +36,16 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 	}
 
 	// 5. 检查分片是否已上传
+	// 单独保存查询结果：后面的 err 会被存储调用覆盖，不能再用它判断记录是否存在
 	var chunkRecord entity.CloudChunkRecord
-	err = s.db.WithContext(ctx).
+	findErr := s.db.WithContext(ctx).
 		Where("SESSION_ID = ? AND CHUNK_INDEX = ?", session.ID, req.ChunkIndex).
 		First(&chunkRecord).Error
+	if findErr != nil && findErr != gorm.ErrRecordNotFound {
+		return errors.Wrap(errors.ErrDatabase, "查询分片记录失败", findErr)
+	}
 
-	if err == nil && chunkRecord.Uploaded {
+	if findErr == nil && chunkRecord.Uploaded {
 		logger.Debug("分片已上传，跳过", zap.Int("chunkIndex", req.ChunkIndex))
 		return nil // 分片已上传，跳过
 	}
@@ -78,7 +82,7 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 
 	// 8. 更新或创建分片记录
 	now := time.Now()
-	if err == gorm.ErrRecordNotFound {
+	if findErr == gorm.ErrRecordNotFound {
 		// 创建新记录
 		chunkRecord = entity.CloudChunkRecord{
 			SessionID:  session.ID,

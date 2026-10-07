@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -18,6 +19,10 @@ import (
 func (s *service) CreateItem(ctx context.Context, item *entity.CloudItem) error {
 	if item.OwnerID != 0 {
 		item.SysCompanyID = s.getUserCompanyID(ctx, item.OwnerID)
+		if item.CreateBy == "" {
+			item.CreateBy = s.getUsernameByID(ctx, item.OwnerID)
+			item.UpdateBy = item.CreateBy
+		}
 	} else if item.SysCompanyID == 0 {
 		item.SysCompanyID = 0 // 无属主则公用
 	}
@@ -114,6 +119,11 @@ func (s *service) DeleteItem(ctx context.Context, itemID uint, userID uint) erro
 
 // DeleteItemsByParentID 递归删除子项目
 func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, userID uint) error {
+	return s.deleteChildren(ctx, parentID, userID, map[uint]bool{parentID: true})
+}
+
+// deleteChildren 递归删除子项目；visited 防止异常数据（环）导致无限递归
+func (s *service) deleteChildren(ctx context.Context, parentID uint, userID uint, visited map[uint]bool) error {
 	// 查找所有子项目
 	var children []*entity.CloudItem
 	err := s.db.WithContext(ctx).
@@ -125,9 +135,13 @@ func (s *service) DeleteItemsByParentID(ctx context.Context, parentID uint, user
 
 	// 递归删除子项目
 	for _, child := range children {
+		if visited[child.ID] {
+			continue
+		}
+		visited[child.ID] = true
 		if child.IsFolder() {
 			// 如果是文件夹，递归删除其子项目
-			if err := s.DeleteItemsByParentID(ctx, child.ID, userID); err != nil {
+			if err := s.deleteChildren(ctx, child.ID, userID, visited); err != nil {
 				return err
 			}
 		} else if child.IsFile() {
@@ -193,6 +207,17 @@ func (s *service) MoveItem(ctx context.Context, itemID uint, targetParentID *uin
 		targetParentID = nil
 	}
 
+	// 文件夹不能移动到自身或自己的子文件夹下（否则形成环，删除时会无限递归）
+	if item.IsFolder() && targetParentID != nil {
+		inside, err := s.isSelfOrDescendant(ctx, *targetParentID, item.ID)
+		if err != nil {
+			return err
+		}
+		if inside {
+			return errors.New(errors.ErrInvalidParam, "不能将文件夹移动到其自身或子文件夹中")
+		}
+	}
+
 	// 计算新路径
 	var newPath string
 	if targetParentID == nil {
@@ -205,29 +230,27 @@ func (s *service) MoveItem(ctx context.Context, itemID uint, targetParentID *uin
 		newPath = parent.Path + "/" + item.Name
 	}
 
-	// 使用事务确保原子性
+	// 使用事务确保原子性；只更新父目录与路径，不整行回写（避免覆盖创建人等字段）
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		oldPath := item.Path
 
-		// 更新项目本身
-		item.ParentID = targetParentID
-		item.Path = newPath
-		if err := tx.Save(item).Error; err != nil {
+		if err := tx.Model(&entity.CloudItem{}).Where("ID = ?", item.ID).
+			Updates(map[string]interface{}{"PARENT_ID": targetParentID, "PATH": newPath}).Error; err != nil {
 			return err
 		}
 
-		// 如果是文件夹，递归更新所有子项目的路径
+		// 文件夹：按父子关系收集子孙条目（只含同一所有者），逐个改写路径前缀
 		if item.IsFolder() {
-			// 查询所有子项目（路径以 oldPath/ 开头）
-			var children []entity.CloudItem
-			if err := tx.Where("PATH LIKE ?", oldPath+"/%").Find(&children).Error; err != nil {
+			descendants, err := collectDescendants(tx, item.ID, item.OwnerID)
+			if err != nil {
 				return err
 			}
-
-			// 批量更新子项目路径
-			for i := range children {
-				children[i].Path = newPath + children[i].Path[len(oldPath):]
-				if err := tx.Save(&children[i]).Error; err != nil {
+			for _, child := range descendants {
+				if !strings.HasPrefix(child.Path, oldPath+"/") {
+					continue
+				}
+				if err := tx.Model(&entity.CloudItem{}).Where("ID = ?", child.ID).
+					Update("PATH", newPath+child.Path[len(oldPath):]).Error; err != nil {
 					return err
 				}
 			}
@@ -235,6 +258,58 @@ func (s *service) MoveItem(ctx context.Context, itemID uint, targetParentID *uin
 
 		return nil
 	})
+}
+
+// maxFolderDepth 目录层级上限，防止异常数据（环）导致死循环
+const maxFolderDepth = 64
+
+// isSelfOrDescendant 判断 folderID 是否就是 ancestorID 或位于其下
+func (s *service) isSelfOrDescendant(ctx context.Context, folderID, ancestorID uint) (bool, error) {
+	current := folderID
+	for depth := 0; depth < maxFolderDepth; depth++ {
+		if current == ancestorID {
+			return true, nil
+		}
+		var parent struct {
+			ParentID *uint `gorm:"column:PARENT_ID"`
+		}
+		res := s.db.WithContext(ctx).Table("cloud_item").Select("PARENT_ID").Where("ID = ?", current).Limit(1).Scan(&parent)
+		if res.Error != nil {
+			return false, res.Error
+		}
+		if res.RowsAffected == 0 || parent.ParentID == nil {
+			return false, nil
+		}
+		current = *parent.ParentID
+	}
+	// 层级异常深（可能已有环），按“在其下”处理以拒绝移动
+	return true, nil
+}
+
+// collectDescendants 按父子关系收集文件夹下的全部子孙条目（同一所有者），已访问集合防止环
+func collectDescendants(tx *gorm.DB, folderID, ownerID uint) ([]entity.CloudItem, error) {
+	var all []entity.CloudItem
+	visited := map[uint]bool{folderID: true}
+	queue := []uint{folderID}
+	for len(queue) > 0 {
+		var children []entity.CloudItem
+		if err := tx.Select("ID, PATH, ITEM_TYPE").Where("PARENT_ID IN ? AND OWNER_ID = ? AND IS_ACTIVE = ?", queue, ownerID, "Y").
+			Find(&children).Error; err != nil {
+			return nil, err
+		}
+		queue = queue[:0]
+		for _, child := range children {
+			if visited[child.ID] {
+				continue
+			}
+			visited[child.ID] = true
+			all = append(all, child)
+			if child.IsFolder() {
+				queue = append(queue, child.ID)
+			}
+		}
+	}
+	return all, nil
 }
 
 // RenameItem 重命名项目

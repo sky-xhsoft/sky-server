@@ -257,6 +257,12 @@ func (s *service) ListGroups(ctx context.Context, req *ListGroupsRequest) ([]*en
 
 // CreateDirectory 创建安全目录
 func (s *service) CreateDirectory(ctx context.Context, dir *entity.SysDirectory) error {
+	// 指定了父目录时归入父目录所在分类
+	if dir.ParentID != nil {
+		if category, ok := s.categoryOf(ctx, *dir.ParentID); ok {
+			dir.SysTableCategoryID = &category
+		}
+	}
 	if err := s.db.WithContext(ctx).Create(dir).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "创建安全目录失败", err)
 	}
@@ -274,6 +280,11 @@ func (s *service) UpdateDirectory(ctx context.Context, dir *entity.SysDirectory)
 	if dir.ParentID != nil && *dir.ParentID == dir.ID {
 		return errors.New(errors.ErrValidation, "不能将自己设置为父目录")
 	}
+	if dir.ParentID != nil {
+		if category, ok := s.categoryOf(ctx, *dir.ParentID); ok {
+			dir.SysTableCategoryID = &category
+		}
+	}
 
 	if err := s.db.WithContext(ctx).Model(&entity.SysDirectory{}).
 		Where("ID = ?", dir.ID).Updates(dir).Error; err != nil {
@@ -285,16 +296,18 @@ func (s *service) UpdateDirectory(ctx context.Context, dir *entity.SysDirectory)
 // DeleteDirectory 删除安全目录
 func (s *service) DeleteDirectory(ctx context.Context, id uint) error {
 	// 检查目录是否存在
-	if _, err := s.GetDirectory(ctx, id); err != nil {
+	dir, err := s.GetDirectory(ctx, id)
+	if err != nil {
 		return err
 	}
 
-	// 检查是否有子目录
+	// 分类目录下还有表目录时不能删除
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&entity.SysDirectory{}).
-		Where("PARENT_ID = ? AND IS_ACTIVE = ?", id, "Y").
-		Count(&count).Error; err != nil {
-		return errors.Wrap(errors.ErrDatabase, "检查子目录失败", err)
+	if dir.IsCategory() && dir.SysTableCategoryID != nil {
+		if err := whereChildrenOf(s.db.WithContext(ctx).Model(&entity.SysDirectory{}), *dir.SysTableCategoryID).
+			Where("IS_ACTIVE = ?", "Y").Count(&count).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "检查子目录失败", err)
+		}
 	}
 	if count > 0 {
 		return errors.New(errors.ErrValidation, "该目录存在子目录,无法删除")
@@ -345,7 +358,11 @@ func (s *service) ListDirectories(ctx context.Context, req *ListDirectoriesReque
 		query = query.Where("SYS_TABLE_ID = ?", *req.TableID)
 	}
 	if req.ParentID != nil {
-		query = query.Where("PARENT_ID = ?", *req.ParentID)
+		category, ok := s.categoryOf(ctx, *req.ParentID)
+		if !ok {
+			return []*entity.SysDirectory{}, 0, nil
+		}
+		query = whereChildrenOf(query, category)
 	}
 
 	// 计算总数
@@ -357,8 +374,14 @@ func (s *service) ListDirectories(ctx context.Context, req *ListDirectoriesReque
 	// 分页查询
 	offset := (req.Page - 1) * req.PageSize
 	var dirs []*entity.SysDirectory
-	if err := query.Order("ORDERNO ASC").Limit(req.PageSize).Offset(offset).Find(&dirs).Error; err != nil {
+	if err := query.Order("ID ASC").Limit(req.PageSize).Offset(offset).Find(&dirs).Error; err != nil {
 		return nil, 0, errors.Wrap(errors.ErrDatabase, "查询目录列表失败", err)
+	}
+	if req.ParentID != nil {
+		for _, d := range dirs {
+			pid := *req.ParentID
+			d.ParentID = &pid
+		}
 	}
 
 	return dirs, total, nil
@@ -370,16 +393,21 @@ func (s *service) GetDirectoryTree(ctx context.Context, parentID *uint) ([]*Dire
 	var dirs []*entity.SysDirectory
 	query := s.db.WithContext(ctx).
 		Where("IS_ACTIVE = ?", "Y").
-		Order("ORDERNO ASC")
+		Order("ID ASC")
 
 	if parentID != nil && *parentID > 0 {
-		// 查询指定父目录下的目录树
-		query = query.Where("PARENT_ID = ? OR ID = ?", *parentID, *parentID)
+		// 查询指定分类目录及其下的表目录
+		category, ok := s.categoryOf(ctx, *parentID)
+		if !ok {
+			return []*DirectoryNode{}, nil
+		}
+		query = query.Where("ID = ? OR (SYS_TABLE_CATEGORY_ID = ? AND SYS_TABLE_ID IS NOT NULL AND SYS_TABLE_ID <> 0)", *parentID, category)
 	}
 
 	if err := query.Find(&dirs).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询目录列表失败", err)
 	}
+	fillDirectoryParents(dirs)
 
 	// 构建目录树
 	pid := uint(0)
@@ -708,19 +736,22 @@ func (s *service) GetPermissionMatrix(ctx context.Context) (*PermissionMatrix, e
 
 	// 查询所有有效目录
 	var dirs []*entity.SysDirectory
-	query := s.db.WithContext(ctx).Where("IS_ACTIVE = ?", "Y").Order("ORDERNO ASC")
+	query := s.db.WithContext(ctx).Where("IS_ACTIVE = ?", "Y").Order("ID ASC")
 	if companyID > 0 {
-		query = query.Where("SYS_COMPANY_ID = ?", companyID)
+		// 目录多为公共目录（公司ID 0/-1）
+		query = query.Where("SYS_COMPANY_ID IN (?, 0, -1)", companyID)
 	}
 	if err := query.Find(&dirs).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询安全目录失败", err)
 	}
+	fillDirectoryParents(dirs)
 
 	// 查询所有有效权限组明细
 	var premList []*entity.SysGroupPrem
 	premQuery := s.db.WithContext(ctx).Where("IS_ACTIVE = ?", "Y")
 	if companyID > 0 {
-		premQuery = premQuery.Where("SYS_COMPANY_ID = ?", companyID)
+		// 权限明细不记录公司，按所属权限组（本公司或公共）过滤
+		premQuery = premQuery.Where("SYS_GROUPS_ID IN (SELECT ID FROM sys_groups WHERE SYS_COMPANY_ID IN (?, 0, -1))", companyID)
 	}
 	if err := premQuery.Find(&premList).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "查询权限组明细失败", err)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/contextutil"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/service/action"
 	"gorm.io/gorm"
@@ -53,7 +54,7 @@ type StartProcessRequest struct {
 	DefinitionID uint                   `json:"definitionId" binding:"required"`
 	SysTableID   int                    `json:"sysTableId"`
 	BusinessID   uint                   `json:"businessId"`
-	StartUserID  uint                   `json:"startUserId" binding:"required"`
+	StartUserID  uint                   `json:"startUserId"` // 由服务端设为当前登录用户
 	Title        string                 `json:"title"`
 	Variables    map[string]interface{} `json:"variables"`
 }
@@ -70,7 +71,7 @@ type ListInstancesRequest struct {
 // CompleteTaskRequest 完成任务请求
 type CompleteTaskRequest struct {
 	TaskID    uint                   `json:"taskId" binding:"required"`
-	UserID    uint                   `json:"userId" binding:"required"`
+	UserID    uint                   `json:"userId"`                    // 由服务端设为当前登录用户
 	Action    string                 `json:"action" binding:"required"` // approve, reject
 	Comment   string                 `json:"comment"`
 	Variables map[string]interface{} `json:"variables"`
@@ -361,7 +362,7 @@ func (s *service) moveToNext(ctx context.Context, instance *entity.WfInstance, c
 		if currentNode.NodeType == "end" {
 			// 流程结束
 			instance.Status = "completed"
-			instance.EndTime = time.Now()
+			instance.EndTime = nowPtr()
 			return s.db.WithContext(ctx).Save(instance).Error
 		}
 		return errors.New(errors.ErrValidation, "流程定义错误：节点没有后续流转")
@@ -403,7 +404,7 @@ func (s *service) moveToNext(ctx context.Context, instance *entity.WfInstance, c
 	case "end":
 		// 流程结束
 		instance.Status = "completed"
-		instance.EndTime = time.Now()
+		instance.EndTime = nowPtr()
 		return s.db.WithContext(ctx).Save(instance).Error
 	default:
 		// 继续流转
@@ -482,7 +483,7 @@ func (s *service) executeAutoTask(ctx context.Context, instance *entity.WfInstan
 // GetInstance 获取流程实例
 func (s *service) GetInstance(ctx context.Context, id uint) (*entity.WfInstance, error) {
 	var instance entity.WfInstance
-	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&instance).Error; err != nil {
+	if err := scopeInstances(ctx, s.db.WithContext(ctx)).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&instance).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "流程实例不存在")
 		}
@@ -501,7 +502,7 @@ func (s *service) ListInstances(ctx context.Context, req *ListInstancesRequest) 
 		req.PageSize = 20
 	}
 
-	query := s.db.WithContext(ctx).Model(&entity.WfInstance{}).Where("IS_ACTIVE = ?", "Y")
+	query := scopeInstances(ctx, s.db.WithContext(ctx).Model(&entity.WfInstance{})).Where("IS_ACTIVE = ?", "Y")
 	if req.DefinitionID > 0 {
 		query = query.Where("WF_DEFINITION_ID = ?", req.DefinitionID)
 	}
@@ -537,14 +538,26 @@ func (s *service) TerminateInstance(ctx context.Context, id uint, userID uint) e
 		return errors.New(errors.ErrValidation, "只能终止运行中或挂起的流程")
 	}
 
-	instance.Status = "terminated"
-	instance.EndTime = time.Now()
+	// 终止实例并关闭其未完成的任务（原先任务仍为 pending，留在处理人待办中）
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&entity.WfInstance{}).Where("ID = ?", instance.ID).
+			Updates(map[string]interface{}{"STATUS": "terminated", "END_TIME": nowPtr()}).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "终止流程失败", err)
+		}
+		if err := tx.Model(&entity.WfTask{}).Where("WF_INSTANCE_ID = ? AND STATUS = ?", instance.ID, "pending").
+			Updates(map[string]interface{}{"STATUS": "terminated", "COMPLETE_TIME": nowPtr()}).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "关闭流程任务失败", err)
+		}
+		return nil
+	})
+}
 
-	if err := s.db.WithContext(ctx).Save(instance).Error; err != nil {
-		return errors.Wrap(errors.ErrDatabase, "终止流程失败", err)
+// scopeInstances 请求带公司ID时只包含本公司用户发起的流程实例
+func scopeInstances(ctx context.Context, q *gorm.DB) *gorm.DB {
+	if company, ok := ctx.Value(contextutil.CompanyIDKey).(uint); ok && company > 0 {
+		q = q.Where("START_USER_ID IN (SELECT ID FROM sys_user WHERE SYS_COMPANY_ID = ?)", company)
 	}
-
-	return nil
+	return q
 }
 
 // SuspendInstance 挂起流程实例
@@ -572,7 +585,11 @@ func (s *service) ResumeInstance(ctx context.Context, id uint) error {
 // GetTask 获取任务
 func (s *service) GetTask(ctx context.Context, id uint) (*entity.WfTask, error) {
 	var task entity.WfTask
-	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&task).Error; err != nil {
+	q := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y")
+	if company, ok := ctx.Value(contextutil.CompanyIDKey).(uint); ok && company > 0 {
+		q = q.Where("WF_INSTANCE_ID IN (SELECT ID FROM wf_instance WHERE START_USER_ID IN (SELECT ID FROM sys_user WHERE SYS_COMPANY_ID = ?))", company)
+	}
+	if err := q.First(&task).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.New(errors.ErrResourceNotFound, "任务不存在")
 		}
@@ -643,7 +660,7 @@ func (s *service) CompleteTask(ctx context.Context, req *CompleteTaskRequest) er
 	task.Status = "completed"
 	task.Action = req.Action
 	task.Comment = req.Comment
-	task.CompleteTime = time.Now()
+	task.CompleteTime = nowPtr()
 
 	if err := s.db.WithContext(ctx).Save(task).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "更新任务失败", err)
@@ -652,7 +669,7 @@ func (s *service) CompleteTask(ctx context.Context, req *CompleteTaskRequest) er
 	// 如果是拒绝,终止流程
 	if req.Action == "reject" {
 		instance.Status = "terminated"
-		instance.EndTime = time.Now()
+		instance.EndTime = nowPtr()
 		return s.db.WithContext(ctx).Save(instance).Error
 	}
 
@@ -698,7 +715,7 @@ func (s *service) ClaimTask(ctx context.Context, taskID, userID uint) error {
 		return errors.New(errors.ErrValidation, "任务已处理")
 	}
 
-	task.ClaimTime = time.Now()
+	task.ClaimTime = nowPtr()
 
 	if err := s.db.WithContext(ctx).Save(task).Error; err != nil {
 		return errors.Wrap(errors.ErrDatabase, "签收任务失败", err)
@@ -745,4 +762,10 @@ func (s *service) TransferTask(ctx context.Context, taskID, fromUserID, toUserID
 	}
 
 	return nil
+}
+
+// nowPtr 当前时间指针（可空时间字段赋值用）
+func nowPtr() *time.Time {
+	now := time.Now()
+	return &now
 }

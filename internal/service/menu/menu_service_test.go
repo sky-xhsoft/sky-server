@@ -54,8 +54,7 @@ func setupMenuTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE sys_user_groups (
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			SYS_USER_ID INTEGER,
-			SYS_GROUPS_ID INTEGER,
-			SYS_DIRECTORY_ID INTEGER,
+			SYS_DIRECTORY_ID INTEGER, -- 与真实表一致：存权限组ID
 			IS_ACTIVE TEXT DEFAULT 'Y'
 		)`,
 		`CREATE TABLE sys_group_prem (
@@ -204,7 +203,7 @@ func TestMenuService_GetUserMenuTree_NonAdminFilteredBySystemType(t *testing.T) 
 	db.Exec(`INSERT INTO sys_table_category (ID, NAME, SYS_SUBSYSTEM_ID, IS_ACTIVE) VALUES (1, 'LiveCat', 1, 'Y'), (2, 'SysCat', 2, 'Y'), (3, 'LegacyCat', 3, 'Y')`)
 	db.Exec(`INSERT INTO sys_table (ID, NAME, SYS_TABLECATEGORY_ID, IS_MENU, SYS_COMPANY_ID, IS_ACTIVE) VALUES (1, 'live_room', 1, 'Y', 1, 'Y'), (2, 'sys_user', 2, 'Y', 1, 'Y'), (3, 'sys_dict', 3, 'Y', 1, 'Y')`)
 	db.Exec(`INSERT INTO sys_directory (ID, SYS_TABLE_ID, IS_ACTIVE) VALUES (1, 1, 'Y'), (2, 2, 'Y'), (3, 3, 'Y')`)
-	db.Exec(`INSERT INTO sys_user_groups (SYS_USER_ID, SYS_GROUPS_ID, IS_ACTIVE) VALUES (1, 1, 'Y')`)
+	db.Exec(`INSERT INTO sys_user_groups (SYS_USER_ID, SYS_DIRECTORY_ID, IS_ACTIVE) VALUES (1, 1, 'Y')`)
 	db.Exec(`INSERT INTO sys_group_prem (SYS_GROUPS_ID, SYS_DIRECTORY_ID, IS_ACTIVE) VALUES (1, 1, 'Y'), (1, 2, 'Y'), (1, 3, 'Y')`)
 
 	svc := NewService(db)

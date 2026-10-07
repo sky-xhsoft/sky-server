@@ -195,6 +195,10 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 		return nil, gorm.ErrInvalidTransaction
 	}
 
+	// 子表字段校验（外键存在性等）须在同一事务内进行，才能看到刚插入、尚未提交的主表记录
+	txSvc := *s
+	txSvc.db = tx
+
 	detailResponses := make([]DetailTableResponse, len(req.Details))
 	for i, detail := range req.Details {
 		detailTable, err := s.metadataService.GetTable(detail.TableName)
@@ -251,7 +255,7 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 				// 已有记录：更新
 				rid := toUintVal(record["ID"])
 				delete(record, "ID")
-				processed, err := s.processFieldsForUpdate(detailColumns, record, userID)
+				processed, err := txSvc.processFieldsForUpdate(detailColumns, record, userID)
 				if err != nil {
 					tx.Rollback()
 					return nil, err
@@ -274,7 +278,7 @@ func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsReque
 				savedRecords = append(savedRecords, updated)
 			} else {
 				// 新记录：插入
-				processed, err := s.processFieldsForCreate(detailColumns, record, userID)
+				processed, err := txSvc.processFieldsForCreate(detailColumns, record, userID)
 				if err != nil {
 					tx.Rollback()
 					return nil, err

@@ -26,18 +26,24 @@ func NewDirectoryHandler(groupService groups.Service) *DirectoryHandler {
 type CreateDirectoryRequest struct {
 	Name        string `json:"name" binding:"required"`
 	SysTableID  *uint  `json:"sysTableId"`
-	ParentID    *uint  `json:"parentId"`
-	Orderno     int    `json:"orderno"`
+	ParentID    *uint  `json:"parentId"` // 归入父目录所在分类
+	Orderno     int    `json:"orderno"`  // 兼容旧接口，不落库
 	Description string `json:"description"`
+	// DisplayName 显示名称；为空时使用 Description
+	DisplayName        string `json:"displayName"`
+	SysTableCategoryID *uint  `json:"sysTableCategoryId"`
 }
 
 // UpdateDirectoryRequest 更新安全目录请求
 type UpdateDirectoryRequest struct {
 	Name        string `json:"name"`
 	SysTableID  *uint  `json:"sysTableId"`
-	ParentID    *uint  `json:"parentId"`
-	Orderno     int    `json:"orderno"`
+	ParentID    *uint  `json:"parentId"` // 归入父目录所在分类
+	Orderno     int    `json:"orderno"`  // 兼容旧接口，不落库
 	Description string `json:"description"`
+	// DisplayName 显示名称；为空时使用 Description
+	DisplayName        string `json:"displayName"`
+	SysTableCategoryID *uint  `json:"sysTableCategoryId"`
 }
 
 // CreateDirectory 创建安全目录
@@ -68,11 +74,13 @@ func (h *DirectoryHandler) CreateDirectory(c *gin.Context) {
 			UpdateBy: username.(string),
 			IsActive: "Y",
 		},
-		Name:        req.Name,
-		SysTableID:  req.SysTableID,
-		ParentID:    req.ParentID,
-		Orderno:     req.Orderno,
-		Description: req.Description,
+		Name:               req.Name,
+		DisplayName:        firstNonEmpty(req.DisplayName, req.Description),
+		SysTableCategoryID: req.SysTableCategoryID,
+		SysTableID:         req.SysTableID,
+		ParentID:           req.ParentID,
+		Orderno:            req.Orderno,
+		Description:        req.Description,
 	}
 
 	if err := h.groupService.CreateDirectory(c.Request.Context(), dir); err != nil {
@@ -136,11 +144,13 @@ func (h *DirectoryHandler) UpdateDirectory(c *gin.Context) {
 			ID:       uint(id),
 			UpdateBy: username.(string),
 		},
-		Name:        req.Name,
-		SysTableID:  req.SysTableID,
-		ParentID:    req.ParentID,
-		Orderno:     req.Orderno,
-		Description: req.Description,
+		Name:               req.Name,
+		DisplayName:        firstNonEmpty(req.DisplayName, req.Description),
+		SysTableCategoryID: req.SysTableCategoryID,
+		SysTableID:         req.SysTableID,
+		ParentID:           req.ParentID,
+		Orderno:            req.Orderno,
+		Description:        req.Description,
 	}
 
 	if err := h.groupService.UpdateDirectory(c.Request.Context(), dir); err != nil {
@@ -365,4 +375,14 @@ func (h *DirectoryHandler) GetDirectoryTree(c *gin.Context) {
 		"message": "success",
 		"data":    tree,
 	})
+}
+
+// firstNonEmpty 返回第一个非空字符串
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

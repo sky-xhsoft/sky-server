@@ -26,13 +26,25 @@ func (SysUserGroups) TableName() string {
 }
 
 // SysDirectory 安全目录
+// 目录按表分类组织：SYS_TABLE_ID 为空的是分类目录，同分类下关联了表的是表目录。
 type SysDirectory struct {
 	BaseModel
-	Name        string `gorm:"column:NAME;size:255;not null" json:"name"`
-	SysTableID  *uint  `gorm:"column:SYS_TABLE_ID;index" json:"sysTableId"`
-	ParentID    *uint  `gorm:"column:PARENT_ID;index" json:"parentId"`
-	Orderno     int    `gorm:"column:ORDERNO" json:"orderno"`
-	Description string `gorm:"column:DESCRIPTION;size:255" json:"description"`
+	Name               string `gorm:"column:NAME;size:255" json:"name"`
+	DisplayName        string `gorm:"column:DISPLAY_NAME;size:255" json:"displayName"`
+	SysTableCategoryID *uint  `gorm:"column:SYS_TABLE_CATEGORY_ID" json:"sysTableCategoryId"`
+	URL                string `gorm:"column:URL;size:255" json:"url"`
+	SysTableID         *uint  `gorm:"column:SYS_TABLE_ID;index" json:"sysTableId"`
+
+	// 以下字段不对应数据库列（表中没有这些列，原先映射导致所有目录接口报错）：
+	// ParentID 由分类推导（表目录的父级为同分类的分类目录），Orderno/Description 仅为兼容旧接口
+	ParentID    *uint  `gorm:"-" json:"parentId"`
+	Orderno     int    `gorm:"-" json:"orderno"`
+	Description string `gorm:"-" json:"description"`
+}
+
+// IsCategory 是否为分类目录（未关联表）
+func (d *SysDirectory) IsCategory() bool {
+	return d.SysTableID == nil || *d.SysTableID == 0
 }
 
 // TableName 指定表名
