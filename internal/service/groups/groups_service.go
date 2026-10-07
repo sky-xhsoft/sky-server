@@ -623,22 +623,22 @@ func (s *service) GetUserDirectoryPermission(ctx context.Context, userID uint, d
 		return PermAll, nil
 	}
 
-	var permission int
+	// 用户可能属于多个权限组，各组在同一目录上的权限按位合并
+	var perms []int
 	err := s.db.WithContext(ctx).
 		Table("sys_group_prem").
-		Select("sys_group_prem.PERMISSION").
 		Joins("INNER JOIN sys_user_groups ON sys_group_prem.SYS_GROUPS_ID = sys_user_groups.SYS_DIRECTORY_ID").
 		Where("sys_user_groups.SYS_USER_ID = ? AND sys_group_prem.SYS_DIRECTORY_ID = ? AND sys_group_prem.IS_ACTIVE = ? AND sys_user_groups.IS_ACTIVE = ?",
 			userID, directoryID, "Y", "Y").
-		Scan(&permission).Error
-
+		Pluck("sys_group_prem.PERMISSION", &perms).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return 0, nil
-		}
 		return 0, errors.Wrap(errors.ErrDatabase, "查询用户权限失败", err)
 	}
 
+	permission := 0
+	for _, p := range perms {
+		permission |= p
+	}
 	return permission, nil
 }
 
