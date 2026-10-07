@@ -21,7 +21,7 @@ go mod download
 
 echo.
 echo [3/3] Building Linux 64-bit version...
-go build -ldflags="-s -w" -o bin/sky-server cmd/server/main.go
+go build -ldflags="-s -w" -o bin/sky-server ./cmd/server
 
 if %ERRORLEVEL% neq 0 (
     echo.

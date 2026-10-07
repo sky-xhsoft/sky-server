@@ -31,7 +31,7 @@ init:
 # 编译项目
 build:
 	@echo "Building Sky-Server..."
-	go build -o bin/sky-server cmd/server/main.go
+	go build -o bin/sky-server ./cmd/server
 	@echo "Build completed: bin/sky-server"
 
 # 运行项目
