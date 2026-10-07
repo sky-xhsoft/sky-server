@@ -622,6 +622,8 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 		publicShares.POST("/:code/access", cloudHandler.AccessShare)
 		// 下载分享文件（不需要认证）
 		publicShares.GET("/:code/download", cloudHandler.DownloadShareFile)
+		// 点击下载：校验并计入下载次数后返回文件直链（不需要认证）
+		publicShares.POST("/:code/download-url", cloudHandler.GetShareDownloadURL)
 		// 获取分享文件夹内容（不需要认证）
 		publicShares.GET("/:code/content", cloudHandler.GetShareFolderContent)
 		// 下载分享文件夹中的文件（不需要认证）

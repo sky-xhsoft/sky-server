@@ -732,9 +732,9 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 		return
 	}
 
-	// 检查下载次数限制
-	if share.MaxDownloads > 0 && share.DownloadCount >= share.MaxDownloads {
-		utils.BadRequest(c, "分享下载次数已达上限")
+	// 计入下载次数（与上限检查原子完成）
+	if err := h.cloudService.ClaimShareDownload(c.Request.Context(), share.ID); err != nil {
+		writeShareError(c, "", err)
 		return
 	}
 
@@ -749,9 +749,6 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	}
 	defer reader.Close()
 
-	// 更新下载次数
-	h.cloudService.IncrementShareDownloadCount(c.Request.Context(), share.ID)
-
 	// 设置响应头
 	c.Header("Content-Disposition", "attachment; filename="+fileInfo.Name)
 	c.Header("Content-Type", *fileInfo.FileType)
@@ -762,6 +759,52 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 		utils.FailFromError(c, "传输文件失败: ", err)
 		return
 	}
+}
+
+// GetShareDownloadURL 点击下载时获取下载地址：校验访问权限并计入下载次数（达到上限则拒绝）后返回文件直链；
+// 文件没有直链时返回空 url，前端改用流式下载接口
+// @Summary 获取分享文件下载地址
+// @Tags Cloud
+// @Produce json
+// @Param code path string true "分享码"
+// @Param fileId query int false "文件夹分享中的文件ID"
+// @Router /api/v1/cloud/shares/{code}/download-url [post]
+func (h *CloudHandler) GetShareDownloadURL(c *gin.Context) {
+	ctx := c.Request.Context()
+	share, err := h.cloudService.GetShareByCode(ctx, c.Param("code"))
+	if err != nil {
+		writeShareError(c, "获取分享信息失败: ", err)
+		return
+	}
+	if err := h.cloudService.VerifyShareViewer(ctx, share, shareViewerCompanyID(c)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+	if err := h.cloudService.VerifyShareAccess(share, shareAccessToken(c)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+
+	fileID := share.ResourceID
+	if share.ResourceType == "folder" {
+		id, err := strconv.ParseUint(c.Query("fileId"), 10, 32)
+		if err != nil || id == 0 {
+			utils.BadRequest(c, "文件ID格式错误")
+			return
+		}
+		if err := h.cloudService.VerifyShareItem(ctx, share, uint(id)); err != nil {
+			writeShareError(c, "", err)
+			return
+		}
+		fileID = uint(id)
+	}
+
+	info, err := h.cloudService.PrepareShareDownload(ctx, share, fileID)
+	if err != nil {
+		writeShareError(c, "获取下载地址失败: ", err)
+		return
+	}
+	utils.Success(c, info)
 }
 
 // DownloadShareFolderFile 下载分享文件夹中的文件
@@ -806,6 +849,11 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 	}
 	// 文件须位于被分享的文件夹内
 	if err := h.cloudService.VerifyShareItem(c.Request.Context(), share, uint(fileID)); err != nil {
+		writeShareError(c, "", err)
+		return
+	}
+	// 文件夹内每下载一个文件计一次分享下载
+	if err := h.cloudService.ClaimShareDownload(c.Request.Context(), share.ID); err != nil {
 		writeShareError(c, "", err)
 		return
 	}

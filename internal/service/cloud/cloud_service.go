@@ -68,6 +68,8 @@ type Service interface {
 	UpdateShare(ctx context.Context, shareID uint, req *UpdateShareRequest, userID uint) (*entity.CloudShare, error)
 	DownloadFileByID(ctx context.Context, fileID uint) (io.ReadCloser, *entity.CloudItem, error)
 	IncrementShareDownloadCount(ctx context.Context, shareID uint) error
+	ClaimShareDownload(ctx context.Context, shareID uint) error
+	PrepareShareDownload(ctx context.Context, share *entity.CloudShare, fileID uint) (*ShareDownloadInfo, error)
 
 	// 配额管理
 	GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQuota, error)
