@@ -27,9 +27,17 @@ func (s *service) Export(ctx context.Context, tableName string, filters map[stri
 		return nil, errors.New(errors.ErrPermissionDenied, "无导出权限")
 	}
 
-	columns, err := s.metadataService.GetColumns(table.ID)
+	allColumns, err := s.metadataService.GetColumns(table.ID)
 	if err != nil {
 		return nil, err
+	}
+	// 字段访问级别不足的列不导出（查询结果里本来就没有值，表头也不应出现）
+	grade := s.userFieldGrade(userID)
+	columns := make([]*entity.SysColumn, 0, len(allColumns))
+	for _, col := range allColumns {
+		if standardFields[col.DbName] || fieldAllowed(col.Sgrade, grade) {
+			columns = append(columns, col)
+		}
 	}
 
 	resp, err := s.GetList(ctx, &QueryRequest{
