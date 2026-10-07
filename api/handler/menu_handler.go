@@ -38,8 +38,8 @@ func (h *MenuHandler) GetMenuTree(c *gin.Context) {
 		return
 	}
 
-	// 获取系统类型参数
-	systemType := c.Query("type")
+	// 获取系统类型参数（未传时按登录端推断）
+	systemType := menuSystemType(c)
 
 	// 获取菜单树
 	menuTree, err := h.menuService.GetMenuTree(c.Request.Context(), companyID.(uint), systemType)
@@ -94,8 +94,8 @@ func (h *MenuHandler) GetUserMenuTree(c *gin.Context) {
 		return
 	}
 
-	// 获取系统类型参数
-	systemType := c.Query("type")
+	// 获取系统类型参数（未传时按登录端推断）
+	systemType := menuSystemType(c)
 
 	// 获取用户菜单树
 	menuTree, err := h.menuService.GetUserMenuTree(
@@ -110,4 +110,22 @@ func (h *MenuHandler) GetUserMenuTree(c *gin.Context) {
 	}
 
 	utils.Success(c, menuTree)
+}
+
+// menuSystemType 菜单所属系统：优先取 type 参数；未传时按令牌中的登录端（live-web/cloud-web/system-web）推断，
+// 避免前端丢失登录类型时返回全部子系统的菜单。无法推断时为空（不限制子系统）
+func menuSystemType(c *gin.Context) string {
+	if t := c.Query("type"); t != "" {
+		return t
+	}
+	clientType, _ := c.Get("clientType")
+	switch clientType {
+	case "live-web":
+		return "live"
+	case "cloud-web":
+		return "cloud"
+	case "system-web":
+		return "system"
+	}
+	return ""
 }
