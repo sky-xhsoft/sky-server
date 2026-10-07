@@ -84,8 +84,28 @@ func (s *Scheduler) scan() {
 
 	for i := range due {
 		sc := &due[i]
+		if !s.claim(ctx, sc, now) {
+			continue
+		}
 		s.exec(ctx, sc)
 	}
+}
+
+// claim 抢占一次到期任务：仅当 NEXT_RUN_AT 仍是本实例读到的值时才把它推到下一次，
+// 多实例部署时同一时刻只有一个实例更新成功并执行
+func (s *Scheduler) claim(ctx context.Context, sc *entity.SysSchedule, now time.Time) bool {
+	var next interface{}
+	if t, err := NextRunAfter(sc.Cron, now); err == nil {
+		next = t
+	}
+	res := s.db.WithContext(ctx).Model(&entity.SysSchedule{}).
+		Where("ID = ? AND NEXT_RUN_AT = ?", sc.ID, sc.NextRunAt).
+		Update("NEXT_RUN_AT", next)
+	if res.Error != nil {
+		logger.Warn("schedule claim failed", zap.Uint("id", sc.ID), zap.Error(res.Error))
+		return false
+	}
+	return res.RowsAffected == 1
 }
 
 // syncNextRun 同步下次运行时间：
