@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"net/http"
 	"strconv"
 
@@ -49,7 +50,7 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 
 	msg, err := h.messageService.SendMessage(c.Request.Context(), &req, senderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -84,7 +85,7 @@ func (h *MessageHandler) GetMessage(c *gin.Context) {
 
 	detail, err := h.messageService.GetMessage(c.Request.Context(), uint(messageID), userID.(uint))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -120,7 +121,7 @@ func (h *MessageHandler) ListUserMessages(c *gin.Context) {
 
 	items, total, err := h.messageService.ListUserMessages(c.Request.Context(), userID.(uint), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -159,7 +160,7 @@ func (h *MessageHandler) MarkAsRead(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	if err := h.messageService.MarkAsRead(c.Request.Context(), uint(messageID), userID.(uint)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -182,7 +183,7 @@ func (h *MessageHandler) MarkAllAsRead(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	if err := h.messageService.MarkAllAsRead(c.Request.Context(), userID.(uint)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -206,7 +207,7 @@ func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 
 	count, err := h.messageService.GetUnreadCount(c.Request.Context(), userID.(uint))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -241,7 +242,7 @@ func (h *MessageHandler) GetUnreadMessages(c *gin.Context) {
 
 	items, err := h.messageService.GetUnreadMessages(c.Request.Context(), userID.(uint), limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -275,7 +276,7 @@ func (h *MessageHandler) DeleteMessage(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	if err := h.messageService.DeleteMessage(c.Request.Context(), uint(messageID), userID.(uint)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -321,7 +322,7 @@ func (h *MessageHandler) StarMessage(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	if err := h.messageService.StarMessage(c.Request.Context(), uint(messageID), userID.(uint), req.IsStarred); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -354,7 +355,7 @@ func (h *MessageHandler) ArchiveMessage(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	if err := h.messageService.ArchiveMessage(c.Request.Context(), uint(messageID), userID.(uint)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -395,7 +396,7 @@ func (h *MessageHandler) SendTemplateMessage(c *gin.Context) {
 
 	msg, err := h.messageService.SendTemplateMessage(c.Request.Context(), &req, senderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -440,7 +441,7 @@ func (h *MessageHandler) SendBatchMessage(c *gin.Context) {
 
 	messages, err := h.messageService.SendBatchMessage(c.Request.Context(), req.UserIDs, &req.Message, senderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})
@@ -485,7 +486,7 @@ func (h *MessageHandler) SendToAll(c *gin.Context) {
 
 	msg, err := h.messageService.SendToAll(c.Request.Context(), &req, senderID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(utils.HTTPStatusFor(err), gin.H{
 			"code":    errors.GetCode(err),
 			"message": err.Error(),
 		})

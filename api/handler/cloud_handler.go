@@ -664,6 +664,11 @@ func writeShareError(c *gin.Context, prefix string, err error) {
 
 // shareViewerCompanyID 访问者所在公司（可选鉴权解析出的登录用户），未登录为 0
 func shareViewerCompanyID(c *gin.Context) uint {
+	// 必须是已登录用户：域名租户中间件会给匿名请求也设置 companyID（按域名识别或默认公司），
+	// 不能据此认定访问者属于该公司
+	if _, loggedIn := c.Get("userID"); !loggedIn {
+		return 0
+	}
 	if v, ok := c.Get("companyID"); ok {
 		if id, ok := v.(uint); ok {
 			return id

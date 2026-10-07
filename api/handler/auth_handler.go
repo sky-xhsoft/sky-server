@@ -37,8 +37,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 优先使用域名识别的公司ID
+	// 优先使用域名识别的公司ID；localhost/未登记域名时中间件只给出默认公司（无 companyDomain），
+	// 此时以请求中的 companyId 为准
 	domainCompanyID := middleware.GetCompanyID(c)
+	if c.GetString("companyDomain") == "" {
+		domainCompanyID = nil
+	}
 	if domainCompanyID != nil {
 		// 使用域名识别的公司ID
 		req.CompanyID = domainCompanyID

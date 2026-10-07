@@ -27,7 +27,7 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 
 		// 如果 host 为空或为 localhost，不进行域名识别
 		if host == "" || host == "localhost" || strings.HasPrefix(host, "127.") || strings.HasPrefix(host, "192.168.") {
-			c.Set("companyID", 1)
+			c.Set("companyID", uint(1)) // 须为 uint：各处按 uint 断言，int 会被当作未识别
 			c.Next()
 			return
 		}
