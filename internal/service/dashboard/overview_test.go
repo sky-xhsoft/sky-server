@@ -73,15 +73,18 @@ func TestGetSystemOverview(t *testing.T) {
 func TestGetCloudOverview(t *testing.T) {
 	db := setupOverviewDB(t)
 	now := time.Now()
+	// 「今天」的数据取今天零点到现在之间的时刻（按先后顺序），凌晨运行时也不会落到昨天
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayAt := func(quarter int) time.Time { return today.Add(now.Sub(today) * time.Duration(quarter) / 4) }
 	db.Exec(`INSERT INTO cloud_item VALUES
 		(1, 'folder', '素材', 7, NULL, NULL, 0, ?, 'Y'),
 		(2, 'file', 'a.mp4', 7, 'video', 'mp4', 1000, ?, 'Y'),
 		(3, 'file', 'b.pdf', 7, 'document', 'pdf', 500, ?, 'Y'),
 		(4, 'file', 'deleted.txt', 7, 'text', 'txt', 9999, ?, 'N'),
 		(5, 'file', 'others.doc', 8, 'document', 'doc', 7777, ?, 'Y')`,
-		now.Add(-3*time.Hour), now.Add(-2*time.Hour), now.AddDate(0, 0, -1), now, now)
+		todayAt(1), todayAt(2), now.AddDate(0, 0, -1), now, now)
 	db.Exec(`INSERT INTO cloud_share VALUES (1, 7, 2, 'abc', 'active', ?, 'Y'), (2, 7, 3, 'def', 'expired', ?, 'Y'), (3, 8, 5, 'ghi', 'active', ?, 'Y')`,
-		now.Add(-time.Hour), now.AddDate(0, 0, -2), now)
+		todayAt(3), now.AddDate(0, 0, -2), now)
 
 	svc := &service{db: db}
 	ov, err := svc.GetCloudOverview(context.Background(), 7, 7)
