@@ -556,7 +556,7 @@ func (s *service) CheckQuota(ctx context.Context, userID uint, fileSize int64) e
 		return errors.New(errors.ErrInvalidParam, fmt.Sprintf("文件大小超过限制（最大%dMB）", quota.MaxFileSize/(1024*1024)))
 	}
 
-	return nil
+	return s.checkCompanyQuota(ctx, userID, fileSize)
 }
 
 // UpdateQuota 更新配额
