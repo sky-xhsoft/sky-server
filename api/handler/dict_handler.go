@@ -81,13 +81,37 @@ func (h *DictHandler) GetDictItemsByName(c *gin.Context) {
 // @Success 200 {object} utils.Response
 // @Router /api/v1/dicts/{dictName}/default [get]
 func (h *DictHandler) GetDefaultValue(c *gin.Context) {
-	dictName := c.Param("dictName")
-	if dictName == "" {
-		utils.BadRequest(c, "字典名称不能为空")
+	// 路由为 /dicts/:dictId/default（原先读取 dictName 参数，永远为空）；数字按字典ID查，否则按字典名称查
+	param := c.Param("dictId")
+	if param == "" {
+		param = c.Param("dictName")
+	}
+	if param == "" {
+		utils.BadRequest(c, "字典ID不能为空")
 		return
 	}
 
-	defaultValue, err := h.dictService.GetDefaultValue(dictName)
+	if id, err := strconv.ParseUint(param, 10, 32); err == nil {
+		items, err := h.dictService.GetDictItems(uint(id))
+		if err != nil {
+			utils.FailFromError(c, "获取默认值失败: ", err)
+			return
+		}
+		defaultValue := ""
+		for _, item := range items {
+			if item.IsDefaultValue == "Y" {
+				defaultValue = item.Value
+				break
+			}
+		}
+		if defaultValue == "" && len(items) > 0 {
+			defaultValue = items[0].Value
+		}
+		utils.Success(c, gin.H{"defaultValue": defaultValue})
+		return
+	}
+
+	defaultValue, err := h.dictService.GetDefaultValue(param)
 	if err != nil {
 		utils.FailFromError(c, "获取默认值失败: ", err)
 		return

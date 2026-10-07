@@ -164,6 +164,7 @@ func (s *service) Import(ctx context.Context, tableName string, file multipart.F
 
 	imported := 0
 	failed := 0
+	var rowErrors []string // 失败行原因（最多返回 maxImportRowErrors 条）
 
 	// 预载字典反向映射(DISPLAY_NAME -> VALUE)，供导入翻译
 	_, dictRev := s.loadDictMaps(columns)
@@ -238,16 +239,31 @@ func (s *service) Import(ctx context.Context, tableName string, file multipart.F
 		if _, err := s.Create(ctx, tableName, data, userID); err != nil {
 			logger.Warn("import row failed", zap.String("table", tableName), zap.Int("row", i+1), zap.Any("data", data), zap.Error(err))
 			failed++
+			if len(rowErrors) < maxImportRowErrors {
+				msg := err.Error()
+				var appErr *errors.AppError
+				if errors.As(err, &appErr) {
+					msg = appErr.Message
+				}
+				rowErrors = append(rowErrors, fmt.Sprintf("第 %d 行：%s", i+1, msg))
+			}
 			continue
 		}
 		imported++
 	}
 
 	if failed > 0 {
-		return imported, errors.New(errors.ErrInvalidParam, fmt.Sprintf("导入完成：成功 %d 条，失败 %d 条", imported, failed))
+		msg := fmt.Sprintf("导入完成：成功 %d 条，失败 %d 条；%s", imported, failed, strings.Join(rowErrors, "；"))
+		if failed > len(rowErrors) {
+			msg += "；……"
+		}
+		return imported, errors.New(errors.ErrInvalidParam, msg)
 	}
 	return imported, nil
 }
+
+// maxImportRowErrors 导入失败时最多列出的行数
+const maxImportRowErrors = 10
 
 // findColumnByDbName 按 DbName 查找列配置
 func findColumnByDbName(columns []*entity.SysColumn, dbName string) *entity.SysColumn {

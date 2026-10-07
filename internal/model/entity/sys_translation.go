@@ -5,7 +5,7 @@ import "time"
 // SysTranslation 翻译配置
 type SysTranslation struct {
 	BaseModel
-	Key        string    `gorm:"column:KEY;size:255;not null" json:"key"`           // 翻译键
+	Key        string    `gorm:"column:KEY_NAME;size:255;not null" json:"key"`      // 翻译键（库表列名为 KEY_NAME）
 	Language   string    `gorm:"column:LANGUAGE;size:50;not null" json:"language"`  // 语言代码
 	Value      string    `gorm:"column:VALUE;type:text" json:"value"`               // 翻译值
 	Module     string    `gorm:"column:MODULE;size:50" json:"module"`               // 所属模块

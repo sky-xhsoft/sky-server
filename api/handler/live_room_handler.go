@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"net/http"
 	"strconv"
 	"time"
@@ -82,7 +83,7 @@ type ListRoomsRequest struct {
 func (h *LiveRoomHandler) CreateRoom(c *gin.Context) {
 	var req CreateRoomRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
@@ -120,7 +121,7 @@ func (h *LiveRoomHandler) CreateRoom(c *gin.Context) {
 	}
 
 	if err := h.roomService.CreateRoom(c.Request.Context(), room); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -141,7 +142,7 @@ func (h *LiveRoomHandler) CreateRoom(c *gin.Context) {
 func (h *LiveRoomHandler) UpdateRoom(c *gin.Context) {
 	var req UpdateRoomRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
@@ -169,7 +170,7 @@ func (h *LiveRoomHandler) UpdateRoom(c *gin.Context) {
 	}
 
 	if err := h.roomService.UpdateRoom(c.Request.Context(), room); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -189,12 +190,12 @@ func (h *LiveRoomHandler) DeleteRoom(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		utils.BadRequest(c, "无效的ID")
 		return
 	}
 
 	if err := h.roomService.DeleteRoom(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -214,13 +215,13 @@ func (h *LiveRoomHandler) GetRoom(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		utils.BadRequest(c, "无效的ID")
 		return
 	}
 
 	room, err := h.roomService.GetRoom(c.Request.Context(), uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -247,7 +248,7 @@ func (h *LiveRoomHandler) GetRoom(c *gin.Context) {
 func (h *LiveRoomHandler) ListRooms(c *gin.Context) {
 	var req ListRoomsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
@@ -290,7 +291,7 @@ func (h *LiveRoomHandler) ListRooms(c *gin.Context) {
 
 	rooms, total, err := h.roomService.ListRooms(c.Request.Context(), filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -315,12 +316,12 @@ func (h *LiveRoomHandler) StartLive(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		utils.BadRequest(c, "无效的ID")
 		return
 	}
 
 	if err := h.roomService.StartLive(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -340,12 +341,12 @@ func (h *LiveRoomHandler) EndLive(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		utils.BadRequest(c, "无效的ID")
 		return
 	}
 
 	if err := h.roomService.EndLive(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 
@@ -367,7 +368,7 @@ func (h *LiveRoomHandler) UpdateViewerCount(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		utils.BadRequest(c, "无效的ID")
 		return
 	}
 
@@ -375,12 +376,12 @@ func (h *LiveRoomHandler) UpdateViewerCount(c *gin.Context) {
 		Count int `json:"count" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
 	if err := h.roomService.UpdateViewerCount(c.Request.Context(), uint(id), req.Count); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.FailFromError(c, "", err)
 		return
 	}
 

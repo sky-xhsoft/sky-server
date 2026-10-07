@@ -3,7 +3,9 @@ package live
 import (
 	"context"
 	"errors"
+
 	"fmt"
+	apperrors "github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
@@ -107,7 +109,7 @@ func (s *liveRoomService) UpdateRoom(ctx context.Context, room *entity.LiveRoom)
 	var existingRoom entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", room.ID, "Y").First(&existingRoom).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("直播间不存在")
+			return apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return err
 	}
@@ -128,7 +130,7 @@ func (s *liveRoomService) DeleteRoom(ctx context.Context, id uint) error {
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("直播间不存在")
+			return apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return err
 	}
@@ -147,7 +149,7 @@ func (s *liveRoomService) GetRoom(ctx context.Context, id uint) (*entity.LiveRoo
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("直播间不存在")
+			return nil, apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return nil, err
 	}
@@ -159,7 +161,7 @@ func (s *liveRoomService) GetRoomByStreamName(ctx context.Context, streamName st
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("STREAM_NAME = ? AND IS_ACTIVE = ?", streamName, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("直播间不存在")
+			return nil, apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return nil, err
 	}
@@ -218,7 +220,7 @@ func (s *liveRoomService) StartLive(ctx context.Context, id uint) error {
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("直播间不存在")
+			return apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return err
 	}
@@ -247,7 +249,7 @@ func (s *liveRoomService) EndLive(ctx context.Context, id uint) error {
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("直播间不存在")
+			return apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return err
 	}
@@ -280,7 +282,7 @@ func (s *liveRoomService) UpdateViewerCount(ctx context.Context, id uint, count 
 	var room entity.LiveRoom
 	if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", id, "Y").First(&room).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("直播间不存在")
+			return apperrors.New(apperrors.ErrResourceNotFound, "直播间不存在")
 		}
 		return err
 	}

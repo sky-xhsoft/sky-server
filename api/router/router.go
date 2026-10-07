@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -93,23 +94,40 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	// 域名多租户识别中间件（根据请求域名自动识别公司）
 	engine.Use(middleware.DomainTenant(db))
 	// 认证中间件校验账号是否停用、是否管理员
-	middleware.SetUserStatusLookup(func(userID uint) (bool, bool, error) {
+	middleware.SetUserStatusLookup(func(userID uint) (middleware.UserStatus, error) {
 		var row struct {
-			IsActive string `gorm:"column:IS_ACTIVE"`
-			IsAdmin  string `gorm:"column:IS_ADMIN"`
+			IsActive  string `gorm:"column:IS_ACTIVE"`
+			IsAdmin   string `gorm:"column:IS_ADMIN"`
+			UserGrade int    `gorm:"column:USER_GRADE"`
+			GroupMax  int    `gorm:"column:GROUP_MAX"`
 		}
-		res := db.Table("sys_user").Select("IS_ACTIVE, IS_ADMIN").Where("ID = ?", userID).Limit(1).Scan(&row)
+		res := db.Raw(`SELECT u.IS_ACTIVE, u.IS_ADMIN, IFNULL(u.SGRADE, 0) AS USER_GRADE,
+				IFNULL((SELECT MAX(g.SGRADE) FROM sys_user_groups ug
+					JOIN sys_groups g ON g.ID = ug.SYS_DIRECTORY_ID AND g.IS_ACTIVE = 'Y'
+					WHERE ug.SYS_USER_ID = u.ID AND ug.IS_ACTIVE = 'Y'), 0) AS GROUP_MAX
+			FROM sys_user u WHERE u.ID = ?`, userID).Scan(&row)
 		if res.Error != nil {
-			return false, false, res.Error
+			return middleware.UserStatus{}, res.Error
 		}
 		if res.RowsAffected == 0 {
-			return false, false, nil
+			return middleware.UserStatus{}, nil
 		}
-		return row.IsActive == "Y", row.IsAdmin == "Y", nil
+		grade := row.UserGrade
+		if row.GroupMax > grade {
+			grade = row.GroupMax
+		}
+		if row.IsAdmin == "Y" {
+			grade = math.MaxInt32
+		}
+		return middleware.UserStatus{Active: row.IsActive == "Y", Admin: row.IsAdmin == "Y", FieldGrade: grade}, nil
 	})
 
 	// 健康检查
 	engine.GET("/health", middleware.HealthCheck())
+
+	// 本地存储模式下云盘文件的访问地址（accessUrl 为 /files/cloud/...，与 COS 公开地址语义一致；
+	// 只开放 cloud 子目录，系统附件仍需经鉴权接口访问）
+	engine.Static("/files/cloud", "uploads/cloud")
 
 	// 指标接口：release 模式下需要登录（接口统计会暴露路由与流量），重置统计始终需要登录
 	isRelease := cfg.App.Mode == "release"
@@ -207,18 +225,14 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	}
 }
 
-// registerCloudStorageConfigRoutes 注册存储配置管理路由
+// registerCloudStorageConfigRoutes 注册存储配置路由
+// 存储由公司配置决定，cloud_storage_config 表不参与选择，只保留刷新存储缓存
 func registerCloudStorageConfigRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, storageConfigService cloud.StorageConfigService) {
 	storageConfigHandler := handler.NewCloudStorageConfigHandler(storageConfigService)
 
 	configs := rg.Group("/cloud/storage/config")
 	configs.Use(middleware.AuthRequired(jwtUtil), middleware.AdminRequired())
 	{
-		configs.POST("", storageConfigHandler.CreateConfig)
-		configs.PUT("/:id", storageConfigHandler.UpdateConfig)
-		configs.GET("/company/:companyId", storageConfigHandler.GetCompanyConfig)
-		configs.GET("", storageConfigHandler.GetAllConfigs)
-		configs.DELETE("/:id", storageConfigHandler.DeleteConfig)
 		configs.POST("/:companyId/refresh", storageConfigHandler.RefreshCache)
 	}
 }

@@ -154,7 +154,7 @@ func (h *CloudItemHandler) DeleteItem(c *gin.Context) {
 
 	item, err := h.cloudService.GetItem(c.Request.Context(), uint(id), uid)
 	if err != nil {
-		utils.InternalError(c, "项目不存在")
+		utils.NotFound(c, "项目不存在")
 		return
 	}
 

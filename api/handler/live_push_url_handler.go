@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -46,7 +47,7 @@ type GeneratePlayURLRequest struct {
 
 // GeneratePushURLByRoomRequest 根据直播间ID生成推流地址请求
 type GeneratePushURLByRoomRequest struct {
-	RoomID string `json:"roomId" binding:"required"` // 直播间ID
+	RoomID flexibleID `json:"roomId" binding:"required"` // 直播间ID（数字或字符串均可）
 }
 
 // GeneratePushURLByRoom 根据直播间ID生成推流地址
@@ -79,9 +80,9 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 	ctx := withCompanyID(c)
 
 	// RoomID 字符串转 uint
-	roomID, err := strconv.ParseUint(req.RoomID, 10, 64)
+	roomID, err := strconv.ParseUint(string(req.RoomID), 10, 64)
 	if err != nil || roomID == 0 {
-		utils.BadRequest(c, "直播间ID无效: "+req.RoomID)
+		utils.BadRequest(c, "直播间ID无效: "+string(req.RoomID))
 		return
 	}
 
@@ -115,7 +116,7 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 	}
 
 	// streamName 用直播间ID；appName 固定 live
-	streamName := req.RoomID
+	streamName := string(req.RoomID)
 	appName := "live"
 
 	// expireTime 用直播间结束时间（Unix秒）；已过期则默认7天后，保证推流鉴权 txTime 在有效期内
@@ -139,7 +140,7 @@ func int64Ptr(v int64) *int64 { return &v }
 
 // GeneratePlayURLByRoomRequest 根据直播间ID生成播放地址请求
 type GeneratePlayURLByRoomRequest struct {
-	RoomID string `json:"roomId" binding:"required"` // 直播间ID
+	RoomID flexibleID `json:"roomId" binding:"required"` // 直播间ID（数字或字符串均可）
 }
 
 // GeneratePlayURLByRoom 根据直播间ID生成播放地址
@@ -166,9 +167,9 @@ func (h *LivePushURLHandler) GeneratePlayURLByRoom(c *gin.Context) {
 	// 正确注入公司ID到上下文，使 ListDomains 缓存 key 用当前登录公司
 	ctx := withCompanyID(c)
 
-	roomID, err := strconv.ParseUint(req.RoomID, 10, 64)
+	roomID, err := strconv.ParseUint(string(req.RoomID), 10, 64)
 	if err != nil || roomID == 0 {
-		utils.BadRequest(c, "直播间ID无效: "+req.RoomID)
+		utils.BadRequest(c, "直播间ID无效: "+string(req.RoomID))
 		return
 	}
 
@@ -195,7 +196,7 @@ func (h *LivePushURLHandler) GeneratePlayURLByRoom(c *gin.Context) {
 	}
 
 	// streamName 用直播间ID；appName 固定 live
-	streamName := req.RoomID
+	streamName := string(req.RoomID)
 	appName := "live"
 	var expireTime int64
 	if h.roomService != nil {
@@ -279,4 +280,22 @@ func (h *LivePushURLHandler) GeneratePlayURL(c *gin.Context) {
 	}
 
 	utils.Success(c, playURLs)
+}
+
+// flexibleID 兼容数字与字符串两种 JSON 写法的 ID（直播间接口返回的 id 为数字）
+type flexibleID string
+
+// UnmarshalJSON 接受 123 或 "123"
+func (f *flexibleID) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*f = flexibleID(str)
+		return nil
+	}
+	var num json.Number
+	if err := json.Unmarshal(data, &num); err != nil {
+		return err
+	}
+	*f = flexibleID(num.String())
+	return nil
 }

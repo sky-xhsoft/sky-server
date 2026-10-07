@@ -49,8 +49,8 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 		}
 
 		// 账号已停用：已签发的令牌同样失效（状态缓存 30 秒）
-		active, admin, known := resolveUserStatus(claims.UserID)
-		if known && !active {
+		status, known := resolveUserStatus(claims.UserID)
+		if known && !status.Active {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":      pkgerrors.ErrInvalidToken,
 				"message":   "账号已停用",
@@ -59,7 +59,10 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		c.Set("isAdmin", admin)
+		c.Set("isAdmin", status.Admin)
+		if known {
+			c.Set("fieldGrade", status.FieldGrade)
+		}
 
 		// 将用户信息存入context
 		c.Set("userID", claims.UserID)

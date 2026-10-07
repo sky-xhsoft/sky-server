@@ -244,7 +244,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 			utils.NotFound(c, i18n.TranslateContext(c, "user_not_found"))
 			return
 		}
-		utils.InternalError(c, i18n.TranslateContext(c, "internal_error")+": "+err.Error())
+		// 其余按错误类型返回（如新密码不满足强度要求为 400，原先一律 500）
+		utils.FailFromError(c, i18n.TranslateContext(c, "internal_error")+": ", err)
 		return
 	}
 

@@ -107,11 +107,33 @@ func (s *service) HasItemWritePermission(ctx context.Context, itemID uint, userI
 	if item.OwnerID == userID {
 		return true, nil
 	}
+	// 条目自身或任一上级文件夹授予了写权限（文件夹授权对其内容继承）
+	return s.hasInheritedPermission(ctx, item, userID, "PERM_WRITE")
+}
+
+// hasInheritedPermission 条目自身或上级文件夹是否对用户授予了指定权限（PERM_READ / PERM_WRITE）
+func (s *service) hasInheritedPermission(ctx context.Context, item *entity.CloudItem, userID uint, permColumn string) (bool, error) {
+	ids := []uint{item.ID}
+	parent := item.ParentID
+	for depth := 0; parent != nil && depth < maxFolderDepth; depth++ {
+		ids = append(ids, *parent)
+		var row struct {
+			ParentID *uint `gorm:"column:PARENT_ID"`
+		}
+		res := s.db.WithContext(ctx).Table("cloud_item").Select("PARENT_ID").Where("ID = ?", *parent).Limit(1).Scan(&row)
+		if res.Error != nil {
+			return false, res.Error
+		}
+		if res.RowsAffected == 0 {
+			break
+		}
+		parent = row.ParentID
+	}
 	var cnt int64
 	if err := s.db.WithContext(ctx).
 		Model(&entity.CloudItemPermission{}).
-		Where("ITEM_ID = ? AND TARGET_TYPE = ? AND TARGET_ID = ? AND PERM_WRITE = ? AND IS_ACTIVE = ?",
-			itemID, "user", userID, "Y", "Y").Count(&cnt).Error; err != nil {
+		Where("ITEM_ID IN ? AND TARGET_TYPE = ? AND TARGET_ID = ? AND "+permColumn+" = ? AND IS_ACTIVE = ?",
+			ids, "user", userID, "Y", "Y").Count(&cnt).Error; err != nil {
 		return false, err
 	}
 	return cnt > 0, nil
@@ -125,14 +147,8 @@ func (s *service) canAccessRead(ctx context.Context, item *entity.CloudItem, use
 	if !s.companyScopeOK(item.SysCompanyID, companyID) {
 		return false
 	}
-	var cnt int64
-	if err := s.db.WithContext(ctx).
-		Model(&entity.CloudItemPermission{}).
-		Where("ITEM_ID = ? AND TARGET_TYPE = ? AND TARGET_ID = ? AND PERM_READ = ? AND IS_ACTIVE = ?",
-			item.ID, "user", userID, "Y", "Y").Count(&cnt).Error; err != nil {
-		return false
-	}
-	return cnt > 0
+	ok, err := s.hasInheritedPermission(ctx, item, userID, "PERM_READ")
+	return err == nil && ok
 }
 
 // companyScopeOK 公司范围：公用(0/-1)对所有公司可见，否则必须同公司

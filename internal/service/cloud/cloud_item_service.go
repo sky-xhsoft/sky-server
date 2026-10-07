@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	stderrors "errors"
 	"strings"
 
 	"gorm.io/gorm"
@@ -26,7 +27,13 @@ func (s *service) CreateItem(ctx context.Context, item *entity.CloudItem) error 
 	} else if item.SysCompanyID == 0 {
 		item.SysCompanyID = 0 // 无属主则公用
 	}
-	return s.db.WithContext(ctx).Create(item).Error
+	if err := s.db.WithContext(ctx).Create(item).Error; err != nil {
+		if stderrors.Is(err, entity.ErrCloudFolderExists) {
+			return errors.New(errors.ErrResourceExists, "同名文件夹已存在")
+		}
+		return err
+	}
+	return nil
 }
 
 // GetItem 获取项目（文件或文件夹）— 公司隔离 + 用户权限判定
@@ -63,7 +70,16 @@ func (s *service) ListItems(ctx context.Context, parentID *uint, userID uint) ([
 		return nil, err
 	}
 
-	// 过滤：所有者 或 权限表命中读
+	// 能读取父文件夹时其内容全部可见（授权继承，也避免逐条查询权限）
+	if parentID != nil {
+		var parent entity.CloudItem
+		if err := s.db.WithContext(ctx).Where("ID = ? AND IS_ACTIVE = ?", *parentID, "Y").First(&parent).Error; err == nil &&
+			s.canAccessRead(ctx, &parent, userID, companyID) {
+			return allItems, nil
+		}
+	}
+
+	// 过滤：所有者 或 权限表命中读（含上级授权）
 	items := make([]*entity.CloudItem, 0, len(allItems))
 	for _, it := range allItems {
 		if s.canAccessRead(ctx, it, userID, companyID) {

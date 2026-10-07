@@ -51,6 +51,10 @@ func (s *service) applyFilters(query *gorm.DB, filters map[string]interface{}, c
 		}
 
 		col := colInfo[safeField]
+		// 元数据中不存在的字段直接忽略（原先拼进 SQL 报 Unknown column 返回 500）
+		if col == nil && len(colInfo) > 0 && !strings.EqualFold(safeField, "ID") {
+			continue
+		}
 		// 非字符串类型(如 FK 下拉选值、bool)仍走精确匹配
 		if _, isStr := value.(string); !isStr || col == nil {
 			query = query.Where(fmt.Sprintf("`%s` = ?", safeField), value)

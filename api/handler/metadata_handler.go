@@ -61,6 +61,7 @@ func (h *MetadataHandler) GetTableConfig(c *gin.Context) {
 		utils.FailFromError(c, "获取字段定义失败: ", err)
 		return
 	}
+	columns = filterColumnsByGrade(c, columns)
 
 	// 收集所有需要的字典ID
 	dictIDs := make(map[uint]bool)
@@ -208,7 +209,7 @@ func (h *MetadataHandler) GetColumns(c *gin.Context) {
 		return
 	}
 
-	utils.Success(c, columns)
+	utils.Success(c, filterColumnsByGrade(c, columns))
 }
 
 // GetTableRefs 获取表的关系定义
@@ -401,4 +402,22 @@ func (h *MetadataHandler) GetForeignKeyDisplayValue(c *gin.Context) {
 	}
 
 	utils.Success(c, displayValue)
+}
+
+// filterColumnsByGrade 去掉字段访问级别（SGRADE）高于当前用户级别的字段；
+// 用户级别由认证中间件写入 fieldGrade（管理员不受限），未知时不过滤
+func filterColumnsByGrade(c *gin.Context, columns []*entity.SysColumn) []*entity.SysColumn {
+	v, ok := c.Get("fieldGrade")
+	if !ok {
+		return columns
+	}
+	grade, _ := v.(int)
+	filtered := make([]*entity.SysColumn, 0, len(columns))
+	for _, col := range columns {
+		if col.Sgrade > 0 && col.Sgrade > grade {
+			continue
+		}
+		filtered = append(filtered, col)
+	}
+	return filtered
 }

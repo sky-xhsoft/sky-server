@@ -39,6 +39,35 @@ var standardFields = map[string]bool{
 	colIsActive:     true,
 }
 
+// normalizeFieldValue 规范化前端传入的字段值：
+// 数值列与外键列的空字符串视为 NULL（导入时留空的可选外键原先被当作 "" 校验而整行失败）；
+// 数值列传入非数字时返回参数错误（原先直接写库，MySQL 报错返回 500）
+func normalizeFieldValue(col *entity.SysColumn, value interface{}) (interface{}, error) {
+	str, isStr := value.(string)
+	if !isStr {
+		return value, nil
+	}
+	isNumber := inferDBType(col) == "number"
+	if !isNumber && col.SetValueType != "fk" {
+		return value, nil
+	}
+	trimmed := strings.TrimSpace(str)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if isNumber {
+		if _, err := strconv.ParseFloat(trimmed, 64); err != nil {
+			name := col.DisplayName
+			if name == "" {
+				name = col.DbName
+			}
+			return nil, errors.New(errors.ErrInvalidParam, fmt.Sprintf("字段 %s 必须是数字", name))
+		}
+		return trimmed, nil
+	}
+	return value, nil
+}
+
 // skippedUpdateFields 请求中的业务字段在处理后一个都没有保留时，返回这些字段的显示名；
 // 只要有字段被保留就返回空（部分字段只读属于正常情况）。
 // 密码/加密字段留空表示不修改，不计入。
@@ -74,10 +103,15 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 	var fields []string
 
 	addedStandardFields := make(map[string]bool)
+	grade := s.userFieldGrade(userID)
 
 	for _, col := range columns {
 		// 跳过UI-only字段（不在真实数据库表中）
 		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
+			continue
+		}
+		// 字段访问级别高于用户级别：不返回
+		if !standardFields[col.DbName] && !fieldAllowed(col.Sgrade, grade) {
 			continue
 		}
 
@@ -134,7 +168,13 @@ func (s *service) buildSelectFields(columns []*entity.SysColumn, userID uint, op
 func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[string]interface{}, userID uint) (map[string]interface{}, error) {
 	processedData := make(map[string]interface{})
 
+	grade := s.userFieldGrade(userID)
+
 	for _, col := range columns {
+		// 字段访问级别高于用户级别：忽略提交的值
+		if !standardFields[col.DbName] && !fieldAllowed(col.Sgrade, grade) {
+			continue
+		}
 		// 跳过UI-only字段
 		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
 			continue
@@ -146,6 +186,14 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 		}
 
 		value, exists := data[col.DbName]
+		if exists {
+			normalized, err := normalizeFieldValue(col, value)
+			if err != nil {
+				return nil, err
+			}
+			data[col.DbName] = normalized
+			value = normalized
+		}
 
 		// SetValueType 策略处理（必须在 NullAble 之前，因为自动填充字段不需要前端传值）
 		switch col.SetValueType {
@@ -302,7 +350,13 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[string]interface{}, userID uint) (map[string]interface{}, error) {
 	processedData := make(map[string]interface{})
 
+	grade := s.userFieldGrade(userID)
+
 	for _, col := range columns {
+		// 字段访问级别高于用户级别：忽略提交的值
+		if !standardFields[col.DbName] && !fieldAllowed(col.Sgrade, grade) {
+			continue
+		}
 		// 跳过UI-only字段
 		if col.DisplayType == "button" || col.DisplayType == "blank" || col.DisplayType == "hr" {
 			continue
@@ -314,6 +368,14 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 		}
 
 		value, exists := data[col.DbName]
+		if exists {
+			normalized, err := normalizeFieldValue(col, value)
+			if err != nil {
+				return nil, err
+			}
+			data[col.DbName] = normalized
+			value = normalized
+		}
 
 		if col.RegExpression != "" && exists && value != nil {
 			if strVal, ok := value.(string); ok {
