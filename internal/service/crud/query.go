@@ -45,7 +45,7 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	logger.Debug("GetOne query fields", zap.String("fields", selectFields))
 
 	// 获取数据过滤条件
-	dataFilter, err := s.groupsService.GetUserDataFilter(ctx, userID, table.ID)
+	dataFilter, err := s.userTableDataFilter(ctx, userID, table.ID)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrInternal, "获取数据过滤条件失败", err)
 	}
@@ -210,7 +210,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	}
 
 	// 获取数据过滤条件
-	dataFilter, err := s.groupsService.GetUserDataFilter(ctx, userID, table.ID)
+	dataFilter, err := s.userTableDataFilter(ctx, userID, table.ID)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrInternal, "获取数据过滤条件失败", err)
 	}
@@ -375,7 +375,7 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 		return nil, err
 	}
 
-	dataFilter, err := s.groupsService.GetUserDataFilter(ctx, userID, table.ID)
+	dataFilter, err := s.userTableDataFilter(ctx, userID, table.ID)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrInternal, "获取数据过滤条件失败", err)
 	}
