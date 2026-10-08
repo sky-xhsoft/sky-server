@@ -127,3 +127,20 @@ func TestIDGenService_NextID_SkipsIDsInsertedOutsideCounter(t *testing.T) {
 		t.Errorf("同步后应继续递增: id2=%d id3=%d", id2, id3)
 	}
 }
+
+func TestIDGenService_NextID_DoesNotReuseDeletedIDs(t *testing.T) {
+	svc, db := setupIDGenTest(t)
+	ctx := context.Background()
+
+	// 表中最大 ID 为 10，较小的 ID 已被删除（留下空号）；计数器尚不存在
+	db.Exec(`INSERT INTO test_table (ID, NAME) VALUES (10, 'j')`)
+	db.Exec(`DELETE FROM test_table WHERE ID < 10`)
+
+	id, err := svc.GetNextID(ctx, "test_table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != 11 {
+		t.Errorf("计数器不存在时应从表中最大 ID 之后取号，期望 11，实际 %d（复用了已删除记录的 ID）", id)
+	}
+}

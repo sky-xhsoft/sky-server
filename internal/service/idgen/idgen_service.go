@@ -55,6 +55,22 @@ const maxIDGenAttempts = 5
 func (s *service) GetNextID(ctx context.Context, tableName string) (uint, error) {
 	cacheKey := fmt.Sprintf("table:maxid:%s", tableName)
 
+	// 计数器不存在（首次取号或已过期）时先同步到表中最大 ID，
+	// 否则会从 1 开始复用已删除记录的 ID，与仍引用旧 ID 的数据错误关联
+	exists, err := s.redisClient.Exists(ctx, cacheKey).Result()
+	if err != nil {
+		return 0, fmt.Errorf("查询Redis计数器失败: %w", err)
+	}
+	if exists == 0 {
+		maxID, err := s.getMaxIDFromDB(ctx, tableName)
+		if err != nil {
+			return 0, err
+		}
+		if err := raiseCounterScript.Run(ctx, s.redisClient, []string{cacheKey}, maxID).Err(); err != nil {
+			return 0, fmt.Errorf("初始化Redis计数器失败: %w", err)
+		}
+	}
+
 	for attempt := 0; attempt < maxIDGenAttempts; attempt++ {
 		newID, err := s.redisClient.Incr(ctx, cacheKey).Result()
 		if err != nil {
