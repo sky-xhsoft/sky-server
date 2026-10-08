@@ -99,3 +99,31 @@ func TestIDGenService_ResetCache(t *testing.T) {
 		t.Errorf("ResetCache failed: %v", err)
 	}
 }
+
+// 计数器之外有记录直接按数据库自增写入时，取号不能与已有记录冲突
+func TestIDGenService_NextID_SkipsIDsInsertedOutsideCounter(t *testing.T) {
+	svc, db := setupIDGenTest(t)
+	ctx := context.Background()
+
+	id1, err := svc.GetNextID(ctx, "test_table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 用这个号写入，再绕过计数器直接自增插入 3 条
+	db.Exec(`INSERT INTO test_table (ID, NAME) VALUES (?, 'via counter')`, id1)
+	db.Exec(`INSERT INTO test_table (NAME) VALUES ('d'), ('e'), ('f')`)
+	var maxID uint
+	db.Raw(`SELECT MAX(ID) FROM test_table`).Scan(&maxID)
+
+	id2, err := svc.GetNextID(ctx, "test_table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id2 <= maxID {
+		t.Errorf("取号 %d 与已有记录冲突（表中最大 ID %d）", id2, maxID)
+	}
+	id3, _ := svc.GetNextID(ctx, "test_table")
+	if id3 != id2+1 {
+		t.Errorf("同步后应继续递增: id2=%d id3=%d", id2, id3)
+	}
+}

@@ -32,66 +32,64 @@ func NewService(db *gorm.DB, redisClient *redis.Client) Service {
 	}
 }
 
+// raiseCounterScript 计数器小于给定值时抬升到该值（并发安全），返回抬升后的值
+var raiseCounterScript = redis.NewScript(`
+	local key = KEYS[1]
+	local target = tonumber(ARGV[1])
+	local current = tonumber(redis.call('GET', key) or 0)
+	if current < target then
+		redis.call('SET', key, target)
+		return target
+	end
+	return current
+`)
+
+// maxIDGenAttempts 取号与已有记录冲突时的最大重试次数
+const maxIDGenAttempts = 5
+
 // GetNextID 获取下一个ID
 // 流程:
-// 1. 尝试从Redis缓存中原子递增获取ID
-// 2. 如果Redis中不存在该表的键，从数据库查询最大ID并初始化缓存
-// 3. 返回递增后的ID
+// 1. 从Redis计数器原子递增取号
+// 2. 确认该ID在表中未被占用：同一张表也会被直接用数据库自增写入（如 /live/rooms、内部逻辑），
+//    这些写入不推进计数器，取到的号可能已存在，此时把计数器抬升到表中最大ID后重新取号
 func (s *service) GetNextID(ctx context.Context, tableName string) (uint, error) {
 	cacheKey := fmt.Sprintf("table:maxid:%s", tableName)
 
-	// 1. 尝试从Redis原子递增获取ID
-	newID, err := s.redisClient.Incr(ctx, cacheKey).Result()
-	if err != nil {
-		return 0, fmt.Errorf("Redis递增失败: %w", err)
-	}
+	for attempt := 0; attempt < maxIDGenAttempts; attempt++ {
+		newID, err := s.redisClient.Incr(ctx, cacheKey).Result()
+		if err != nil {
+			return 0, fmt.Errorf("Redis递增失败: %w", err)
+		}
 
-	// 2. 如果是第一次访问（newID == 1），需要从数据库初始化
-	if newID == 1 {
-		// 从数据库查询当前最大ID
+		taken, err := s.idExists(ctx, tableName, uint(newID))
+		if err != nil {
+			return 0, err
+		}
+		if !taken {
+			// 设置过期时间（7天），过期后下次取号会按表中最大ID重新同步
+			s.redisClient.Expire(ctx, cacheKey, 7*24*time.Hour)
+			return uint(newID), nil
+		}
+
 		maxID, err := s.getMaxIDFromDB(ctx, tableName)
 		if err != nil {
 			return 0, err
 		}
-
-		// 如果数据库中有数据，重置Redis缓存为最大ID+1
-		if maxID > 0 {
-			// 使用SET命令重置缓存（只在不存在或小于maxID+1时设置）
-			// 为了保证并发安全，使用Lua脚本原子操作
-			script := redis.NewScript(`
-				local key = KEYS[1]
-				local maxID = tonumber(ARGV[1])
-				local current = tonumber(redis.call('GET', key) or 0)
-				if current < maxID then
-					redis.call('SET', key, maxID)
-					return maxID
-				end
-				return current
-			`)
-
-			result, err := script.Run(ctx, s.redisClient, []string{cacheKey}, maxID+1).Int64()
-			if err != nil {
-				return 0, fmt.Errorf("初始化Redis缓存失败: %w", err)
-			}
-
-			// 再次递增获取新ID
-			newID, err = s.redisClient.Incr(ctx, cacheKey).Result()
-			if err != nil {
-				return 0, fmt.Errorf("Redis递增失败: %w", err)
-			}
-
-			// 设置过期时间（7天，防止缓存无限增长）
-			s.redisClient.Expire(ctx, cacheKey, 7*24*time.Hour)
-
-			return uint(result), nil
+		if err := raiseCounterScript.Run(ctx, s.redisClient, []string{cacheKey}, maxID).Err(); err != nil {
+			return 0, fmt.Errorf("同步Redis计数器失败: %w", err)
 		}
-
-		// 如果数据库为空，newID=1就是正确的
-		// 设置过期时间
-		s.redisClient.Expire(ctx, cacheKey, 7*24*time.Hour)
 	}
+	return 0, fmt.Errorf("表 %s 取号连续冲突，请稍后重试", tableName)
+}
 
-	return uint(newID), nil
+// idExists 判断表中是否已存在该ID（含已停用的记录）
+func (s *service) idExists(ctx context.Context, tableName string, id uint) (bool, error) {
+	var n int64
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE ID = ?", tableName)
+	if err := s.db.WithContext(ctx).Raw(query, id).Scan(&n).Error; err != nil {
+		return false, fmt.Errorf("检查ID是否占用失败: %w", err)
+	}
+	return n > 0, nil
 }
 
 // getMaxIDFromDB 从数据库查询表的最大ID
