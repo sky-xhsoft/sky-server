@@ -24,6 +24,12 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		zap.String("fileMD5", req.FileMD5),
 		zap.Uint("userID", userID))
 
+	fileName, err := ValidateItemName(req.FileName)
+	if err != nil {
+		return nil, err
+	}
+	req.FileName = fileName
+
 	// 1. 检查配额
 	if err := s.cloudService.CheckQuota(ctx, userID, req.FileSize); err != nil {
 		return nil, err
@@ -31,7 +37,7 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 
 	// 2. 检查是否存在未完成的会话（断点续传）
 	var existingSession entity.CloudUploadSession
-	err := s.db.WithContext(ctx).
+	err = s.db.WithContext(ctx).
 		Where("FILE_ID = ? AND USER_ID = ? AND STATUS IN (?, ?) AND IS_ACTIVE = ?",
 			req.FileMD5, userID, "uploading", "paused", "Y").
 		First(&existingSession).Error
@@ -161,9 +167,19 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		ExpireTime:      &expireTime,
 	}
 
-	// 如果是腾讯云COS等支持原生分块上传的存储，尝试初始化原生分块上传
+	// 秒传：已有相同文件时，告诉前端所有分片都已就绪，完成时直接引用已有存储对象
+	_, instant := s.findInstantSource(ctx, userID, req.FileMD5, req.FileSize)
+	uploadedChunks := []int{}
+	if instant {
+		uploadedChunks = allChunkIndexes(totalChunks)
+		if b, mErr := json.Marshal(uploadedChunks); mErr == nil {
+			session.UploadedChunks = string(b)
+		}
+	}
+
+	// 如果是腾讯云COS等支持原生分块上传的存储，尝试初始化原生分块上传（秒传不需要）
 	// 调用存储层的 InitiateMultipartUpload 接口
-	if err == nil {
+	if err == nil && !instant {
 		if _, ok := storageInstance.(interface {
 			InitiateMultipartUpload(ctx context.Context, path string) (string, error)
 		}); ok {
@@ -202,7 +218,7 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		FileSize:       session.FileSize,
 		ChunkSize:      session.ChunkSize,
 		TotalChunks:    totalChunks,
-		UploadedChunks: []int{},
+		UploadedChunks: uploadedChunks,
 		Status:         "uploading",
 		ExpireTime:     expireTime.Format(time.RFC3339),
 	}, nil

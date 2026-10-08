@@ -57,6 +57,17 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		logger.Warn("会话已完成但找不到文件记录，重新合并", zap.Uint("sessionID", sessionID))
 	}
 
+	// 秒传：本会话没有实际上传任何分片，且已有相同文件，直接引用已有存储对象
+	if session.Status != "completed" {
+		var realChunks int64
+		s.db.WithContext(ctx).Model(&entity.CloudChunkRecord{}).Where("SESSION_ID = ? AND UPLOADED = ?", session.ID, true).Count(&realChunks)
+		if realChunks == 0 {
+			if existing, ok := s.findInstantSource(ctx, userID, session.FileID, session.FileSize); ok {
+				return s.completeInstant(ctx, &session, userID, existing)
+			}
+		}
+	}
+
 	// 2. 检查所有分片是否已上传
 	var uploadedChunks []int
 	if session.UploadedChunks != "" {

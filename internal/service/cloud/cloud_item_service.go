@@ -115,15 +115,9 @@ func (s *service) DeleteItem(ctx context.Context, itemID uint, userID uint) erro
 		return errors.PermissionDenied
 	}
 
-	// 如果是文件，删除物理存储
-	if item.IsFile() && item.StoragePath != nil {
-		// 获取公司存储实例
-		storageInstance, err := s.getCompanyStorage(ctx, userID)
-		if err == nil {
-			if err := storageInstance.Delete(ctx, *item.StoragePath); err != nil {
-				logger.Warn("Storage delete failed for item", zap.Uint("itemId", item.ID), zap.Error(err))
-			}
-		}
+	// 如果是文件，删除物理存储（秒传的多条记录共用同一存储对象，仍被引用时保留）
+	if item.IsFile() {
+		s.deleteStorageIfUnreferenced(ctx, item)
 	}
 
 	// 软删除数据库记录
@@ -160,18 +154,8 @@ func (s *service) deleteChildren(ctx context.Context, parentID uint, userID uint
 			if err := s.deleteChildren(ctx, child.ID, userID, visited); err != nil {
 				return err
 			}
-		} else if child.IsFile() {
-			// 如果是文件，删除存储
-			if child.StoragePath != nil {
-				// 获取公司存储实例
-				storageInstance, err := s.getCompanyStorage(ctx, userID)
-				if err == nil {
-					if err := storageInstance.Delete(ctx, *child.StoragePath); err != nil {
-						logger.Warn("Storage delete failed for child item", zap.Uint("itemId", child.ID), zap.Error(err))
-					}
-				}
-			}
 		}
+		// 文件的物理存储由 DeleteItem 统一处理
 
 		// 删除当前项目
 		if err := s.DeleteItem(ctx, child.ID, userID); err != nil {
@@ -330,6 +314,10 @@ func collectDescendants(tx *gorm.DB, folderID, ownerID uint) ([]entity.CloudItem
 
 // RenameItem 重命名项目
 func (s *service) RenameItem(ctx context.Context, itemID uint, newName string, userID uint) error {
+	newName, err := ValidateItemName(newName)
+	if err != nil {
+		return err
+	}
 	item, err := s.GetItem(ctx, itemID, userID)
 	if err != nil {
 		return errors.ResourceNotFound
@@ -408,4 +396,25 @@ func (s *service) GetStorage() storage.Storage {
 	// 由于不再直接存储 storage 字段，这里返回 nil 或默认存储
 	// 但为了兼容性，我们可以尝试返回一个默认存储
 	return nil
+}
+
+// deleteStorageIfUnreferenced 删除文件的存储对象；仍有其他有效记录引用同一存储路径（秒传）时保留。
+// 存储对象位于文件所有者所属公司的存储中
+func (s *service) deleteStorageIfUnreferenced(ctx context.Context, item *entity.CloudItem) {
+	if item.StoragePath == nil || *item.StoragePath == "" {
+		return
+	}
+	var refs int64
+	if err := s.db.WithContext(ctx).Model(&entity.CloudItem{}).
+		Where("STORAGE_PATH = ? AND IS_ACTIVE = ? AND ID <> ?", *item.StoragePath, "Y", item.ID).
+		Count(&refs).Error; err != nil || refs > 0 {
+		return
+	}
+	storageInstance, err := s.getCompanyStorage(ctx, item.OwnerID)
+	if err != nil {
+		return
+	}
+	if err := storageInstance.Delete(ctx, *item.StoragePath); err != nil {
+		logger.Warn("Storage delete failed for item", zap.Uint("itemId", item.ID), zap.Error(err))
+	}
 }

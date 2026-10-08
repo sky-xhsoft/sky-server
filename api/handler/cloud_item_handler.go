@@ -88,6 +88,12 @@ func (h *CloudItemHandler) CreateItem(c *gin.Context) {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
+	name, err := cloud.ValidateItemName(req.Name)
+	if err != nil {
+		utils.FailFromError(c, "", err)
+		return
+	}
+	req.Name = name
 
 	userID, exists := c.Get("userID")
 	if !exists {

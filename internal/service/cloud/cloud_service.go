@@ -172,6 +172,11 @@ type FolderNode struct {
 
 // CreateFolder 创建文件夹
 func (s *service) CreateFolder(ctx context.Context, req *CreateFolderRequest, userID uint) (*entity.CloudFolder, error) {
+	name, err := ValidateItemName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	req.Name = name
 	// 构建路径
 	path := "/" + req.Name
 	if req.ParentID != nil && *req.ParentID != 0 {
@@ -365,6 +370,11 @@ func (s *service) DeleteFolder(ctx context.Context, folderID uint, userID uint) 
 
 // UploadFile 上传文件
 func (s *service) UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudItem, error) {
+	fileName, err := ValidateItemName(req.FileName)
+	if err != nil {
+		return nil, err
+	}
+	req.FileName = fileName
 	// 检查配额
 	if err := s.CheckQuota(ctx, userID, req.FileSize); err != nil {
 		return nil, err
@@ -673,6 +683,10 @@ func (s *service) generateShareCode() string {
 
 // RenameFolder 重命名文件夹
 func (s *service) RenameFolder(ctx context.Context, folderID uint, newName string, userID uint) error {
+	newName, err := ValidateItemName(newName)
+	if err != nil {
+		return err
+	}
 	folder, err := s.getFolderByID(ctx, folderID)
 	if err != nil {
 		return err
@@ -725,8 +739,8 @@ func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (i
 		return nil, nil, err
 	}
 
-	// 检查权限
-	if file.OwnerID != userID {
+	// 检查权限：所有者，或被授予读权限（含从上级文件夹继承），与列表可见范围一致
+	if !s.canAccessRead(ctx, file, userID, s.getUserCompanyID(ctx, userID)) {
 		return nil, nil, errors.New(errors.ErrPermissionDenied, "无权限下载此文件")
 	}
 
@@ -735,8 +749,8 @@ func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (i
 		return nil, nil, errors.New(errors.ErrInvalidParam, "文件存储路径不存在")
 	}
 
-	// 获取公司存储实例
-	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	// 文件存放在所有者所属公司的存储中
+	storageInstance, err := s.getCompanyStorage(ctx, file.OwnerID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -844,6 +858,10 @@ func (s *service) MoveFile(ctx context.Context, fileID uint, targetFolderID *uin
 
 // RenameFile 重命名文件
 func (s *service) RenameFile(ctx context.Context, fileID uint, newName string, userID uint) error {
+	newName, err := ValidateItemName(newName)
+	if err != nil {
+		return err
+	}
 	file, err := s.getFileByID(ctx, fileID)
 	if err != nil {
 		return err
