@@ -291,7 +291,8 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	resp, err := h.ssoService.GetCurrentUser(userID.(uint))
 	if err != nil {
 		if errors.Is(err, errors.ResourceNotFound) {
-			utils.NotFound(c, "用户不存在")
+			// 令牌有效但账号已不存在或已停用：按未登录处理，前端据此回到登录页
+			utils.Unauthorized(c, "账号已停用或不存在")
 			return
 		}
 		utils.FailFromError(c, "获取用户信息失败: ", err)

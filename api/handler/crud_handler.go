@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/domain/search"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/crud"
@@ -210,6 +212,7 @@ func (h *CrudHandler) Update(c *gin.Context) {
 		utils.FailFromError(c, "更新失败: ", err)
 		return
 	}
+	invalidateUserStatus(tableName, uint(id))
 
 	utils.Success(c, gin.H{"message": "更新成功"})
 }
@@ -245,6 +248,7 @@ func (h *CrudHandler) Delete(c *gin.Context) {
 		utils.FailFromError(c, "删除失败: ", err)
 		return
 	}
+	invalidateUserStatus(tableName, uint(id))
 
 	utils.Success(c, gin.H{"message": "删除成功"})
 }
@@ -279,6 +283,7 @@ func (h *CrudHandler) BatchDelete(c *gin.Context) {
 		utils.FailFromError(c, "批量删除失败: ", err)
 		return
 	}
+	invalidateUserStatus(tableName, req.IDs...)
 
 	utils.Success(c, gin.H{"message": "批量删除成功"})
 }
@@ -593,7 +598,9 @@ func (h *CrudHandler) BatchUpdate(c *gin.Context) {
 	for _, id := range req.IDs {
 		if err := h.crudService.Update(c.Request.Context(), tableName, id, req.Data, userID.(uint)); err != nil {
 			failed++
+			continue
 		}
+		invalidateUserStatus(tableName, id)
 	}
 
 	if failed > 0 {
@@ -635,4 +642,14 @@ func (h *CrudHandler) Search(c *gin.Context) {
 	}
 
 	utils.Success(c, result)
+}
+
+// invalidateUserStatus 改动或删除用户后清除鉴权中间件的账号状态缓存，停用立即生效（否则缓存期内旧令牌仍可用）
+func invalidateUserStatus(tableName string, ids ...uint) {
+	if !strings.EqualFold(tableName, "SYS_USER") {
+		return
+	}
+	for _, id := range ids {
+		middleware.InvalidateUserStatus(id)
+	}
 }
