@@ -211,9 +211,7 @@ func (s *service) videoThumbnail(ctx context.Context, file *entity.CloudItem) ([
 
 // videoThumbnailFrom 从存储中的视频截取第一帧
 func (s *service) videoThumbnailFrom(ctx context.Context, st interface{}, path string) ([]byte, error) {
-	ffmpegOnce.Do(func() {
-		ffmpegPath, _ = exec.LookPath("ffmpeg")
-	})
+	ffmpegOnce.Do(func() { ffmpegPath = findFFmpeg() })
 	if ffmpegPath == "" {
 		return nil, fmt.Errorf("服务器未安装 ffmpeg")
 	}
@@ -251,4 +249,21 @@ func (s *service) videoThumbnailFrom(ctx context.Context, st interface{}, path s
 		return nil, fmt.Errorf("截取视频第一帧失败: 无输出")
 	}
 	return stdout.Bytes(), nil
+}
+
+// findFFmpeg 查找 ffmpeg：环境变量 FFMPEG_PATH > PATH > 用户目录 ~/bin/ffmpeg（无管理员权限时的安装位置）
+func findFFmpeg() string {
+	if p := os.Getenv("FFMPEG_PATH"); p != "" {
+		return p
+	}
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		p := filepath.Join(home, "bin", "ffmpeg")
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
 }
