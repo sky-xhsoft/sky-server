@@ -82,7 +82,7 @@ func (h *LiveCallbackHandler) HandleSmartErase(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存智能擦除事件失败", zap.Error(err))
 	}
 
@@ -155,7 +155,7 @@ func (h *LiveCallbackHandler) HandleSubtitle(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存直播字幕事件失败", zap.Error(err))
 	}
 
@@ -228,7 +228,7 @@ func (h *LiveCallbackHandler) HandleSummary(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存直播摘要事件失败", zap.Error(err))
 	}
 
@@ -332,7 +332,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 			RoomName:   room.RoomName,
 		}
 
-		if err := h.db.Create(callbackEvent).Error; err != nil {
+		if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 			logger.Error("保存高光切片事件失败",
 				zap.Error(err),
 				zap.Int("itemIndex", i),
@@ -372,9 +372,10 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 					// 直播间文件夹不存在，创建
 					roomFolder = entity.CloudItem{
 						BaseModel: entity.BaseModel{
-							CreateBy: room.CreateBy,
-							UpdateBy: room.CreateBy,
-							IsActive: "Y",
+							SysCompanyID: room.SysCompanyID,
+							CreateBy:     room.CreateBy,
+							UpdateBy:     room.CreateBy,
+							IsActive:     "Y",
 						},
 						ItemType: "folder",
 						Name:     room.RoomName,
@@ -393,9 +394,10 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 					// 直播切片文件夹不存在，创建
 					highlightFolder = entity.CloudItem{
 						BaseModel: entity.BaseModel{
-							CreateBy: room.CreateBy,
-							UpdateBy: room.CreateBy,
-							IsActive: "Y",
+							SysCompanyID: room.SysCompanyID,
+							CreateBy:     room.CreateBy,
+							UpdateBy:     room.CreateBy,
+							IsActive:     "Y",
 						},
 						ItemType: "folder",
 						Name:     "直播切片",
@@ -432,9 +434,10 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				if !fileExists {
 					fileItem := entity.CloudItem{
 						BaseModel: entity.BaseModel{
-							CreateBy: room.CreateBy,
-							UpdateBy: room.CreateBy,
-							IsActive: "Y",
+							SysCompanyID: room.SysCompanyID,
+							CreateBy:     room.CreateBy,
+							UpdateBy:     room.CreateBy,
+							IsActive:     "Y",
 						},
 						ItemType:    "file",
 						Name:        fileName,
@@ -541,7 +544,7 @@ func (h *LiveCallbackHandler) HandlePushException(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存推流异常事件失败", zap.Error(err))
 	}
 
@@ -614,7 +617,7 @@ func (h *LiveCallbackHandler) HandleRecordException(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存录制异常事件失败", zap.Error(err))
 	}
 
@@ -675,7 +678,7 @@ func (h *LiveCallbackHandler) HandlePullStream(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存拉流转推事件失败", zap.Error(err))
 	}
 
@@ -749,7 +752,7 @@ func (h *LiveCallbackHandler) HandleMonitor(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存监播事件失败", zap.Error(err))
 	}
 

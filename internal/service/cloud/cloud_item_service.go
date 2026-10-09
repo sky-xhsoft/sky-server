@@ -19,7 +19,10 @@ import (
 // CreateItem 创建项目（文件或文件夹）— 写入公司归属 (SysCompanyID)
 func (s *service) CreateItem(ctx context.Context, item *entity.CloudItem) error {
 	if item.OwnerID != 0 {
-		item.SysCompanyID = s.getUserCompanyID(ctx, item.OwnerID)
+		// 调用方已指定公司时保留（如直播回调按直播间所在公司归属），否则取属主所在公司
+		if item.SysCompanyID == 0 {
+			item.SysCompanyID = s.getUserCompanyID(ctx, item.OwnerID)
+		}
 		if item.CreateBy == "" {
 			item.CreateBy = s.getUsernameByID(ctx, item.OwnerID)
 			item.UpdateBy = item.CreateBy

@@ -20,7 +20,9 @@ type LiveCallbackEvent struct {
 	EventData    string    `gorm:"column:EVENT_DATA;type:text" json:"eventData"`                       // 事件详细数据（JSON格式）
 	Sign         string    `gorm:"column:SIGN;type:varchar(255)" json:"sign"`                          // 签名
 	TValue       int64     `gorm:"column:T_VALUE;not null" json:"tValue"`                              // 签名过期时间
+	CreateBy     string    `gorm:"column:CREATE_BY;size:80" json:"createBy"`                           // 回调无操作人，取直播间创建人
 	CreateTime   time.Time `gorm:"column:CREATE_TIME;type:datetime;not null;autoCreateTime" json:"createTime"`
+	UpdateBy     string    `gorm:"column:UPDATE_BY;size:80" json:"updateBy"`
 	SysCompanyID int64     `gorm:"column:SYS_COMPANY_ID;not null;index" json:"sysCompanyId"`
 	IsActive     string    `gorm:"column:IS_ACTIVE;type:char(1);default:'Y'" json:"isActive"`
 	RoomName     string    `gorm:"column:ROOM_NAME;type:varchar(255)" json:"roomName"` // 直播间名称

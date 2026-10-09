@@ -372,6 +372,21 @@ const callbackSignValidityWindow = 10 * time.Minute
 
 // checkSign 回调签名校验：未配置回调密钥时，release 模式一律拒绝（防止伪造回调），
 // debug 模式放行以便本地联调（启动时会告警）
+// saveCallbackEvent 保存回调事件：归属直播间所在公司，回调没有操作人时创建人取直播间创建人；
+// 未找到直播间时由 LiveCallbackEvent.BeforeCreate 按流名称兜底公司
+func (h *LiveCallbackHandler) saveCallbackEvent(event *entity.LiveCallbackEvent, room *entity.LiveRoom) error {
+	if room != nil && room.ID != 0 {
+		if event.SysCompanyID == 0 {
+			event.SysCompanyID = int64(room.SysCompanyID)
+		}
+		if event.CreateBy == "" {
+			event.CreateBy = room.CreateBy
+			event.UpdateBy = room.CreateBy
+		}
+	}
+	return h.db.Create(event).Error
+}
+
 func (h *LiveCallbackHandler) checkSign(t int64, sign string) bool {
 	if h.callbackKey == "" {
 		return h.cfg == nil || h.cfg.App.Mode != "release"
@@ -444,7 +459,7 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 
 		// 将直播间状态设置为 live
 		if room.Status != "live" {
-			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Update("STATUS", "live").Error; err != nil {
+			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Updates(map[string]interface{}{"STATUS": "live", "UPDATE_BY": room.CreateBy}).Error; err != nil {
 				logger.Error("更新直播间状态失败",
 					zap.String("streamId", event.StreamID),
 					zap.String("roomName", room.RoomName),
@@ -477,7 +492,7 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存推流事件失败", zap.Error(err))
 	}
 
@@ -529,7 +544,7 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 
 		// 将直播间状态设置为 ended
 		if room.Status != "ended" {
-			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Update("STATUS", "ended").Error; err != nil {
+			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Updates(map[string]interface{}{"STATUS": "ended", "UPDATE_BY": room.CreateBy}).Error; err != nil {
 				logger.Error("更新直播间状态失败",
 					zap.String("streamId", event.StreamID),
 					zap.String("roomName", room.RoomName),
@@ -562,7 +577,7 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存断流事件失败", zap.Error(err))
 	}
 
@@ -663,7 +678,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存录制文件事件失败", zap.Error(err))
 	}
 
@@ -695,9 +710,10 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 				// 直播间文件夹不存在，创建
 				roomFolder = entity.CloudItem{
 					BaseModel: entity.BaseModel{
-						CreateBy: room.CreateBy,
-						UpdateBy: room.CreateBy,
-						IsActive: "Y",
+						SysCompanyID: room.SysCompanyID,
+						CreateBy:     room.CreateBy,
+						UpdateBy:     room.CreateBy,
+						IsActive:     "Y",
 					},
 					ItemType: "folder",
 					Name:     room.RoomName,
@@ -716,9 +732,10 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 				// 直播录制文件夹不存在，创建
 				recordingFolder = entity.CloudItem{
 					BaseModel: entity.BaseModel{
-						CreateBy: room.CreateBy,
-						UpdateBy: room.CreateBy,
-						IsActive: "Y",
+						SysCompanyID: room.SysCompanyID,
+						CreateBy:     room.CreateBy,
+						UpdateBy:     room.CreateBy,
+						IsActive:     "Y",
 					},
 					ItemType: "folder",
 					Name:     "直播录制",
@@ -756,9 +773,10 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 			if !fileExists {
 				fileItem := entity.CloudItem{
 					BaseModel: entity.BaseModel{
-						CreateBy: room.CreateBy,
-						UpdateBy: room.CreateBy,
-						IsActive: "Y",
+						SysCompanyID: room.SysCompanyID,
+						CreateBy:     room.CreateBy,
+						UpdateBy:     room.CreateBy,
+						IsActive:     "Y",
 					},
 					ItemType:    "file",
 					Name:        fileName,
@@ -876,7 +894,7 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存录制状态事件失败", zap.Error(err))
 	}
 
@@ -1114,7 +1132,7 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存截图事件失败", zap.Error(err))
 	}
 
@@ -1188,7 +1206,7 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存画面审核事件失败", zap.Error(err))
 	}
 
@@ -1262,7 +1280,7 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存音频审核事件失败", zap.Error(err))
 	}
 
@@ -1336,7 +1354,7 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存质检事件失败", zap.Error(err))
 	}
 
@@ -1410,7 +1428,7 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存评测阈值事件失败", zap.Error(err))
 	}
 
@@ -1483,7 +1501,7 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 		IsActive:   "Y",
 	}
 
-	if err := h.db.Create(callbackEvent).Error; err != nil {
+	if err := h.saveCallbackEvent(callbackEvent, &room); err != nil {
 		logger.Error("保存评测平均分事件失败", zap.Error(err))
 	}
 
