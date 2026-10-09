@@ -49,6 +49,12 @@ type Service interface {
 	// 文件管理
 	UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudItem, error)
 	DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudItem, error)
+	// GetDriveStats 用户全部文件按类型统计（不限当前目录）
+	GetDriveStats(ctx context.Context, userID uint) (*DriveStats, error)
+	// ListFilesByCategory 用户全部文件中某一类型的文件
+	ListFilesByCategory(ctx context.Context, userID uint, category string) ([]*entity.CloudItem, error)
+	// GetCompanyStorage 用户所属公司的存储空间与用量
+	GetCompanyStorage(ctx context.Context, userID uint) (*CompanyStorage, error)
 	// GetThumbnail 文件缩略图（JPEG）：图片为缩小图，视频为第一帧
 	GetThumbnail(ctx context.Context, fileID uint, userID uint) ([]byte, error)
 	DeleteFile(ctx context.Context, fileID uint, userID uint) error
@@ -98,6 +104,10 @@ func NewService(db *gorm.DB, companyStorageManager *storage.CompanyStorageManage
 
 // getItemStorage 读取 / 删除已有文件：按文件记录的存储类型取存储（公司改用云存储后，本地历史文件仍从本地读取）
 func (s *service) getItemStorage(ctx context.Context, item *entity.CloudItem) (storage.Storage, error) {
+	// 直播录制、高光切片等回调写入的记录只保存外部地址，按地址读取；删除时不删除外部源文件
+	if item.StoragePath != nil && storage.IsExternalURL(*item.StoragePath) {
+		return storage.NewExternalURLStorage(), nil
+	}
 	storageType := ""
 	if item.StorageType != nil {
 		storageType = *item.StorageType
@@ -560,7 +570,7 @@ func (s *service) GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQ
 				IsActive: "Y",
 			},
 			UserID:      userID,
-			TotalQuota:  10 * 1024 * 1024 * 1024, // 默认10GB
+			TotalQuota:  DefaultCompanyStorageQuota, // 默认与公司默认空间一致，实际以公司空间为准
 			UsedSpace:   0,
 			FileCount:   0,
 			FolderCount: 0,
@@ -582,8 +592,9 @@ func (s *service) CheckQuota(ctx context.Context, userID uint, fileSize int64) e
 		return err
 	}
 
-	if quota.UsedSpace+fileSize > quota.TotalQuota {
-		return errors.New(errors.ErrResourceConflict, "存储空间不足")
+	// 默认配额（standard）以公司存储空间为准；单独设置了配额类型的用户再按个人上限限制
+	if quota.QuotaType != "" && quota.QuotaType != "standard" && quota.UsedSpace+fileSize > quota.TotalQuota {
+		return errors.New(errors.ErrResourceConflict, "个人存储空间不足")
 	}
 
 	if fileSize > quota.MaxFileSize {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 )
@@ -297,7 +298,7 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 	// 设置响应头
 	c.Header("Content-Disposition", "attachment; filename="+fileInfo.Name)
 	c.Header("Content-Type", *fileInfo.FileType)
-	c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
+	setDownloadLength(c, fileInfo)
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
@@ -780,7 +781,7 @@ func (h *CloudHandler) DownloadShareFile(c *gin.Context) {
 	// 设置响应头
 	c.Header("Content-Disposition", "attachment; filename="+fileInfo.Name)
 	c.Header("Content-Type", *fileInfo.FileType)
-	c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
+	setDownloadLength(c, fileInfo)
 
 	// 流式传输文件
 	if _, err := io.Copy(c.Writer, reader); err != nil {
@@ -902,7 +903,7 @@ func (h *CloudHandler) DownloadShareFolderFile(c *gin.Context) {
 		c.Header("Content-Type", "application/octet-stream")
 	}
 	if fileInfo.FileSize != nil {
-		c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
+		setDownloadLength(c, fileInfo)
 	}
 
 	// 流式传输文件
@@ -976,7 +977,7 @@ func (h *CloudHandler) PreviewShareFolderFile(c *gin.Context) {
 	c.Header("Content-Type", contentType)
 	c.Header("Content-Disposition", "inline; filename="+fileInfo.Name)
 	if fileInfo.FileSize != nil {
-		c.Header("Content-Length", strconv.FormatInt(*fileInfo.FileSize, 10))
+		setDownloadLength(c, fileInfo)
 	}
 
 	// 流式传输文件
@@ -1158,8 +1159,17 @@ func (h *CloudHandler) GetUserQuota(c *gin.Context) {
 		utils.FailFromError(c, "获取配额信息失败: ", err)
 		return
 	}
+	company, err := h.cloudService.GetCompanyStorage(c.Request.Context(), userID.(uint))
+	if err != nil {
+		utils.FailFromError(c, "获取公司存储空间失败: ", err)
+		return
+	}
 
-	utils.Success(c, quota)
+	// company：公司存储空间（同公司用户共享，默认 100GB），云盘界面按此显示
+	utils.Success(c, struct {
+		*entity.CloudQuota
+		Company *cloud.CompanyStorage `json:"company"`
+	}{quota, company})
 }
 
 // 请求结构体定义
@@ -1298,4 +1308,13 @@ func (h *CloudHandler) GetFolderContent(c *gin.Context) {
 type FolderContentResponse struct {
 	Folders []*entity.CloudFolder `json:"folders"` // 子文件夹列表
 	Files   []*entity.CloudItem   `json:"files"`   // 文件列表
+}
+
+// setDownloadLength 声明下载长度。外部地址（直播录制、切片回调写入的记录）的大小来自回调，
+// 可能与实际内容不一致，声明错误会导致传输中断，因此不声明
+func setDownloadLength(c *gin.Context, file *entity.CloudItem) {
+	if file.FileSize == nil || (file.StoragePath != nil && storage.IsExternalURL(*file.StoragePath)) {
+		return
+	}
+	c.Header("Content-Length", strconv.FormatInt(*file.FileSize, 10))
 }

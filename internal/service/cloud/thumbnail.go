@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/storage"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +62,7 @@ var (
 
 var (
 	thumbImageExts = map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true, ".webp": true}
-	thumbVideoExts = map[string]bool{".mp4": true, ".mov": true, ".m4v": true, ".avi": true, ".wmv": true, ".flv": true, ".mkv": true, ".webm": true, ".mpg": true, ".mpeg": true, ".ts": true, ".3gp": true}
+	thumbVideoExts = map[string]bool{".mp4": true, ".mov": true, ".m4v": true, ".avi": true, ".wmv": true, ".flv": true, ".mkv": true, ".webm": true, ".mpg": true, ".mpeg": true, ".ts": true, ".3gp": true, ".m3u8": true, ".hls": true}
 )
 
 // thumbnailKind 返回 image / video，不支持缩略图时返回空
@@ -114,6 +116,17 @@ func (s *service) GetThumbnail(ctx context.Context, fileID uint, userID uint) ([
 		if data, err := os.ReadFile(cachePath); err == nil {
 			return data, nil
 		}
+		// 公司存储（COS 等）中已有缩略图：取回并写入本机缓存（服务迁移、多实例时不必重新生成）
+		fetchCtx, cancelFetch := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelFetch()
+		store, remoteKey := s.thumbnailStore(fetchCtx, file, cachePath)
+		if store != nil {
+			if data, err := readThumbnail(fetchCtx, store, remoteKey); err == nil {
+				writeThumbnailCache(cachePath, data)
+				return data, nil
+			}
+		}
+
 		thumbnailSlots <- struct{}{}
 		defer func() { <-thumbnailSlots }()
 
@@ -131,11 +144,9 @@ func (s *service) GetThumbnail(ctx context.Context, fileID uint, userID uint) ([
 		if genErr != nil {
 			return nil, genErr
 		}
-		if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err == nil {
-			tmp := cachePath + ".tmp"
-			if os.WriteFile(tmp, data, 0644) == nil {
-				_ = os.Rename(tmp, cachePath)
-			}
+		writeThumbnailCache(cachePath, data)
+		if store != nil {
+			go saveThumbnail(store, remoteKey, data, fileID)
 		}
 		return data, nil
 	})
@@ -144,6 +155,57 @@ func (s *service) GetThumbnail(ctx context.Context, fileID uint, userID uint) ([
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "缩略图不可用", err)
 	}
 	return result.([]byte), nil
+}
+
+// thumbnailStore 缩略图同时保存到的公司存储（文件所有者所在公司）。
+// 本地存储与本机缓存在同一磁盘，不重复保存，返回 nil
+func (s *service) thumbnailStore(ctx context.Context, file *entity.CloudItem, cachePath string) (storage.Storage, string) {
+	st, err := s.getCompanyStorage(ctx, file.OwnerID)
+	if err != nil || st == nil {
+		return nil, ""
+	}
+	if local, ok := st.(interface{ IsLocalStorage() bool }); ok && local.IsLocalStorage() {
+		return nil, ""
+	}
+	rel, err := filepath.Rel(ThumbnailCacheDir, cachePath)
+	if err != nil {
+		return nil, ""
+	}
+	return st, "thumbnails/" + filepath.ToSlash(rel)
+}
+
+func readThumbnail(ctx context.Context, st storage.Storage, key string) ([]byte, error) {
+	rc, err := st.Download(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(io.LimitReader(rc, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) < 3 || data[0] != 0xFF || data[1] != 0xD8 {
+		return nil, fmt.Errorf("不是有效的缩略图")
+	}
+	return data, nil
+}
+
+// saveThumbnail 后台保存缩略图到公司存储，失败只记日志（本机缓存仍可用）
+func saveThumbnail(st storage.Storage, key string, data []byte, fileID uint) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := st.Upload(ctx, key, bytes.NewReader(data), "image/jpeg"); err != nil {
+		logger.Warn("缩略图保存到公司存储失败", zap.Uint("fileID", fileID), zap.String("key", key), zap.Error(err))
+	}
+}
+
+func writeThumbnailCache(cachePath string, data []byte) {
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err == nil {
+		tmp := cachePath + ".tmp"
+		if os.WriteFile(tmp, data, 0644) == nil {
+			_ = os.Rename(tmp, cachePath)
+		}
+	}
 }
 
 // thumbnailCachePath 按文件内容（MD5）缓存：相同内容只生成一次；无 MD5 时按存储路径
@@ -313,8 +375,13 @@ func capRange(header string) string {
 	return fmt.Sprintf("bytes=%d-%d", start, end)
 }
 
-// startRangeProxy 在 127.0.0.1 启动临时代理，把请求（含 Range）转发到 target，返回本地地址与关闭函数
+// startRangeProxy 在 127.0.0.1 启动临时代理，把请求（含 Range）转发到 target，返回本地地址与关闭函数。
+// 本地地址沿用 target 的路径：HLS 播放列表中的相对分片地址解析到同一目录，由代理转发到源站同目录
 func startRangeProxy(target string) (string, func(), error) {
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return "", nil, err
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", nil, err
@@ -322,7 +389,12 @@ func startRangeProxy(target string) (string, func(), error) {
 	srv := &http.Server{
 		ReadHeaderTimeout: 10 * time.Second,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			req, err := http.NewRequestWithContext(r.Context(), r.Method, target, nil)
+			upstream := *targetURL
+			if r.URL.Path != targetURL.Path {
+				// 分片等其他文件：同一源站下的对应路径（带其自身的查询参数）
+				upstream.Path, upstream.RawPath, upstream.RawQuery = r.URL.Path, r.URL.RawPath, r.URL.RawQuery
+			}
+			req, err := http.NewRequestWithContext(r.Context(), r.Method, upstream.String(), nil)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
@@ -351,5 +423,9 @@ func startRangeProxy(target string) (string, func(), error) {
 		defer cancel()
 		_ = srv.Shutdown(ctx)
 	}
-	return "http://" + ln.Addr().String() + "/video", stop, nil
+	localPath := targetURL.EscapedPath()
+	if localPath == "" {
+		localPath = "/"
+	}
+	return "http://" + ln.Addr().String() + localPath, stop, nil
 }

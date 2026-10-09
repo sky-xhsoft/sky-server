@@ -641,6 +641,8 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 		items := cloudRg.Group("/items")
 		{
 			items.GET("", cloudItemHandler.ListItems)
+			items.GET("/stats", cloudItemHandler.GetDriveStats)
+			items.GET("/by-category", cloudItemHandler.ListByCategory)
 			items.POST("", cloudItemHandler.CreateItem)
 			items.DELETE("/:id", cloudItemHandler.DeleteItem)
 			items.PUT("/:id/rename", cloudItemHandler.RenameItem)

@@ -74,6 +74,48 @@ func (h *CloudItemHandler) ListItems(c *gin.Context) {
 	})
 }
 
+// GetDriveStats 云盘统计
+// @Summary 云盘文件统计
+// @Description 当前用户全部文件按类型统计（视频、图片、文档、其他），不限当前目录
+// @Tags Cloud
+// @Produce json
+// @Success 200 {object} cloud.DriveStats
+// @Router /api/v1/cloud/items/stats [get]
+func (h *CloudItemHandler) GetDriveStats(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+	stats, err := h.cloudService.GetDriveStats(c.Request.Context(), userID.(uint))
+	if err != nil {
+		utils.FailFromError(c, "统计文件失败: ", err)
+		return
+	}
+	utils.Success(c, stats)
+}
+
+// ListByCategory 按类型列出文件
+// @Summary 按类型列出全部文件
+// @Description 当前用户全部文件中某一类型的文件（video、image、document、other），不限目录
+// @Tags Cloud
+// @Produce json
+// @Param category query string true "分类"
+// @Router /api/v1/cloud/items/by-category [get]
+func (h *CloudItemHandler) ListByCategory(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+	files, err := h.cloudService.ListFilesByCategory(c.Request.Context(), userID.(uint), c.Query("category"))
+	if err != nil {
+		utils.FailFromError(c, "查询文件失败: ", err)
+		return
+	}
+	utils.Success(c, gin.H{"folders": []interface{}{}, "files": files})
+}
+
 // CreateItem 创建项目
 // @Summary 创建云盘项目（文件或文件夹）
 // @Tags cloud
