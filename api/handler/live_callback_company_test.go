@@ -44,7 +44,7 @@ func setupCallbackCompanyTest(t *testing.T) (*LiveCallbackHandler, *gorm.DB, *en
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&entity.LiveRoom{}, &entity.SysUser{}, &entity.CloudItem{}, &entity.LiveCallbackEvent{}); err != nil {
+	if err := db.AutoMigrate(&entity.LiveRoom{}, &entity.SysUser{}, &entity.CloudItem{}, &entity.LiveCallbackEvent{}, &entity.LiveRecode{}, &entity.LiveCut{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,10 +140,15 @@ func TestCallback_RecordingFile_CloudItemsBelongToRoomCompany(t *testing.T) {
 	}
 }
 
-// countCallbackData 回调产生的数据：回调事件数、云盘记录数
+// countCallbackData 回调产生的数据：回调事件 + 录制/切片列表记录数、云盘记录数
 func countCallbackData(db *gorm.DB) (events, items int64) {
+	var media int64
 	db.Model(&entity.LiveCallbackEvent{}).Count(&events)
 	db.Model(&entity.CloudItem{}).Count(&items)
+	db.Model(&entity.LiveRecode{}).Count(&media)
+	events += media
+	db.Model(&entity.LiveCut{}).Count(&media)
+	events += media
 	return
 }
 
@@ -187,8 +192,8 @@ func TestCallback_ClipDisabled_Ignored(t *testing.T) {
 	}
 
 	postCallback(t, h.HandleRecordingFile, recordingFileBody())
-	if events, items := countCallbackData(db); events != 1 || items != 3 {
-		t.Errorf("录制已开启应正常处理，期望事件 1 条、云盘记录 3 条，实际 %d / %d", events, items)
+	if events, items := countCallbackData(db); events != 2 || items != 3 {
+		t.Errorf("录制已开启应正常处理，期望事件+录制记录 2 条、云盘记录 3 条，实际 %d / %d", events, items)
 	}
 }
 
@@ -196,8 +201,8 @@ func TestCallback_ClipDisabled_Ignored(t *testing.T) {
 func TestCallback_ClipEnabled_Processed(t *testing.T) {
 	h, db, _ := setupCallbackCompanyTest(t)
 	postCallback(t, h.HandleHighlight, highlightBody())
-	if events, items := countCallbackData(db); events != 1 || items != 3 {
-		t.Errorf("开启切片应保存事件并写入云盘（直播间目录/直播切片目录/切片文件），实际事件 %d 条、云盘记录 %d 条", events, items)
+	if events, items := countCallbackData(db); events != 2 || items != 3 {
+		t.Errorf("开启切片应保存事件、切片记录并写入云盘（直播间目录/直播切片目录/切片文件），实际事件+切片记录 %d 条、云盘记录 %d 条", events, items)
 	}
 }
 
@@ -245,5 +250,47 @@ func TestCallback_RecordAndClipUseOwnFolders(t *testing.T) {
 		if !strings.HasPrefix(files[i].Path, want) {
 			t.Errorf("文件 %d 应保存在 %q 下，实际 %q", i, want, files[i].Path)
 		}
+	}
+}
+
+// 录制回调写入录制列表：归属直播间所在公司、创建人为直播间创建人；重复回调只记录一次
+func TestCallback_RecordingFile_WritesRecordingList(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	body := recordingFileBody()
+	body["duration"] = 120
+	postCallback(t, h.HandleRecordingFile, body)
+	postCallback(t, h.HandleRecordingFile, recordingFileBody())
+
+	var list []entity.LiveRecode
+	db.Find(&list)
+	if len(list) != 1 {
+		t.Fatalf("同一录制文件应只记录一次，实际 %d 条", len(list))
+	}
+	r := list[0]
+	if r.SysCompanyID != 7 || r.RoomID == nil || *r.RoomID != 501 || r.CreateBy != "zhang" {
+		t.Errorf("录制记录应归属直播间：公司 7、直播间 501、创建人 zhang，实际 %d / %v / %q", r.SysCompanyID, r.RoomID, r.CreateBy)
+	}
+	if r.RecordURL != "https://example.com/r.mp4" || r.RecordType != "mp4" || r.FileSize != 1024 || r.Duration != 120 || r.Status != "ready" {
+		t.Errorf("录制记录字段不正确: %+v", r)
+	}
+}
+
+// 高光切片回调写入切片列表
+func TestCallback_Highlight_WritesClipList(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	postCallback(t, h.HandleHighlight, highlightBody())
+	postCallback(t, h.HandleHighlight, highlightBody())
+
+	var list []entity.LiveCut
+	db.Find(&list)
+	if len(list) != 1 {
+		t.Fatalf("同一切片应只记录一次，实际 %d 条", len(list))
+	}
+	c := list[0]
+	if c.SysCompanyID != 7 || c.RoomID == nil || *c.RoomID != 501 || c.CreateBy != "zhang" || c.StreamID != "501" {
+		t.Errorf("切片记录应归属直播间：公司 7、直播间 501、创建人 zhang，实际 %d / %v / %q / %q", c.SysCompanyID, c.RoomID, c.CreateBy, c.StreamID)
+	}
+	if c.ClipName != "精彩片段" || c.ClipURL != "https://example.com/c.mp4" || c.Duration != 60 || c.Status != "ready" {
+		t.Errorf("切片记录字段不正确: %+v", c)
 	}
 }

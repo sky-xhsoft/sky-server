@@ -350,6 +350,9 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				zap.String("videoUrl", item.VideoStoreURL))
 		}
 
+		// 写入切片列表（live_cut）
+		h.saveClip(&room, event.StreamID, &item)
+
 		// 将高光切片保存到云盘（如果找到了对应的直播间）
 		if room.RoomName != "" {
 			// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）

@@ -718,6 +718,9 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		logger.Error("保存录制文件事件失败", zap.Error(err))
 	}
 
+	// 写入录制列表（live_recode）
+	h.saveRecording(&room, &event, eventTime)
+
 	// 如果找到了对应的直播间，将录制文件保存到云盘
 	if room.RoomName != "" {
 		// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
