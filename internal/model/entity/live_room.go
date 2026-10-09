@@ -29,7 +29,8 @@ type LiveRoom struct {
 	Props            string     `gorm:"column:PROPS;type:text" json:"props"`                                                   // 扩展属性（JSON）
 	IsRecord         string     `gorm:"column:IS_RECORD;type:char(1);default:'Y'" json:"isRecord"`                             // 是否录制：Y/N
 	IsClip           string     `gorm:"column:IS_CLIP;type:char(1);default:'Y'" json:"isClip"`                                 // 是否切片：Y/N
-	StorageFolderID  *uint      `gorm:"column:STORAGE_FOLDER_ID" json:"storageFolderId"`                                       // 录制/切片存储位置（云盘文件夹 ID，空为根目录）
+	RecordFolderID   *uint      `gorm:"column:RECORD_FOLDER_ID" json:"recordFolderId"`                                         // 录制存储位置（云盘文件夹 ID，空为根目录）
+	ClipFolderID     *uint      `gorm:"column:CLIP_FOLDER_ID" json:"clipFolderId"`                                             // 切片存储位置（云盘文件夹 ID，空为根目录）
 }
 
 // TableName 指定表名

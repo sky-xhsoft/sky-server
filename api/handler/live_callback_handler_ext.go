@@ -355,8 +355,8 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 			// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
 			var creatorUser entity.SysUser
 			if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
-				// 目录：存储位置/直播间名称/直播切片（存储位置取直播间配置）
-				highlightFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID), liveService.RoomFolderClip)
+				// 目录：切片存储位置/直播间名称/直播切片
+				highlightFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID, liveService.RoomFolderClip), liveService.RoomFolderClip)
 				if err != nil {
 					logger.Error("创建直播切片文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
 					continue

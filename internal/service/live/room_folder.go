@@ -19,10 +19,11 @@ type RoomFolderSpec struct {
 	CreateBy        string
 	CompanyID       uint
 	OwnerID         uint  // 直播间创建人的用户 ID，目录属于该用户
-	StorageFolderID *uint // 直播间配置的存储位置（云盘文件夹 ID），为空表示云盘根目录
+	StorageFolderID *uint // 本次目录的存储位置（录制或切片各自配置的云盘文件夹 ID），为空表示云盘根目录
 }
 
 // EnsureRoomFolder 确保「存储位置/直播间名称[/子目录]」存在，返回最末一级目录。
+// 录制与切片可配置不同的存储位置，调用方按子目录传入对应的 StorageFolderID。
 // 存储位置须为直播间创建人自己的有效文件夹，否则放在云盘根目录，避免写入他人目录。
 func EnsureRoomFolder(db *gorm.DB, spec RoomFolderSpec, sub string) (*entity.CloudItem, error) {
 	parent := resolveStorageFolder(db, spec)

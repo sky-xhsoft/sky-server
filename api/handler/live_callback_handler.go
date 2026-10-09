@@ -402,14 +402,19 @@ func (h *LiveCallbackHandler) skipDisabledFeature(c *gin.Context, room *entity.L
 	return true
 }
 
-// roomFolderSpec 直播间云盘目录：归属直播间所在公司与创建人，存储位置取直播间配置
-func roomFolderSpec(room *entity.LiveRoom, ownerID uint) liveService.RoomFolderSpec {
+// roomFolderSpec 直播间云盘目录：归属直播间所在公司与创建人；
+// 存储位置按子目录取直播间配置（直播录制用录制存储位置，直播切片用切片存储位置）
+func roomFolderSpec(room *entity.LiveRoom, ownerID uint, sub string) liveService.RoomFolderSpec {
+	storage := room.RecordFolderID
+	if sub == liveService.RoomFolderClip {
+		storage = room.ClipFolderID
+	}
 	return liveService.RoomFolderSpec{
 		RoomName:        room.RoomName,
 		CreateBy:        room.CreateBy,
 		CompanyID:       room.SysCompanyID,
 		OwnerID:         ownerID,
-		StorageFolderID: room.StorageFolderID,
+		StorageFolderID: storage,
 	}
 }
 
@@ -718,8 +723,8 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
 		var creatorUser entity.SysUser
 		if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
-			// 目录：存储位置/直播间名称/直播录制（存储位置取直播间配置）
-			recordingFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID), liveService.RoomFolderRecording)
+			// 目录：录制存储位置/直播间名称/直播录制
+			recordingFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID, liveService.RoomFolderRecording), liveService.RoomFolderRecording)
 			if err != nil {
 				logger.Error("创建直播录制文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
 				c.JSON(200, gin.H{"code": 0})

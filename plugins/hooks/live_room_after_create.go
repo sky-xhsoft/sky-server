@@ -64,29 +64,30 @@ func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(
 			}
 		}
 
-		// 开启录制或切片时创建云盘目录：存储位置/直播间名称/{直播录制,直播切片}（存储位置取直播间配置）
-		isRecord := !strings.EqualFold(GetStringOrEmpty(params, "IS_RECORD"), "N")
-		isClip := !strings.EqualFold(GetStringOrEmpty(params, "IS_CLIP"), "N")
-		spec := liveService.RoomFolderSpec{
-			RoomName:  roomName,
-			CreateBy:  createBy,
-			CompanyID: companyID,
-			OwnerID:   userID,
+		// 开启录制 / 切片时分别创建云盘目录：
+		// 录制存储位置/直播间名称/直播录制，切片存储位置/直播间名称/直播切片
+		targets := []struct {
+			enabledKey, folderKey, sub string
+		}{
+			{"IS_RECORD", "RECORD_FOLDER_ID", liveService.RoomFolderRecording},
+			{"IS_CLIP", "CLIP_FOLDER_ID", liveService.RoomFolderClip},
 		}
-		if storageFolderID := GetUintOrZero(params, "STORAGE_FOLDER_ID"); storageFolderID > 0 {
-			spec.StorageFolderID = &storageFolderID
-		}
-		subs := make([]string, 0, 2)
-		if isRecord {
-			subs = append(subs, liveService.RoomFolderRecording)
-		}
-		if isClip {
-			subs = append(subs, liveService.RoomFolderClip)
-		}
-		for _, sub := range subs {
+		for _, target := range targets {
+			if strings.EqualFold(GetStringOrEmpty(params, target.enabledKey), "N") {
+				continue
+			}
+			spec := liveService.RoomFolderSpec{
+				RoomName:  roomName,
+				CreateBy:  createBy,
+				CompanyID: companyID,
+				OwnerID:   userID,
+			}
+			if folderID := GetUintOrZero(params, target.folderKey); folderID > 0 {
+				spec.StorageFolderID = &folderID
+			}
 			// 不影响直播间创建：失败只记录日志，回调到达时会再次补建
-			if _, err := liveService.EnsureRoomFolder(txDB, spec, sub); err != nil {
-				logger.Error("创建直播间云盘目录失败", zap.Error(err), zap.String("roomName", roomName), zap.String("sub", sub))
+			if _, err := liveService.EnsureRoomFolder(txDB, spec, target.sub); err != nil {
+				logger.Error("创建直播间云盘目录失败", zap.Error(err), zap.String("roomName", roomName), zap.String("sub", target.sub))
 			}
 		}
 

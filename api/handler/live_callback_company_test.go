@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -200,7 +201,7 @@ func TestCallback_ClipEnabled_Processed(t *testing.T) {
 	}
 }
 
-// 直播间配置了存储位置：录制文件保存到「存储位置/直播间名称/直播录制」
+// 直播间配置了录制存储位置：录制文件保存到「录制存储位置/直播间名称/直播录制」
 func TestCallback_RecordingFile_UsesRoomStorageFolder(t *testing.T) {
 	h, db, owner := setupCallbackCompanyTest(t)
 	// 存储位置须与直播间同公司（直播间属于公司 7）
@@ -208,7 +209,7 @@ func TestCallback_RecordingFile_UsesRoomStorageFolder(t *testing.T) {
 	if err := db.Create(&storage).Error; err != nil {
 		t.Fatal(err)
 	}
-	db.Model(&entity.LiveRoom{}).Where("ID = ?", 501).Update("STORAGE_FOLDER_ID", storage.ID)
+	db.Model(&entity.LiveRoom{}).Where("ID = ?", 501).Update("RECORD_FOLDER_ID", storage.ID)
 
 	postCallback(t, h.HandleRecordingFile, recordingFileBody())
 
@@ -219,5 +220,30 @@ func TestCallback_RecordingFile_UsesRoomStorageFolder(t *testing.T) {
 	want := "/直播资料/公司七的直播间/直播录制/"
 	if len(file.Path) < len(want) || file.Path[:len(want)] != want {
 		t.Errorf("录制文件应保存在直播间存储位置下，期望前缀 %q，实际 %q", want, file.Path)
+	}
+}
+
+// 录制、切片分别设置存储位置：各自保存到对应的文件夹下
+func TestCallback_RecordAndClipUseOwnFolders(t *testing.T) {
+	h, db, owner := setupCallbackCompanyTest(t)
+	recordDir := entity.CloudItem{BaseModel: entity.BaseModel{SysCompanyID: 7, IsActive: "Y"}, ItemType: "folder", Name: "录像", Path: "/录像", OwnerID: owner.ID}
+	clipDir := entity.CloudItem{BaseModel: entity.BaseModel{SysCompanyID: 7, IsActive: "Y"}, ItemType: "folder", Name: "精彩", Path: "/素材/精彩", OwnerID: owner.ID}
+	db.Create(&recordDir)
+	db.Create(&clipDir)
+	db.Model(&entity.LiveRoom{}).Where("ID = ?", 501).Updates(map[string]interface{}{"RECORD_FOLDER_ID": recordDir.ID, "CLIP_FOLDER_ID": clipDir.ID})
+
+	postCallback(t, h.HandleRecordingFile, recordingFileBody())
+	postCallback(t, h.HandleHighlight, highlightBody())
+
+	var files []entity.CloudItem
+	db.Where("ITEM_TYPE = ?", "file").Order("ID").Find(&files)
+	if len(files) != 2 {
+		t.Fatalf("应生成录制与切片文件各 1 个，实际 %d 个", len(files))
+	}
+	wants := []string{"/录像/公司七的直播间/直播录制/", "/素材/精彩/公司七的直播间/直播切片/"}
+	for i, want := range wants {
+		if !strings.HasPrefix(files[i].Path, want) {
+			t.Errorf("文件 %d 应保存在 %q 下，实际 %q", i, want, files[i].Path)
+		}
 	}
 }
