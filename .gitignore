@@ -55,3 +55,6 @@ sqls/skyserver_full_export_*.sql
 # 含生产凭据的部署文档与 Redis 数据文件（不入库）
 deploy/生产部署信息*.md
 dump.rdb
+
+# 缩略图缓存
+data/thumbnails/

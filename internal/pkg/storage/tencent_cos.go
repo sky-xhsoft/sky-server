@@ -573,6 +573,20 @@ func (s *TencentCOS) UploadPart(ctx context.Context, path string, uploadID strin
 	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
 }
 
+// PresignedDownloadURL 生成带签名的下载地址（私有桶可读），支持 Range 读取部分内容
+func (s *TencentCOS) PresignedDownloadURL(ctx context.Context, path string, expire time.Duration) (string, error) {
+	bucketURL, err := url.Parse(s.bucketURL)
+	if err != nil {
+		return "", errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
+	}
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, s.httpClient)
+	presigned, err := client.Object.GetPresignedURL(ctx, http.MethodGet, path, s.secretID, s.secretKey, expire, nil)
+	if err != nil {
+		return "", errors.Wrap(errors.ErrInternal, "生成下载地址失败", err)
+	}
+	return presigned.String(), nil
+}
+
 // AbortMultipartUpload 终止原生分块上传，释放已上传但未合并的分块
 func (s *TencentCOS) AbortMultipartUpload(ctx context.Context, path string, uploadID string) error {
 	bucketURL, err := url.Parse(s.bucketURL)

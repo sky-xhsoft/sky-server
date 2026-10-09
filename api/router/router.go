@@ -686,6 +686,7 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 			// 保留：上传和下载接口特殊，暂不废弃
 			files.POST("/upload", cloudHandler.UploadFile)
 			files.GET("/:id/download", cloudHandler.DownloadFile)
+			files.GET("/:id/thumbnail", cloudHandler.GetThumbnail)
 
 			// 已废弃的文件操作接口
 			files.DELETE("/:id",

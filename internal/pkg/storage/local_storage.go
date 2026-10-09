@@ -363,3 +363,11 @@ func (s *LocalStorage) Rename(ctx context.Context, srcPath, dstPath string) (str
 	}
 	return fmt.Sprintf("%s/%s", s.baseURL, dstPath), nil
 }
+
+// LocalPath 返回文件在磁盘上的绝对路径（供 ffmpeg 等外部工具直接读取）
+func (s *LocalStorage) LocalPath(path string) (string, error) {
+	if err := s.validatePath(path); err != nil {
+		return "", err
+	}
+	return filepath.Abs(filepath.Join(s.basePath, path))
+}

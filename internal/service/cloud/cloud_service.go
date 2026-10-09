@@ -49,6 +49,8 @@ type Service interface {
 	// 文件管理
 	UploadFile(ctx context.Context, req *UploadFileRequest, userID uint) (*entity.CloudItem, error)
 	DownloadFile(ctx context.Context, fileID uint, userID uint) (io.ReadCloser, *entity.CloudItem, error)
+	// GetThumbnail 文件缩略图（JPEG）：图片为缩小图，视频为第一帧
+	GetThumbnail(ctx context.Context, fileID uint, userID uint) ([]byte, error)
 	DeleteFile(ctx context.Context, fileID uint, userID uint) error
 	MoveFile(ctx context.Context, fileID uint, targetFolderID *uint, userID uint) error
 	RenameFile(ctx context.Context, fileID uint, newName string, userID uint) error

@@ -306,6 +306,34 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 	}
 }
 
+// GetThumbnail 文件缩略图
+// @Summary 文件缩略图
+// @Description 图片返回缩小图，视频返回第一帧（JPEG）；其他类型或生成失败返回 404
+// @Tags Cloud
+// @Produce image/jpeg
+// @Param id path int true "文件ID"
+// @Success 200 {file} binary
+// @Router /api/v1/cloud/files/{id}/thumbnail [get]
+func (h *CloudHandler) GetThumbnail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+	data, err := h.cloudService.GetThumbnail(c.Request.Context(), uint(id), userID.(uint))
+	if err != nil {
+		utils.FailFromError(c, "获取缩略图失败: ", err)
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=86400")
+	c.Data(200, "image/jpeg", data)
+}
+
 // DeleteFile 删除文件
 // @Summary 删除文件
 // @Description 删除指定文件
