@@ -463,18 +463,18 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "push_stream",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		ClientIP:     event.UserIP,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "push_stream",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		ClientIP:   event.UserIP,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -548,18 +548,18 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "disconnect_stream",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		ClientIP:     event.UserIP,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "disconnect_stream",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		ClientIP:   event.UserIP,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -650,17 +650,17 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "recording_file",
-		EventTime:    eventTime,
-		DomainName:   getDomainName(event), // 优先使用 app 字段
-		AppName:      getAppName(event),    // 优先使用 appname 字段
-		StreamName:   getStreamName(event), // 优先使用 stream_id 作为流名称
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "recording_file",
+		EventTime:  eventTime,
+		DomainName: getDomainName(event), // 优先使用 app 字段
+		AppName:    getAppName(event),    // 优先使用 appname 字段
+		StreamName: getStreamName(event), // 优先使用 stream_id 作为流名称
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -863,17 +863,17 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "recording_status",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "recording_status",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -1101,17 +1101,17 @@ func (h *LiveCallbackHandler) HandleScreenshot(c *gin.Context) {
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "screenshot",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "screenshot",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -1175,17 +1175,17 @@ func (h *LiveCallbackHandler) HandleVideoAudit(c *gin.Context) {
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "video_audit",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "video_audit",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -1249,17 +1249,17 @@ func (h *LiveCallbackHandler) HandleAudioAudit(c *gin.Context) {
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "audio_audit",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "audio_audit",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -1323,17 +1323,17 @@ func (h *LiveCallbackHandler) HandleQualityInspection(c *gin.Context) {
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "quality_inspection",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "quality_inspection",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -1397,17 +1397,17 @@ func (h *LiveCallbackHandler) HandleQualityThreshold(c *gin.Context) {
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "quality_threshold",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "quality_threshold",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
@@ -1470,17 +1470,17 @@ func (h *LiveCallbackHandler) HandleQualityAverage(c *gin.Context) {
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
-		EventType:    "quality_average",
-		EventTime:    event.EventTime,
-		DomainName:   event.PushDomain,
-		AppName:      event.AppName,
-		StreamName:   event.StreamName,
-		StreamID:     event.StreamID,
-		EventData:    string(eventData),
-		Sign:         event.Sign,
-		TValue:       event.T,
-		RoomName:     room.RoomName,
-		IsActive:     "Y",
+		EventType:  "quality_average",
+		EventTime:  event.EventTime,
+		DomainName: event.PushDomain,
+		AppName:    event.AppName,
+		StreamName: event.StreamName,
+		StreamID:   event.StreamID,
+		EventData:  string(eventData),
+		Sign:       event.Sign,
+		TValue:     event.T,
+		RoomName:   room.RoomName,
+		IsActive:   "Y",
 	}
 
 	if err := h.db.Create(callbackEvent).Error; err != nil {
