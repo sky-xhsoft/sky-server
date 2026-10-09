@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -387,6 +388,19 @@ func (h *LiveCallbackHandler) saveCallbackEvent(event *entity.LiveCallbackEvent,
 	return h.db.Create(event).Error
 }
 
+// skipDisabledFeature 直播间关闭了录制或切片时，对应的腾讯云回调不做处理（不保存事件、不写云盘），
+// 仍返回成功，避免腾讯云重试；未找到直播间时返回 false，按原逻辑处理
+func (h *LiveCallbackHandler) skipDisabledFeature(c *gin.Context, room *entity.LiveRoom, enabled, feature, streamID string) bool {
+	if room == nil || room.ID == 0 || !strings.EqualFold(strings.TrimSpace(enabled), "N") {
+		return false
+	}
+	logger.Info("直播间未开启"+feature+"，忽略回调",
+		zap.Uint("roomId", room.ID),
+		zap.String("streamId", streamID))
+	c.JSON(200, gin.H{"code": 0})
+	return true
+}
+
 func (h *LiveCallbackHandler) checkSign(t int64, sign string) bool {
 	if h.callbackKey == "" {
 		return h.cfg == nil || h.cfg.App.Mode != "release"
@@ -662,6 +676,11 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		}
 	}
 
+	// 直播间未开启录制：不保存事件、不写云盘
+	if h.skipDisabledFeature(c, &room, room.IsRecord, "录制", event.StreamID) {
+		return
+	}
+
 	// 保存事件到数据库
 	eventData, _ := json.Marshal(event)
 	callbackEvent := &entity.LiveCallbackEvent{
@@ -876,6 +895,11 @@ func (h *LiveCallbackHandler) HandleRecordingStatus(c *gin.Context) {
 				zap.String("streamId", event.StreamID),
 				zap.String("roomName", room.RoomName))
 		}
+	}
+
+	// 直播间未开启录制：不处理录制状态
+	if h.skipDisabledFeature(c, &room, room.IsRecord, "录制", event.StreamID) {
+		return
 	}
 
 	// 保存事件到数据库

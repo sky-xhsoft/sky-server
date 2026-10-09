@@ -138,3 +138,64 @@ func TestCallback_RecordingFile_CloudItemsBelongToRoomCompany(t *testing.T) {
 		}
 	}
 }
+
+// countCallbackData 回调产生的数据：回调事件数、云盘记录数
+func countCallbackData(db *gorm.DB) (events, items int64) {
+	db.Model(&entity.LiveCallbackEvent{}).Count(&events)
+	db.Model(&entity.CloudItem{}).Count(&items)
+	return
+}
+
+func recordingFileBody() map[string]interface{} {
+	return map[string]interface{}{
+		"stream_id": "501", "event_time": time.Now().Unix(), "file_format": "mp4",
+		"video_url": "https://example.com/r.mp4", "file_size": 1024,
+	}
+}
+
+func highlightBody() map[string]interface{} {
+	now := time.Now().Unix()
+	return map[string]interface{}{
+		"stream_id": "501",
+		"items":     []map[string]interface{}{{"begin_time": now - 60, "end_time": now, "video_store_url": "https://example.com/c.mp4", "title": "精彩片段"}},
+	}
+}
+
+// 直播间未开启录制：录制文件、录制状态、录制异常回调都不处理（不保存事件、不写云盘），但仍返回成功
+func TestCallback_RecordingDisabled_Ignored(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	db.Model(&entity.LiveRoom{}).Where("ID = ?", 501).Update("IS_RECORD", "N")
+
+	postCallback(t, h.HandleRecordingFile, recordingFileBody())
+	postCallback(t, h.HandleRecordingStatus, map[string]interface{}{"stream_id": "501", "event_time": time.Now().Unix(), "status": 1})
+	postCallback(t, h.HandleRecordException, map[string]interface{}{"stream_id": "501", "event_time": time.Now().Unix(), "error_code": 1})
+
+	if events, items := countCallbackData(db); events != 0 || items != 0 {
+		t.Errorf("未开启录制时不应处理录制回调，实际产生事件 %d 条、云盘记录 %d 条", events, items)
+	}
+}
+
+// 直播间未开启切片：高光切片回调不处理；录制不受影响
+func TestCallback_ClipDisabled_Ignored(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	db.Model(&entity.LiveRoom{}).Where("ID = ?", 501).Update("IS_CLIP", "N")
+
+	postCallback(t, h.HandleHighlight, highlightBody())
+	if events, items := countCallbackData(db); events != 0 || items != 0 {
+		t.Fatalf("未开启切片时不应处理切片回调，实际产生事件 %d 条、云盘记录 %d 条", events, items)
+	}
+
+	postCallback(t, h.HandleRecordingFile, recordingFileBody())
+	if events, items := countCallbackData(db); events != 1 || items != 3 {
+		t.Errorf("录制已开启应正常处理，期望事件 1 条、云盘记录 3 条，实际 %d / %d", events, items)
+	}
+}
+
+// 已开启（默认）时高光切片正常处理
+func TestCallback_ClipEnabled_Processed(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	postCallback(t, h.HandleHighlight, highlightBody())
+	if events, items := countCallbackData(db); events != 1 || items != 3 {
+		t.Errorf("开启切片应保存事件并写入云盘（直播间目录/直播切片目录/切片文件），实际事件 %d 条、云盘记录 %d 条", events, items)
+	}
+}

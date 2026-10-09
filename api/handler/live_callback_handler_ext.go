@@ -296,6 +296,11 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 		}
 	}
 
+	// 直播间未开启切片：不保存事件、不写云盘
+	if h.skipDisabledFeature(c, &room, room.IsClip, "切片", event.StreamID) {
+		return
+	}
+
 	// 为每个高光切片创建一条记录
 	for i, item := range event.Items {
 		// 构建单个切片的数据结构（用于保存到 event_data）
@@ -601,6 +606,11 @@ func (h *LiveCallbackHandler) HandleRecordException(c *gin.Context) {
 				zap.String("streamId", event.StreamID),
 				zap.String("roomName", room.RoomName))
 		}
+	}
+
+	// 直播间未开启录制：不处理录制异常
+	if h.skipDisabledFeature(c, &room, room.IsRecord, "录制", event.StreamID) {
+		return
 	}
 
 	callbackEvent := &entity.LiveCallbackEvent{
