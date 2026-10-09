@@ -200,8 +200,6 @@ cloud:
     authStrategy: "both"
     # 默认存储类型: local, aliyunOSS, tencentCOS
     defaultStorage: "tencentCOS"
-    # 默认直播间文件夹的父ID（可选）- 如果不设置，将创建在根目录
-    defaultRoomParentID: null
     # 存储配置（各公司默认值）
     storage:
       local:

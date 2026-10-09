@@ -199,3 +199,25 @@ func TestCallback_ClipEnabled_Processed(t *testing.T) {
 		t.Errorf("开启切片应保存事件并写入云盘（直播间目录/直播切片目录/切片文件），实际事件 %d 条、云盘记录 %d 条", events, items)
 	}
 }
+
+// 直播间配置了存储位置：录制文件保存到「存储位置/直播间名称/直播录制」
+func TestCallback_RecordingFile_UsesRoomStorageFolder(t *testing.T) {
+	h, db, owner := setupCallbackCompanyTest(t)
+	// 存储位置须与直播间同公司（直播间属于公司 7）
+	storage := entity.CloudItem{BaseModel: entity.BaseModel{SysCompanyID: 7, IsActive: "Y"}, ItemType: "folder", Name: "直播资料", Path: "/直播资料", OwnerID: owner.ID}
+	if err := db.Create(&storage).Error; err != nil {
+		t.Fatal(err)
+	}
+	db.Model(&entity.LiveRoom{}).Where("ID = ?", 501).Update("STORAGE_FOLDER_ID", storage.ID)
+
+	postCallback(t, h.HandleRecordingFile, recordingFileBody())
+
+	var file entity.CloudItem
+	if err := db.Where("ITEM_TYPE = ?", "file").First(&file).Error; err != nil {
+		t.Fatal(err)
+	}
+	want := "/直播资料/公司七的直播间/直播录制/"
+	if len(file.Path) < len(want) || file.Path[:len(want)] != want {
+		t.Errorf("录制文件应保存在直播间存储位置下，期望前缀 %q，实际 %q", want, file.Path)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 	"go.uber.org/zap"
 )
 
@@ -354,65 +355,11 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 			// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
 			var creatorUser entity.SysUser
 			if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
-				// 创建文件夹："直播间名称/直播切片"
-				var roomFolder, highlightFolder entity.CloudItem
-
-				// 获取默认的直播间文件夹父ID（从配置中读取）
-				var defaultParentID *uint = nil
-				if h.cfg.Cloud.DefaultRoomParentID != nil {
-					defaultParentID = h.cfg.Cloud.DefaultRoomParentID
-				}
-
-				// 检查直播间文件夹是否存在
-				query := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?",
-					"folder", room.RoomName, creatorUser.ID, "Y")
-				// 根据配置处理 PARENT_ID 查询条件
-				if defaultParentID != nil {
-					query = query.Where("PARENT_ID = ?", *defaultParentID)
-				} else {
-					query = query.Where("PARENT_ID IS NULL")
-				}
-
-				if err := query.First(&roomFolder).Error; err != nil {
-					// 直播间文件夹不存在，创建
-					roomFolder = entity.CloudItem{
-						BaseModel: entity.BaseModel{
-							SysCompanyID: room.SysCompanyID,
-							CreateBy:     room.CreateBy,
-							UpdateBy:     room.CreateBy,
-							IsActive:     "Y",
-						},
-						ItemType: "folder",
-						Name:     room.RoomName,
-						ParentID: defaultParentID,
-						Path:     "/" + room.RoomName,
-						OwnerID:  creatorUser.ID,
-					}
-					if err := h.db.Create(&roomFolder).Error; err != nil {
-						logger.Error("创建直播间文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
-					}
-				}
-
-				// 检查"直播切片"文件夹是否存在
-				if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-					"folder", "直播切片", creatorUser.ID, roomFolder.ID, "Y").First(&highlightFolder).Error; err != nil {
-					// 直播切片文件夹不存在，创建
-					highlightFolder = entity.CloudItem{
-						BaseModel: entity.BaseModel{
-							SysCompanyID: room.SysCompanyID,
-							CreateBy:     room.CreateBy,
-							UpdateBy:     room.CreateBy,
-							IsActive:     "Y",
-						},
-						ItemType: "folder",
-						Name:     "直播切片",
-						ParentID: &roomFolder.ID,
-						Path:     roomFolder.Path + "/直播切片",
-						OwnerID:  creatorUser.ID,
-					}
-					if err := h.db.Create(&highlightFolder).Error; err != nil {
-						logger.Error("创建直播切片文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
-					}
+				// 目录：存储位置/直播间名称/直播切片（存储位置取直播间配置）
+				highlightFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID), liveService.RoomFolderClip)
+				if err != nil {
+					logger.Error("创建直播切片文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
+					continue
 				}
 
 				// 创建高光切片文件记录

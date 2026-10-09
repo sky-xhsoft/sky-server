@@ -16,6 +16,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
+	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -401,6 +402,17 @@ func (h *LiveCallbackHandler) skipDisabledFeature(c *gin.Context, room *entity.L
 	return true
 }
 
+// roomFolderSpec 直播间云盘目录：归属直播间所在公司与创建人，存储位置取直播间配置
+func roomFolderSpec(room *entity.LiveRoom, ownerID uint) liveService.RoomFolderSpec {
+	return liveService.RoomFolderSpec{
+		RoomName:        room.RoomName,
+		CreateBy:        room.CreateBy,
+		CompanyID:       room.SysCompanyID,
+		OwnerID:         ownerID,
+		StorageFolderID: room.StorageFolderID,
+	}
+}
+
 func (h *LiveCallbackHandler) checkSign(t int64, sign string) bool {
 	if h.callbackKey == "" {
 		return h.cfg == nil || h.cfg.App.Mode != "release"
@@ -706,65 +718,12 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 		// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
 		var creatorUser entity.SysUser
 		if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
-			// 创建文件夹："直播间名称/直播录制"
-			var roomFolder, recordingFolder entity.CloudItem
-
-			// 获取默认的直播间文件夹父ID（从配置中读取）
-			var defaultParentID *uint = nil
-			if h.cfg.Cloud.DefaultRoomParentID != nil {
-				defaultParentID = h.cfg.Cloud.DefaultRoomParentID
-			}
-
-			// 检查直播间文件夹是否存在
-			query := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?",
-				"folder", room.RoomName, creatorUser.ID, "Y")
-			// 根据配置处理 PARENT_ID 查询条件
-			if defaultParentID != nil {
-				query = query.Where("PARENT_ID = ?", *defaultParentID)
-			} else {
-				query = query.Where("PARENT_ID IS NULL")
-			}
-
-			if err := query.First(&roomFolder).Error; err != nil {
-				// 直播间文件夹不存在，创建
-				roomFolder = entity.CloudItem{
-					BaseModel: entity.BaseModel{
-						SysCompanyID: room.SysCompanyID,
-						CreateBy:     room.CreateBy,
-						UpdateBy:     room.CreateBy,
-						IsActive:     "Y",
-					},
-					ItemType: "folder",
-					Name:     room.RoomName,
-					ParentID: defaultParentID,
-					Path:     "/" + room.RoomName,
-					OwnerID:  creatorUser.ID,
-				}
-				if err := h.db.Create(&roomFolder).Error; err != nil {
-					logger.Error("创建直播间文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
-				}
-			}
-
-			// 检查"直播录制"文件夹是否存在
-			if err := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-				"folder", "直播录制", creatorUser.ID, roomFolder.ID, "Y").First(&recordingFolder).Error; err != nil {
-				// 直播录制文件夹不存在，创建
-				recordingFolder = entity.CloudItem{
-					BaseModel: entity.BaseModel{
-						SysCompanyID: room.SysCompanyID,
-						CreateBy:     room.CreateBy,
-						UpdateBy:     room.CreateBy,
-						IsActive:     "Y",
-					},
-					ItemType: "folder",
-					Name:     "直播录制",
-					ParentID: &roomFolder.ID,
-					Path:     roomFolder.Path + "/直播录制",
-					OwnerID:  creatorUser.ID,
-				}
-				if err := h.db.Create(&recordingFolder).Error; err != nil {
-					logger.Error("创建直播录制文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
-				}
+			// 目录：存储位置/直播间名称/直播录制（存储位置取直播间配置）
+			recordingFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID), liveService.RoomFolderRecording)
+			if err != nil {
+				logger.Error("创建直播录制文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
+				c.JSON(200, gin.H{"code": 0})
+				return
 			}
 
 			// 创建录制文件记录

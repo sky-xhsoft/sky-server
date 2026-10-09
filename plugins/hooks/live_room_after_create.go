@@ -2,10 +2,12 @@ package hooks
 
 import (
 	"context"
+	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
+	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
 	"go.uber.org/zap"
 )
@@ -62,97 +64,29 @@ func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(
 			}
 		}
 
-		// 直接使用数据库操作创建云盘文件夹
-		var roomFolder entity.CloudItem
-
-		// 获取默认的直播间文件夹父ID（从配置中读取）
-		var defaultParentID *uint = nil
-		if cfg.Cloud.DefaultRoomParentID != nil {
-			defaultParentID = cfg.Cloud.DefaultRoomParentID
+		// 开启录制或切片时创建云盘目录：存储位置/直播间名称/{直播录制,直播切片}（存储位置取直播间配置）
+		isRecord := !strings.EqualFold(GetStringOrEmpty(params, "IS_RECORD"), "N")
+		isClip := !strings.EqualFold(GetStringOrEmpty(params, "IS_CLIP"), "N")
+		spec := liveService.RoomFolderSpec{
+			RoomName:  roomName,
+			CreateBy:  createBy,
+			CompanyID: companyID,
+			OwnerID:   userID,
 		}
-
-		// 检查直播间文件夹是否存在
-		query := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?",
-			"folder", roomName, userID, "Y")
-		// 根据配置处理 PARENT_ID 查询条件
-		if defaultParentID != nil {
-			query = query.Where("PARENT_ID = ?", *defaultParentID)
-		} else {
-			query = query.Where("PARENT_ID IS NULL")
+		if storageFolderID := GetUintOrZero(params, "STORAGE_FOLDER_ID"); storageFolderID > 0 {
+			spec.StorageFolderID = &storageFolderID
 		}
-
-		if err := query.First(&roomFolder).Error; err != nil {
-			// 直播间文件夹不存在，创建
-			roomFolder = entity.CloudItem{
-				BaseModel: entity.BaseModel{
-					SysCompanyID: companyID,
-					CreateBy:     createBy,
-					UpdateBy:     createBy,
-					IsActive:     "Y",
-				},
-				ItemType: "folder",
-				Name:     roomName,
-				ParentID: defaultParentID, // 使用默认的父ID
-				Path:     "/" + roomName,  // 根据需要修改路径生成逻辑
-				OwnerID:  userID,
-			}
-			if err := txDB.Create(&roomFolder).Error; err != nil {
-				logger.Error("创建直播间文件夹失败", zap.Error(err), zap.String("roomName", roomName))
-				// 不影响主流程，继续执行
-			} else {
-				logger.Info("创建直播间根目录成功", zap.String("roomName", roomName), zap.Uint("folderID", roomFolder.ID))
-			}
+		subs := make([]string, 0, 2)
+		if isRecord {
+			subs = append(subs, liveService.RoomFolderRecording)
 		}
-
-		// 创建直播录制子目录（如果直播间文件夹创建成功或已存在）
-		if roomFolder.ID > 0 {
-			recordingFolderName := "直播录制"
-			var recordingFolder entity.CloudItem
-			if err := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-				"folder", recordingFolderName, userID, roomFolder.ID, "Y").First(&recordingFolder).Error; err != nil {
-				recordingFolder = entity.CloudItem{
-					BaseModel: entity.BaseModel{
-						SysCompanyID: companyID,
-						CreateBy:     createBy,
-						UpdateBy:     createBy,
-						IsActive:     "Y",
-					},
-					ItemType: "folder",
-					Name:     recordingFolderName,
-					ParentID: &roomFolder.ID,
-					Path:     roomFolder.Path + "/" + recordingFolderName,
-					OwnerID:  userID,
-				}
-				if err := txDB.Create(&recordingFolder).Error; err != nil {
-					logger.Error("创建直播录制子目录失败", zap.Error(err), zap.String("roomName", roomName))
-				} else {
-					logger.Info("创建直播录制子目录成功", zap.String("roomName", roomName))
-				}
-			}
-
-			// 创建直播切片子目录
-			clipFolderName := "直播切片"
-			var clipFolder entity.CloudItem
-			if err := txDB.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-				"folder", clipFolderName, userID, roomFolder.ID, "Y").First(&clipFolder).Error; err != nil {
-				clipFolder = entity.CloudItem{
-					BaseModel: entity.BaseModel{
-						SysCompanyID: companyID,
-						CreateBy:     createBy,
-						UpdateBy:     createBy,
-						IsActive:     "Y",
-					},
-					ItemType: "folder",
-					Name:     clipFolderName,
-					ParentID: &roomFolder.ID,
-					Path:     roomFolder.Path + "/" + clipFolderName,
-					OwnerID:  userID,
-				}
-				if err := txDB.Create(&clipFolder).Error; err != nil {
-					logger.Error("创建直播切片子目录失败", zap.Error(err), zap.String("roomName", roomName))
-				} else {
-					logger.Info("创建直播切片子目录成功", zap.String("roomName", roomName))
-				}
+		if isClip {
+			subs = append(subs, liveService.RoomFolderClip)
+		}
+		for _, sub := range subs {
+			// 不影响直播间创建：失败只记录日志，回调到达时会再次补建
+			if _, err := liveService.EnsureRoomFolder(txDB, spec, sub); err != nil {
+				logger.Error("创建直播间云盘目录失败", zap.Error(err), zap.String("roomName", roomName), zap.String("sub", sub))
 			}
 		}
 
