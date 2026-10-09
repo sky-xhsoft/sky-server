@@ -60,85 +60,51 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 		return errors.New(errors.ErrInvalidParam, "分片MD5校验失败")
 	}
 
-	// 7. 保存分片到临时目录
-	chunkPath := fmt.Sprintf("%s/chunk_%d", session.StoragePath, req.ChunkIndex)
-
-	// 创建 Reader
-	chunkReader := &chunkReader{data: req.ChunkData}
-
-	// 获取公司存储实例
+	// 7. 保存分片：COS 等支持原生分块的存储直接写入最终对象的分块（完成时由存储端合并），
+	//    否则保存为临时分片文件，完成时由服务端合并
 	storageInstance, err := s.getSessionStorage(ctx, session)
 	if err != nil {
 		logger.Error("获取存储实例失败", zap.Error(err))
 		return errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
 	}
 
-	if _, err := storageInstance.Upload(ctx, chunkPath, chunkReader, "application/octet-stream"); err != nil {
+	chunkPath := fmt.Sprintf("%s/chunk_%d", session.StoragePath, req.ChunkIndex)
+	etag := ""
+	if writer, ok := storageInstance.(offsetWriter); ok && session.StorageUploadID == "" {
+		// 本地存储：分片直接写入组装文件的对应偏移，完成时只需改名，无需再合并
+		chunkSize := int64(session.ChunkSize)
+		expected := chunkSize
+		if rest := session.FileSize - int64(req.ChunkIndex)*chunkSize; rest < expected {
+			expected = rest
+		}
+		if int64(len(req.ChunkData)) != expected {
+			return errors.New(errors.ErrInvalidParam, fmt.Sprintf("分片大小不正确：期望 %d，实际 %d", expected, len(req.ChunkData)))
+		}
+		chunkPath = assembledPartPath(session.StoragePath)
+		if err := writer.WriteAt(ctx, chunkPath, int64(req.ChunkIndex)*chunkSize, req.ChunkData); err != nil {
+			logger.Error("写入分片失败", zap.Int("chunkIndex", req.ChunkIndex), zap.Error(err))
+			return errors.Wrap(errors.ErrStorage, "保存分片失败", err)
+		}
+	} else if partUploader, ok := storageInstance.(nativePartUploader); ok && session.StorageUploadID != "" {
+		chunkPath = ""
+		if etag, err = partUploader.UploadPart(ctx, session.StoragePath, session.StorageUploadID, req.ChunkIndex, req.ChunkData); err != nil {
+			logger.Error("上传原生分块失败", zap.Int("chunkIndex", req.ChunkIndex), zap.Error(err))
+			return errors.Wrap(errors.ErrStorage, "上传分块失败", err)
+		}
+	} else if _, err := storageInstance.Upload(ctx, chunkPath, &chunkReader{data: req.ChunkData}, "application/octet-stream"); err != nil {
 		logger.Error("保存分片失败",
 			zap.Int("chunkIndex", req.ChunkIndex),
 			zap.Error(err))
 		return errors.Wrap(errors.ErrInternal, "保存分片失败", err)
 	}
 
-	// 8. 更新或创建分片记录
-	now := time.Now()
-	if findErr == gorm.ErrRecordNotFound {
-		// 创建新记录
-		chunkRecord = entity.CloudChunkRecord{
-			SessionID:  session.ID,
-			ChunkIndex: req.ChunkIndex,
-			ChunkSize:  len(req.ChunkData),
-			ChunkMD5:   req.ChunkMD5,
-			ChunkPath:  chunkPath,
-			Uploaded:   true,
-			UploadTime: &now,
-			RetryCount: 0,
-		}
-
-		if err := s.db.WithContext(ctx).Create(&chunkRecord).Error; err != nil {
-			return errors.Wrap(errors.ErrDatabase, "创建分片记录失败", err)
-		}
-	} else {
-		// 更新现有记录
-		if err := s.db.WithContext(ctx).Model(&chunkRecord).Updates(map[string]interface{}{
-			"UPLOADED":    true,
-			"UPLOAD_TIME": now,
-			"RETRY_COUNT": gorm.Expr("RETRY_COUNT + 1"),
-		}).Error; err != nil {
-			return errors.Wrap(errors.ErrDatabase, "更新分片记录失败", err)
-		}
-	}
-
-	// 9. 更新上传会话的已上传分片列表
-	var uploadedChunks []int
-	if session.UploadedChunks != "" {
-		json.Unmarshal([]byte(session.UploadedChunks), &uploadedChunks)
-	}
-
-	// 检查是否已存在
-	exists := false
-	for _, idx := range uploadedChunks {
-		if idx == req.ChunkIndex {
-			exists = true
-			break
-		}
-	}
-
-	if !exists {
-		uploadedChunks = append(uploadedChunks, req.ChunkIndex)
-		sort.Ints(uploadedChunks)
-
-		uploadedChunksJSON, _ := json.Marshal(uploadedChunks)
-		if err := s.db.WithContext(ctx).Model(&entity.CloudUploadSession{}).
-			Where("ID = ?", session.ID).
-			Update("UPLOADED_CHUNKS", string(uploadedChunksJSON)).Error; err != nil {
-			return errors.Wrap(errors.ErrDatabase, "更新会话状态失败", err)
-		}
+	// 8. 记录分片并更新会话的已上传列表（会话行锁，并发上传分片时不会互相覆盖）
+	if err := s.recordChunkUploaded(ctx, session.ID, req.ChunkIndex, len(req.ChunkData), req.ChunkMD5, chunkPath, etag); err != nil {
+		return err
 	}
 
 	logger.Debug("分片上传成功",
 		zap.Int("chunkIndex", req.ChunkIndex),
-		zap.Int("uploaded", len(uploadedChunks)),
 		zap.Int("total", session.TotalChunks))
 
 	return nil
@@ -251,10 +217,9 @@ func (s *multipartUploadService) MarkChunkUploaded(ctx context.Context, sessionI
 		// 1. 查询会话并加行锁（SELECT FOR UPDATE），保证并发更新排队有序，每个人都能拿到最新数据
 		var lockedSession entity.CloudUploadSession
 		if err := tx.WithContext(ctx).
+			Clauses(clause.Locking{Strength: "UPDATE"}). // 加行锁（须在查询前），并发更新会阻塞等待，不会覆盖
 			Where("ID = ? AND USER_ID = ? AND IS_ACTIVE = ?", sessionID, userID, "Y").
-			First(&lockedSession).
-			Clauses(clause.Locking{Strength: "UPDATE"}). // 加行锁，并发更新会阻塞等待，不会覆盖
-			Error; err != nil {
+			First(&lockedSession).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				return errors.New(errors.ErrResourceNotFound, "上传会话不存在")
 			}
@@ -374,7 +339,7 @@ func (s *multipartUploadService) cleanupChunks(ctx context.Context, sessionID ui
 
 	// 获取会话的用户ID
 	var session entity.CloudUploadSession
-	if err := s.db.WithContext(ctx).Select("USER_ID", "STORAGE_TYPE").Where("ID = ?", sessionID).First(&session).Error; err != nil {
+	if err := s.db.WithContext(ctx).Select("USER_ID", "STORAGE_TYPE", "STORAGE_PATH", "STORAGE_UPLOAD_ID").Where("ID = ?", sessionID).First(&session).Error; err != nil {
 		logger.Error("查询会话失败", zap.Uint("sessionID", sessionID), zap.Error(err))
 		return
 	}
@@ -384,6 +349,15 @@ func (s *multipartUploadService) cleanupChunks(ctx context.Context, sessionID ui
 	if err != nil {
 		logger.Error("获取存储实例失败", zap.Uint("sessionID", sessionID), zap.Error(err))
 		return
+	}
+
+	// 0. 原生分块上传：终止存储端未完成的上传，释放已上传的分块（已完成合并时终止无影响）
+	if aborter, ok := storageInstance.(interface {
+		AbortMultipartUpload(ctx context.Context, path string, uploadID string) error
+	}); ok && session.StorageUploadID != "" {
+		if err := aborter.AbortMultipartUpload(ctx, session.StoragePath, session.StorageUploadID); err != nil {
+			logger.Debug("终止原生分块上传（可能已完成）", zap.Uint("sessionID", sessionID), zap.Error(err))
+		}
 	}
 
 	// 1. 列出所有分片文件
@@ -423,4 +397,82 @@ func (r *chunkReader) Read(p []byte) (n int, err error) {
 	n = copy(p, r.data[r.pos:])
 	r.pos += n
 	return n, nil
+}
+
+// offsetWriter 支持按偏移写入的存储（本地存储）
+type offsetWriter interface {
+	WriteAt(ctx context.Context, path string, offset int64, data []byte) error
+}
+
+// assembledPartPath 本地存储分片直接组装的目标文件（位于会话临时目录下，随会话清理）
+func assembledPartPath(storagePath string) string {
+	return storagePath + "/assembled.part"
+}
+
+// nativePartUploader 支持原生分块上传的存储（如腾讯云 COS）
+type nativePartUploader interface {
+	UploadPart(ctx context.Context, path string, uploadID string, chunkIndex int, data []byte) (string, error)
+}
+
+// recordChunkUploaded 记录已上传的分片，并在会话行锁内把分片序号加入会话的已上传列表
+func (s *multipartUploadService) recordChunkUploaded(ctx context.Context, sessionID uint, chunkIndex, size int, chunkMD5, chunkPath, etag string) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var session entity.CloudUploadSession
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("ID", "UPLOADED_CHUNKS").
+			Where("ID = ?", sessionID).
+			First(&session).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "查询上传会话失败", err)
+		}
+
+		now := time.Now()
+		var record entity.CloudChunkRecord
+		findErr := tx.Where("SESSION_ID = ? AND CHUNK_INDEX = ?", sessionID, chunkIndex).First(&record).Error
+		switch {
+		case findErr == gorm.ErrRecordNotFound:
+			record = entity.CloudChunkRecord{
+				SessionID:  sessionID,
+				ChunkIndex: chunkIndex,
+				ChunkSize:  size,
+				ChunkMD5:   chunkMD5,
+				ChunkPath:  chunkPath,
+				ETag:       etag,
+				Uploaded:   true,
+				UploadTime: &now,
+			}
+			if err := tx.Create(&record).Error; err != nil {
+				return errors.Wrap(errors.ErrDatabase, "创建分片记录失败", err)
+			}
+		case findErr != nil:
+			return errors.Wrap(errors.ErrDatabase, "查询分片记录失败", findErr)
+		default:
+			if err := tx.Model(&record).Updates(map[string]interface{}{
+				"UPLOADED":    true,
+				"UPLOAD_TIME": now,
+				"CHUNK_PATH":  chunkPath,
+				"ETAG":        etag,
+				"RETRY_COUNT": gorm.Expr("RETRY_COUNT + 1"),
+			}).Error; err != nil {
+				return errors.Wrap(errors.ErrDatabase, "更新分片记录失败", err)
+			}
+		}
+
+		var uploaded []int
+		if session.UploadedChunks != "" {
+			_ = json.Unmarshal([]byte(session.UploadedChunks), &uploaded)
+		}
+		for _, idx := range uploaded {
+			if idx == chunkIndex {
+				return nil
+			}
+		}
+		uploaded = append(uploaded, chunkIndex)
+		sort.Ints(uploaded)
+		data, _ := json.Marshal(uploaded)
+		if err := tx.Model(&entity.CloudUploadSession{}).Where("ID = ?", sessionID).
+			Update("UPLOADED_CHUNKS", string(data)).Error; err != nil {
+			return errors.Wrap(errors.ErrDatabase, "更新会话状态失败", err)
+		}
+		return nil
+	})
 }

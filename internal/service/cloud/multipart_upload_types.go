@@ -25,6 +25,8 @@ type MultipartUploadService interface {
 
 	// CompleteUpload 完成上传（合并分片）
 	CompleteUpload(ctx context.Context, sessionID uint, userID uint) (*entity.CloudItem, error)
+	// StartComplete 完成上传；需要服务端合并时转后台执行并返回 nil，通过 GetUploadStatus 查询结果
+	StartComplete(ctx context.Context, sessionID uint, userID uint) (*entity.CloudItem, error)
 
 	// AbortUpload 取消上传
 	AbortUpload(ctx context.Context, sessionID uint, userID uint) error
@@ -79,6 +81,7 @@ type UploadStatus struct {
 	Status         string  `json:"status"`
 	Progress       float64 `json:"progress"`
 	ExpireTime     string  `json:"expireTime"`
+	ErrorMessage   string  `json:"errorMessage,omitempty"` // 后台合并失败原因
 }
 
 // ChunkPresignedURL 分片预签名上传URL

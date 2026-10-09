@@ -1,11 +1,15 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
@@ -542,6 +546,44 @@ func (s *TencentCOS) PresignedChunkUploadURL(ctx context.Context, path string, u
 
 	// 返回带签名的URL
 	return req.URL.String(), nil
+}
+
+// UploadPart 上传一个原生分块（chunkIndex 从 0 开始），返回 COS 的 ETag。
+// 服务端中转上传时直接写入原生分块，完成时由 COS 合并，无需再下载分片重新上传
+func (s *TencentCOS) UploadPart(ctx context.Context, path string, uploadID string, chunkIndex int, data []byte) (string, error) {
+	bucketURL, err := url.Parse(s.bucketURL)
+	if err != nil {
+		return "", errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
+	}
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, s.httpClient)
+
+	sum := md5.Sum(data)
+	resp, err := client.Object.UploadPart(ctx, path, uploadID, chunkIndex+1, bytes.NewReader(data), &cos.ObjectUploadPartOptions{
+		ContentLength: int64(len(data)),
+		ContentMD5:    base64.StdEncoding.EncodeToString(sum[:]),
+	})
+	if err != nil {
+		logger.Error("Failed to upload part",
+			zap.String("path", path),
+			zap.String("uploadID", uploadID),
+			zap.Int("chunkIndex", chunkIndex),
+			zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "上传分块失败", err)
+	}
+	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
+}
+
+// AbortMultipartUpload 终止原生分块上传，释放已上传但未合并的分块
+func (s *TencentCOS) AbortMultipartUpload(ctx context.Context, path string, uploadID string) error {
+	bucketURL, err := url.Parse(s.bucketURL)
+	if err != nil {
+		return errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
+	}
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, s.httpClient)
+	if _, err := client.Object.AbortMultipartUpload(ctx, path, uploadID); err != nil {
+		return errors.Wrap(errors.ErrInternal, "终止分块上传失败", err)
+	}
+	return nil
 }
 
 // CompleteMultipartUpload 完成分块上传，让服务端合并所有分块

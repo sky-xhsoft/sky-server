@@ -253,6 +253,7 @@ func (s *multipartUploadService) GetUploadStatus(ctx context.Context, sessionID 
 		Status:         session.Status,
 		Progress:       progress,
 		ExpireTime:     session.ExpireTime.Format(time.RFC3339),
+		ErrorMessage:   session.ErrorMessage,
 	}, nil
 }
 

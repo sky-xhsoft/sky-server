@@ -269,6 +269,11 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		}
 	}
 
+	// 本地存储分片已直接写入组装文件：改名即完成
+	if s.isAssembled(ctx, &session) {
+		return s.completeAssembled(ctx, &session, userID, storageInstance)
+	}
+
 	// ========== 传统合并模式 ==========
 
 	// 自动选择合并策略：大文件且多分片使用流式合并

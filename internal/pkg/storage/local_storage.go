@@ -321,3 +321,45 @@ func (s *LocalStorage) CompleteMultipartUpload(ctx context.Context, path string,
 	}
 	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
 }
+
+// WriteAt 把数据写入文件的指定偏移（文件不存在时创建）。
+// 分片上传时各分片直接写入目标文件的对应位置，完成时无需再读写整个文件合并
+func (s *LocalStorage) WriteAt(ctx context.Context, path string, offset int64, data []byte) error {
+	if err := s.validatePath(path); err != nil {
+		return err
+	}
+	fullPath := filepath.Join(s.basePath, path)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return errors.Wrap(errors.ErrInternal, "创建目录失败", err)
+	}
+	file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return errors.Wrap(errors.ErrInternal, "打开文件失败", err)
+	}
+	if _, err := file.WriteAt(data, offset); err != nil {
+		file.Close()
+		return errors.Wrap(errors.ErrInternal, "写入文件失败", err)
+	}
+	if err := file.Close(); err != nil {
+		return errors.Wrap(errors.ErrInternal, "写入文件失败", err)
+	}
+	return nil
+}
+
+// Rename 移动文件（同一存储内改名，不复制数据），返回目标文件的访问URL
+func (s *LocalStorage) Rename(ctx context.Context, srcPath, dstPath string) (string, error) {
+	if err := s.validatePath(srcPath); err != nil {
+		return "", err
+	}
+	if err := s.validatePath(dstPath); err != nil {
+		return "", err
+	}
+	dst := filepath.Join(s.basePath, dstPath)
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return "", errors.Wrap(errors.ErrInternal, "创建目录失败", err)
+	}
+	if err := os.Rename(filepath.Join(s.basePath, srcPath), dst); err != nil {
+		return "", errors.Wrap(errors.ErrInternal, "移动文件失败", err)
+	}
+	return fmt.Sprintf("%s/%s", s.baseURL, dstPath), nil
+}

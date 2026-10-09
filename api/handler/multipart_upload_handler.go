@@ -204,9 +204,14 @@ func (h *MultipartUploadHandler) CompleteUpload(c *gin.Context) {
 		return
 	}
 
-	file, err := h.multipartService.CompleteUpload(c.Request.Context(), req.SessionID, userID.(uint))
+	file, err := h.multipartService.StartComplete(c.Request.Context(), req.SessionID, userID.(uint))
 	if err != nil {
 		utils.FailFromError(c, "完成上传失败: ", err)
+		return
+	}
+	if file == nil {
+		// 服务端后台合并中，客户端轮询上传状态
+		utils.Success(c, gin.H{"status": "merging", "sessionId": req.SessionID})
 		return
 	}
 
