@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
@@ -461,8 +462,11 @@ type GetStreamMetricsRequest struct {
 }
 
 // GetStreamMetrics 获取直播流实时指标
+// ErrStreamMetricsNotSupported 直播流实时指标尚未接入腾讯云统计
+var ErrStreamMetricsNotSupported = errors.New("直播流实时指标尚未接入腾讯云统计")
+
 func (m *StreamManager) GetStreamMetrics(ctx context.Context, req *GetStreamMetricsRequest) (*StreamMetrics, error) {
 	// 真实在线统计需调用腾讯云实时流统计接口（如 DescribeLiveStreamPlayInfoList）。
-	// 当前尚未接入，禁止返回模拟数据误导用户，改为明确拒绝。
-	return nil, fmt.Errorf("直播流实时指标尚未接入腾讯云统计，无法提供真实数据")
+	// 当前尚未接入，禁止返回模拟数据误导用户，改为明确返回「不支持」。
+	return nil, ErrStreamMetricsNotSupported
 }

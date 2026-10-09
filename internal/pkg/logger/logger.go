@@ -71,6 +71,10 @@ func Init(cfg *config.LogConfig) (*zap.Logger, error) {
 	// 创建logger
 	Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zapcore.ErrorLevel))
 
+	// 部分代码直接使用 zap.L() 记录日志，未替换全局实例时这些日志会被丢弃；
+	// 直接调用 zap 不经过本包封装函数，需抵消上面的 CallerSkip(1) 才能显示正确的调用位置
+	zap.ReplaceGlobals(Logger.WithOptions(zap.AddCallerSkip(-1)))
+
 	return Logger, nil
 }
 

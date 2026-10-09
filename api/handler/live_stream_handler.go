@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -335,6 +336,11 @@ func (h *LiveStreamHandler) GetStreamMetrics(c *gin.Context) {
 		DomainName: domainName,
 		AppName:    appName,
 	})
+	if errors.Is(err, live.ErrStreamMetricsNotSupported) {
+		// 未接入不是服务端故障：返回 supported=false，前端据此停止轮询并提示
+		utils.Success(c, gin.H{"supported": false, "message": err.Error()})
+		return
+	}
 	if err != nil {
 		zap.L().Error("获取直播流指标失败",
 			zap.String("streamName", streamName),
