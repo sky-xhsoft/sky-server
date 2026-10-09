@@ -90,12 +90,12 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 
 	// 5. 获取公司存储实例和配置，确定正确的存储类型
 	storageInstance, err := s.getCompanyStorage(ctx, userID)
-	var storageType string
 	if err != nil {
-		// 获取存储实例失败，使用默认值
-		storageType = "local"
-		logger.Warn("获取公司存储实例失败，使用默认本地存储", zap.Error(err))
-	} else {
+		// 公司存储不可用（如云存储配置不完整）：直接报错，不能悄悄改写到服务器本地
+		return nil, err
+	}
+	var storageType string
+	{
 		// 从公司配置中获取正确的存储类型
 		user, getuserErr := s.userRepo.GetUserByID(userID)
 		if getuserErr == nil {

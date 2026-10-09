@@ -185,7 +185,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerGroupsRoutes(v1, jwtUtil, services.Groups)
 		registerEmailRoutes(v1, services.Email)
 		registerSmsRoutes(v1, services.SMS)
-		registerCompanyRoutes(v1, jwtUtil, services.Company, services.SMS)
+		registerCompanyRoutes(v1, jwtUtil, services.Company, services.SMS, services.StorageConfig)
 
 		// 注册安全目录管理路由
 		registerDirectoryRoutes(v1, jwtUtil, services.Groups)

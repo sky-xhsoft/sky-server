@@ -80,7 +80,7 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 	}
 
 	// 获取公司存储实例
-	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	storageInstance, err := s.getSessionStorage(ctx, &session)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
 	}
@@ -495,7 +495,7 @@ func (s *multipartUploadService) completeUploadOptimized(ctx context.Context, se
 		zap.Int64("fileSize", session.FileSize))
 
 	// 获取公司存储实例
-	storageInstance, getStorageErr := s.getCompanyStorage(ctx, userID)
+	storageInstance, getStorageErr := s.getSessionStorage(ctx, session)
 	if getStorageErr != nil {
 		return nil, errors.Wrap(errors.ErrStorage, "获取存储实例失败", getStorageErr)
 	}

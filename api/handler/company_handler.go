@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"context"
 	"net/http"
 	"strings"
 
@@ -15,8 +15,20 @@ import (
 
 // CompanyHandler 公司处理器
 type CompanyHandler struct {
-	svc company.Service
-	sms sms.Service
+	svc            company.Service
+	sms            sms.Service
+	storageRefresh StorageCacheRefresher
+}
+
+// StorageCacheRefresher 刷新公司存储实例缓存（保存公司配置后存储设置立即生效）
+type StorageCacheRefresher interface {
+	RefreshCache(ctx context.Context, companyID uint) error
+}
+
+// WithStorageRefresher 设置存储缓存刷新器
+func (h *CompanyHandler) WithStorageRefresher(r StorageCacheRefresher) *CompanyHandler {
+	h.storageRefresh = r
+	return h
 }
 
 // NewCompanyHandler 创建公司处理器
@@ -123,7 +135,6 @@ func (h *CompanyHandler) UpdateCompanyConfig(c *gin.Context) {
 		utils.BadRequest(c, "公司ID格式错误")
 		return
 	}
-	fmt.Printf("[DBG] UpdateCompanyConfig companyID=%d host=%s\n", id, c.Request.Host)
 
 	var req company.UpdateCompanyConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -139,6 +150,11 @@ func (h *CompanyHandler) UpdateCompanyConfig(c *gin.Context) {
 		}
 		utils.FailFromError(c, "更新公司配置失败: ", err)
 		return
+	}
+
+	// 存储设置立即生效；配置不完整时刷新会失败，上传时会给出具体原因，这里不阻断保存
+	if h.storageRefresh != nil {
+		_ = h.storageRefresh.RefreshCache(c.Request.Context(), id)
 	}
 
 	utils.Success(c, maskCompanyConfig(conf))

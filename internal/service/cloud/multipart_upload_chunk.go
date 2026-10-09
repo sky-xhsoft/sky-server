@@ -67,7 +67,7 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 	chunkReader := &chunkReader{data: req.ChunkData}
 
 	// 获取公司存储实例
-	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	storageInstance, err := s.getSessionStorage(ctx, session)
 	if err != nil {
 		logger.Error("获取存储实例失败", zap.Error(err))
 		return errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
@@ -205,7 +205,7 @@ func (s *multipartUploadService) GetChunkPresignedURL(ctx context.Context, sessi
 	var presignedURL string
 
 	// 获取公司存储实例
-	storageInstance, err := s.getCompanyStorage(ctx, userID)
+	storageInstance, err := s.getSessionStorage(ctx, session)
 	if err != nil {
 		logger.Error("获取存储实例失败", zap.Error(err))
 		return nil, errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
@@ -374,13 +374,13 @@ func (s *multipartUploadService) cleanupChunks(ctx context.Context, sessionID ui
 
 	// 获取会话的用户ID
 	var session entity.CloudUploadSession
-	if err := s.db.WithContext(ctx).Select("USER_ID").Where("ID = ?", sessionID).First(&session).Error; err != nil {
+	if err := s.db.WithContext(ctx).Select("USER_ID", "STORAGE_TYPE").Where("ID = ?", sessionID).First(&session).Error; err != nil {
 		logger.Error("查询会话失败", zap.Uint("sessionID", sessionID), zap.Error(err))
 		return
 	}
 
 	// 获取公司存储实例
-	storageInstance, err := s.getCompanyStorage(ctx, session.UserID)
+	storageInstance, err := s.getSessionStorage(ctx, &session)
 	if err != nil {
 		logger.Error("获取存储实例失败", zap.Uint("sessionID", sessionID), zap.Error(err))
 		return

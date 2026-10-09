@@ -41,6 +41,19 @@ func NewMultipartUploadService(db *gorm.DB, companyStorageManager *storage.Compa
 	}
 }
 
+// getSessionStorage 进行中的上传会话按会话创建时的存储类型取存储（公司中途切换存储时，已上传的分片仍在原存储）
+func (s *multipartUploadService) getSessionStorage(ctx context.Context, session *entity.CloudUploadSession) (storage.Storage, error) {
+	user, err := s.userRepo.GetUserByID(session.UserID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "获取用户信息失败", err)
+	}
+	st, err := s.companyStorageManager.GetStorageByType(ctx, user.SysCompanyID, session.StorageType)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrStorage, "获取公司存储实例失败", err)
+	}
+	return st, nil
+}
+
 // getCompanyStorage 根据用户ID获取公司存储实例
 func (s *multipartUploadService) getCompanyStorage(ctx context.Context, userID uint) (storage.Storage, error) {
 	// 从用户ID获取用户信息

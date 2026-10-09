@@ -94,6 +94,26 @@ func NewService(db *gorm.DB, companyStorageManager *storage.CompanyStorageManage
 	}
 }
 
+// getItemStorage 读取 / 删除已有文件：按文件记录的存储类型取存储（公司改用云存储后，本地历史文件仍从本地读取）
+func (s *service) getItemStorage(ctx context.Context, item *entity.CloudItem) (storage.Storage, error) {
+	storageType := ""
+	if item.StorageType != nil {
+		storageType = *item.StorageType
+	}
+	if storageType != storage.StorageTypeLocal {
+		return s.getCompanyStorage(ctx, item.OwnerID)
+	}
+	user, err := s.userRepo.GetUserByID(item.OwnerID)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrDatabase, "获取用户信息失败", err)
+	}
+	st, err := s.companyStorageManager.GetStorageByType(ctx, user.SysCompanyID, storageType)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrStorage, "获取文件存储实例失败", err)
+	}
+	return st, nil
+}
+
 // getCompanyStorage 根据用户ID获取公司存储实例
 func (s *service) getCompanyStorage(ctx context.Context, userID uint) (storage.Storage, error) {
 	// 从用户ID获取用户信息
@@ -750,7 +770,7 @@ func (s *service) DownloadFile(ctx context.Context, fileID uint, userID uint) (i
 	}
 
 	// 文件存放在所有者所属公司的存储中
-	storageInstance, err := s.getCompanyStorage(ctx, file.OwnerID)
+	storageInstance, err := s.getItemStorage(ctx, file)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1107,7 +1127,7 @@ func (s *service) DownloadFileByID(ctx context.Context, fileID uint) (io.ReadClo
 	}
 
 	// 获取公司存储实例（通过文件所有者ID获取）
-	storageInstance, err := s.getCompanyStorage(ctx, file.OwnerID)
+	storageInstance, err := s.getItemStorage(ctx, file)
 	if err != nil {
 		return nil, nil, err
 	}

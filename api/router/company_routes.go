@@ -5,13 +5,17 @@ import (
 	"github.com/sky-xhsoft/sky-server/api/handler"
 	"github.com/sky-xhsoft/sky-server/api/middleware"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
+	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/sms"
 )
 
 // registerCompanyRoutes 注册公司管理路由
-func registerCompanyRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, companyService company.Service, smsService sms.Service) {
+func registerCompanyRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, companyService company.Service, smsService sms.Service, storageConfig cloud.StorageConfigService) {
 	companyHandler := handler.NewCompanyHandler(companyService, smsService)
+	if storageConfig != nil {
+		companyHandler.WithStorageRefresher(storageConfig)
+	}
 
 	companyRg := rg.Group("/company")
 	{

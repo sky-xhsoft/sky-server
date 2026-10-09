@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,7 +99,10 @@ func (m *CompanyStorageManager) GetStorage(ctx context.Context, companyID uint) 
 		logger.Error("根据公司配置创建存储实例失败",
 			zap.Uint("companyID", companyID),
 			zap.Error(err))
-		// 创建失败，返回全局存储
+		// 公司明确选择了云存储：报错提示补全配置，不能悄悄写到服务器本地
+		if normalizeConfig(config).StorageType != StorageTypeLocal {
+			return nil, fmt.Errorf("公司云存储配置不完整：%w", err)
+		}
 		return m.globalManager.GetDefaultStorage()
 	}
 
@@ -178,21 +183,93 @@ func (m *CompanyStorageManager) ClearAllCache() {
 	logger.Info("清除所有公司存储配置缓存")
 }
 
+// 公司存储类型
+const (
+	StorageTypeLocal      = "local"
+	StorageTypeAliyunOSS  = "aliyunOSS"
+	StorageTypeTencentCOS = "tencentCOS"
+)
+
+// cosBucketURLPattern 腾讯云 COS Bucket 地址：https://{bucket}.cos.{region}.myqcloud.com
+var cosBucketURLPattern = regexp.MustCompile(`^(?:https?://)?([^./]+)\.cos\.([a-z0-9-]+)\.myqcloud\.com`)
+
+// ParseCOSBucketURL 从 COS Bucket 地址解析 Bucket 名称与区域；无法识别时返回空串
+func ParseCOSBucketURL(bucketURL string) (bucket, region string) {
+	m := cosBucketURLPattern.FindStringSubmatch(strings.TrimSpace(bucketURL))
+	if m == nil {
+		return "", ""
+	}
+	return m[1], m[2]
+}
+
+// normalizeConfig 规范化公司存储配置（返回副本，不修改原对象）：
+//   - 存储类型别名：cos → tencentCOS，oss → aliyunOSS
+//   - 类型为空但腾讯云 COS 的 Bucket 地址已填写时按 COS 处理
+//   - COS 的 Bucket 名称、区域为空时从 Bucket 地址解析
+//   - COS 密钥为空时沿用腾讯云直播的密钥（同一腾讯云账号无需重复填写）
+//   - 其余为空时按本地存储
+func normalizeConfig(config *entity.SysCompanyConf) *entity.SysCompanyConf {
+	c := *config
+	switch strings.ToLower(strings.TrimSpace(c.StorageType)) {
+	case "local":
+		c.StorageType = StorageTypeLocal
+	case "cos", "tencentcos":
+		c.StorageType = StorageTypeTencentCOS
+	case "oss", "aliyunoss":
+		c.StorageType = StorageTypeAliyunOSS
+	case "":
+		if strings.TrimSpace(c.TencentCOSBucketURL) != "" {
+			c.StorageType = StorageTypeTencentCOS
+		} else {
+			c.StorageType = StorageTypeLocal
+		}
+	}
+	if c.StorageType == StorageTypeTencentCOS {
+		bucket, region := ParseCOSBucketURL(c.TencentCOSBucketURL)
+		if c.TencentCOSBucketName == "" {
+			c.TencentCOSBucketName = bucket
+		}
+		if c.TencentCOSRegion == "" {
+			c.TencentCOSRegion = region
+		}
+		if c.TencentCOSSecretID == "" && c.TencentCOSSecretKey == "" {
+			c.TencentCOSSecretID = c.TencentCloudSecretID
+			c.TencentCOSSecretKey = c.TencentCloudSecretKey
+		}
+	}
+	return &c
+}
+
 // createStorageFromConfig 根据数据库配置创建存储实例
 func (m *CompanyStorageManager) createStorageFromConfig(config *entity.SysCompanyConf) (Storage, error) {
-	switch config.StorageType {
-	case "local":
-		return m.createLocalStorage(config)
-	case "aliyunOSS":
-		return m.createAliyunOSSStorage(config)
-	case "tencentCOS":
-		return m.createTencentCOSStorage(config)
+	c := normalizeConfig(config)
+	switch c.StorageType {
+	case StorageTypeLocal:
+		return m.createLocalStorage(c)
+	case StorageTypeAliyunOSS:
+		return m.createAliyunOSSStorage(c)
+	case StorageTypeTencentCOS:
+		return m.createTencentCOSStorage(c)
 	default:
-		// 未知类型，使用默认的本地存储
-		logger.Warn("未知的存储类型，使用本地存储",
-			zap.String("storageType", config.StorageType))
-		return m.createLocalStorage(config)
+		return nil, fmt.Errorf("不支持的存储类型: %s", config.StorageType)
 	}
+}
+
+// GetStorageByType 读写已有文件时按文件记录的存储类型取存储：
+// 记录为本地存储、而公司已改用云存储时返回本地存储（使用公司的本地存储配置），保证历史文件仍可访问；
+// 其余情况返回公司当前存储
+func (m *CompanyStorageManager) GetStorageByType(ctx context.Context, companyID uint, storageType string) (Storage, error) {
+	if storageType != StorageTypeLocal {
+		return m.GetStorage(ctx, companyID)
+	}
+	config, err := m.configRepo.GetByCompanyID(ctx, companyID)
+	if err != nil || config == nil {
+		return m.globalManager.GetStorage(StorageTypeLocal)
+	}
+	if normalizeConfig(config).StorageType == StorageTypeLocal {
+		return m.GetStorage(ctx, companyID)
+	}
+	return m.createLocalStorage(config)
 }
 
 // createLocalStorage 创建本地存储

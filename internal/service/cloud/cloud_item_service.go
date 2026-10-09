@@ -413,7 +413,7 @@ func (s *service) deleteStorageIfUnreferenced(ctx context.Context, item *entity.
 		Count(&refs).Error; err != nil || refs > 0 {
 		return
 	}
-	storageInstance, err := s.getCompanyStorage(ctx, item.OwnerID)
+	storageInstance, err := s.getItemStorage(ctx, item)
 	if err != nil {
 		return
 	}
