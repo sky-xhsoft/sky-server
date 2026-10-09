@@ -208,6 +208,8 @@ func (s *liveService) ListDomains(ctx context.Context, domainType *int64) ([]*te
 		if err == nil && cachedData != "" {
 			var domains []*tencentLive.DomainInfo
 			if err := json.Unmarshal([]byte(cachedData), &domains); err == nil {
+				// 旧版本写入的缓存可能含系统域名，读取时同样过滤
+				domains = excludeSystemDomains(domains)
 				// 如果指定了域名类型，需要过滤
 				if domainType != nil {
 					filtered := make([]*tencentLive.DomainInfo, 0)
@@ -229,13 +231,7 @@ func (s *liveService) ListDomains(ctx context.Context, domainType *int64) ([]*te
 		return nil, err
 	}
 
-	// 过滤掉以 myqcloud.com 结尾的域名
-	filteredDomains := make([]*tencentLive.DomainInfo, 0)
-	for _, domain := range domains {
-		if !strings.HasSuffix(domain.Name, ".myqcloud.com") {
-			filteredDomains = append(filteredDomains, domain)
-		}
-	}
+	filteredDomains := excludeSystemDomains(domains)
 
 	if s.redisClient != nil {
 		cacheKey := s.domainListCacheKey(ctx)
@@ -430,4 +426,29 @@ func (s *liveService) StopRecordTask(ctx context.Context, taskID string) error {
 
 func (s *liveService) DeleteRecordTask(ctx context.Context, taskID string) error {
 	return s.getRecordManager(ctx).DeleteRecordTask(ctx, taskID)
+}
+
+// systemDomainSuffixes 腾讯云自动分配的系统域名后缀，不属于用户自有域名，不在域名列表中展示
+var systemDomainSuffixes = []string{".myqcloud.com", ".tlivecloud.com"}
+
+// isSystemDomain 判断是否为腾讯云系统域名（不区分大小写）
+func isSystemDomain(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	for _, suffix := range systemDomainSuffixes {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// excludeSystemDomains 过滤掉腾讯云系统域名
+func excludeSystemDomains(domains []*tencentLive.DomainInfo) []*tencentLive.DomainInfo {
+	filtered := make([]*tencentLive.DomainInfo, 0, len(domains))
+	for _, domain := range domains {
+		if domain != nil && !isSystemDomain(domain.Name) {
+			filtered = append(filtered, domain)
+		}
+	}
+	return filtered
 }
