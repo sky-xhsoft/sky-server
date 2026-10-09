@@ -6,10 +6,14 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 )
@@ -101,3 +105,71 @@ func TestVideoThumbnail_LocalFile(t *testing.T) {
 type fakeLocalPath struct{ path string }
 
 func (f fakeLocalPath) LocalPath(string) (string, error) { return f.path, nil }
+
+type fakePresigner struct{ url string }
+
+func (f fakePresigner) PresignedDownloadURL(context.Context, string, time.Duration) (string, error) {
+	return f.url, nil
+}
+
+// 云存储视频：经本机代理按 Range 读取并截取第一帧，不下载整个文件（未安装 ffmpeg 时跳过）
+func TestVideoThumbnail_RemoteViaProxy(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("未安装 ffmpeg")
+	}
+	dir := t.TempDir()
+	video := filepath.Join(dir, "v.mp4")
+	if out, err := exec.Command(ff, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=25",
+		"-vf", "noise=alls=100:allf=t", "-t", "10", "-b:v", "20M", "-pix_fmt", "yuv420p", "-movflags", "+faststart", video).CombinedOutput(); err != nil {
+		t.Fatalf("生成测试视频失败: %v %s", err, out)
+	}
+	data, _ := os.ReadFile(video)
+
+	var served int64
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cw := &countingWriter{ResponseWriter: w, n: &served}
+		http.ServeContent(cw, r, "v.mp4", time.Now(), bytes.NewReader(data))
+	}))
+	defer remote.Close()
+
+	s := &service{}
+	thumb, err := s.videoThumbnailFrom(context.Background(), fakePresigner{url: remote.URL + "/v.mp4?sig=secret"}, "v.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := jpeg.Decode(bytes.NewReader(thumb)); err != nil {
+		t.Fatalf("输出不是 JPEG: %v", err)
+	}
+	// 只应读取开头一小部分（远小于整个文件）
+	if got := atomic.LoadInt64(&served); got*4 > int64(len(data)) {
+		t.Errorf("读取了 %d 字节，应只读取部分内容（文件 %d 字节）", got, len(data))
+	}
+}
+
+type countingWriter struct {
+	http.ResponseWriter
+	n *int64
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.ResponseWriter.Write(p)
+	atomic.AddInt64(c.n, int64(n))
+	return n, err
+}
+
+func TestCapRange(t *testing.T) {
+	cases := map[string]string{
+		"":                 "bytes=0-2097151",
+		"bytes=0-":         "bytes=0-2097151",
+		"bytes=100-":       "bytes=100-2097251",
+		"bytes=0-99":       "bytes=0-99",
+		"bytes=0-99999999": "bytes=0-2097151",
+		"bytes=-500":       "bytes=-500",
+	}
+	for in, want := range cases {
+		if got := capRange(in); got != want {
+			t.Errorf("capRange(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

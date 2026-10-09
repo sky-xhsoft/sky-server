@@ -9,10 +9,13 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -223,7 +226,15 @@ func (s *service) videoThumbnailFrom(ctx context.Context, st interface{}, path s
 	case interface {
 		PresignedDownloadURL(context.Context, string, time.Duration) (string, error)
 	}:
-		input, err = v.PresignedDownloadURL(ctx, path, 10*time.Minute)
+		var signed string
+		if signed, err = v.PresignedDownloadURL(ctx, path, 10*time.Minute); err == nil {
+			// 经本机代理读取：静态编译的 ffmpeg 解析域名会崩溃，且签名地址不出现在进程参数中
+			var stop func()
+			input, stop, err = startRangeProxy(signed)
+			if err == nil {
+				defer stop()
+			}
+		}
 	default:
 		err = fmt.Errorf("存储不支持读取视频")
 	}
@@ -234,6 +245,10 @@ func (s *service) videoThumbnailFrom(ctx context.Context, st interface{}, path s
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, ffmpegPath,
 		"-hide_banner", "-loglevel", "error",
+		// 只取第一帧：缩短流分析，避免为探测格式读取数秒的视频数据
+		"-analyzeduration", "100000", "-probesize", "1000000",
+		// 单线程解码：多线程解码要先缓冲多帧才输出第一帧，会多读取数帧数据
+		"-threads", "1",
 		"-i", input,
 		"-frames:v", "1",
 		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", thumbnailWidth),
@@ -242,6 +257,8 @@ func (s *service) videoThumbnailFrom(ctx context.Context, st interface{}, path s
 	)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	// ffmpeg 会走 http_proxy 环境变量，本机代理地址须直连
+	cmd.Env = append(os.Environ(), "no_proxy=127.0.0.1,localhost", "NO_PROXY=127.0.0.1,localhost")
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("截取视频第一帧失败: %v %s", err, strings.TrimSpace(stderr.String()))
 	}
@@ -266,4 +283,73 @@ func findFFmpeg() string {
 		}
 	}
 	return ""
+}
+
+// rangeProxyClient 代理请求云存储的客户端（支持 Range，单次请求最长 1 分钟）
+var rangeProxyClient = &http.Client{Timeout: time.Minute}
+
+// proxyWindow 代理单次响应的最大字节数
+const proxyWindow = 2 << 20
+
+// capRange 把客户端的 Range 限制在 proxyWindow 以内（无 Range 视为从头读取）
+func capRange(header string) string {
+	var start, end int64 = 0, -1
+	if strings.HasPrefix(header, "bytes=") && !strings.Contains(header, ",") {
+		parts := strings.SplitN(strings.TrimPrefix(header, "bytes="), "-", 2)
+		if len(parts) == 2 && parts[0] != "" {
+			if v, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+				start = v
+			}
+			if v, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+				end = v
+			}
+		} else if len(parts) == 2 && parts[0] == "" {
+			return header // 后缀 Range（bytes=-N，读取末尾，如 moov 在文件尾）原样转发
+		}
+	}
+	if limit := start + proxyWindow - 1; end < 0 || end > limit {
+		end = limit
+	}
+	return fmt.Sprintf("bytes=%d-%d", start, end)
+}
+
+// startRangeProxy 在 127.0.0.1 启动临时代理，把请求（含 Range）转发到 target，返回本地地址与关闭函数
+func startRangeProxy(target string) (string, func(), error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", nil, err
+	}
+	srv := &http.Server{
+		ReadHeaderTimeout: 10 * time.Second,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			req, err := http.NewRequestWithContext(r.Context(), r.Method, target, nil)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			// 每次最多返回 proxyWindow 字节，ffmpeg 需要更多时会按偏移继续请求，
+			// 避免开放式 Range（bytes=0-）让代理在 ffmpeg 退出前持续从云存储拉取数据
+			req.Header.Set("Range", capRange(r.Header.Get("Range")))
+			resp, err := rangeProxyClient.Do(req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+			for _, h := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified", "ETag"} {
+				if v := resp.Header.Get(h); v != "" {
+					w.Header().Set(h, v)
+				}
+			}
+			w.WriteHeader(resp.StatusCode)
+			_, _ = io.Copy(w, resp.Body)
+		}),
+	}
+	go func() { _ = srv.Serve(ln) }()
+	stop := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}
+	return "http://" + ln.Addr().String() + "/video", stop, nil
 }
