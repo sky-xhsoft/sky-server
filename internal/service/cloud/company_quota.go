@@ -10,7 +10,7 @@ import (
 )
 
 // checkCompanyQuota 检查用户所属公司的配额（sys_company_conf 的 MAX_* 字段，单位字节）。
-// 存储空间未配置（0）时默认 100GB；单文件大小、文件数为 0 表示不限制
+// 存储空间未配置（0）时默认 100GB；单文件大小为 0 表示不限制；文件数不做限制（MAX_FILES 不生效）
 func (s *service) checkCompanyQuota(ctx context.Context, userID uint, fileSize int64) error {
 	var companyIDs []uint
 	if err := s.db.WithContext(ctx).Table("sys_user").Where("ID = ?", userID).
@@ -23,7 +23,7 @@ func (s *service) checkCompanyQuota(ctx context.Context, userID uint, fileSize i
 	companyID := companyIDs[0]
 
 	var conf entity.SysCompanyConf
-	err := s.db.WithContext(ctx).Select("MAX_STORAGE_SIZE, MAX_FILE_SIZE, MAX_FILES").
+	err := s.db.WithContext(ctx).Select("MAX_STORAGE_SIZE, MAX_FILE_SIZE").
 		Where("SYS_COMPANY_ID = ? AND IS_ACTIVE = ?", companyID, "Y").First(&conf).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return errors.Wrap(errors.ErrDatabase, "查询公司配置失败", err)
@@ -37,15 +37,12 @@ func (s *service) checkCompanyQuota(ctx context.Context, userID uint, fileSize i
 		limit = DefaultCompanyStorageQuota
 	}
 
-	usedSpace, fileCount, err := s.companyUsage(ctx, companyID)
+	usedSpace, _, err := s.companyUsage(ctx, companyID)
 	if err != nil {
 		return err
 	}
 	if usedSpace+fileSize > limit {
 		return errors.New(errors.ErrResourceConflict, fmt.Sprintf("公司存储空间不足（上限%s）", formatBytes(limit)))
-	}
-	if conf.MaxFiles > 0 && fileCount+1 > int64(conf.MaxFiles) {
-		return errors.New(errors.ErrResourceConflict, fmt.Sprintf("公司文件数已达上限（%d个）", conf.MaxFiles))
 	}
 	return nil
 }

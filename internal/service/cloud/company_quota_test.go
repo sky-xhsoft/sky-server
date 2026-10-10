@@ -19,8 +19,8 @@ func TestCheckCompanyQuota(t *testing.T) {
 		`CREATE TABLE sys_user (ID INTEGER PRIMARY KEY, SYS_COMPANY_ID INTEGER)`,
 		`CREATE TABLE sys_company_conf (ID INTEGER PRIMARY KEY, SYS_COMPANY_ID INTEGER, IS_ACTIVE TEXT, MAX_STORAGE_SIZE INTEGER, MAX_FILE_SIZE INTEGER, MAX_FILES INTEGER)`,
 		`CREATE TABLE cloud_quota (ID INTEGER PRIMARY KEY, USER_ID INTEGER, USED_SPACE INTEGER, FILE_COUNT INTEGER, IS_ACTIVE TEXT)`,
-		// 公司 1：总量 1000 字节、单文件 300 字节、最多 5 个文件；两个用户已用 700 字节、4 个文件
-		// 公司 2：全部为 0（存储空间默认 100GB，单文件与文件数不限制）；公司 3：没有配置（同样默认 100GB）
+		// 公司 1：总量 1000 字节、单文件 300 字节、MAX_FILES=5（不生效）；两个用户已用 700 字节、4 个文件
+		// 公司 2：全部为 0（存储空间默认 100GB，单文件不限制）；公司 3：没有配置（同样默认 100GB）
 		`INSERT INTO sys_user VALUES (1, 1), (2, 1), (3, 2), (4, 3)`,
 		`INSERT INTO sys_company_conf VALUES (1, 1, 'Y', 1000, 300, 5), (2, 2, 'Y', 0, 0, 0)`,
 		`INSERT INTO cloud_quota VALUES (1, 1, 500, 3, 'Y'), (2, 2, 200, 1, 'Y'), (3, 3, 999999, 999, 'Y')`,
@@ -52,9 +52,9 @@ func TestCheckCompanyQuota(t *testing.T) {
 		}
 	}
 
-	// 文件数达到上限
-	db.Exec(`UPDATE cloud_quota SET FILE_COUNT = 4 WHERE ID = 1`)
-	if err := s.checkCompanyQuota(ctx, 1, 1); err == nil {
-		t.Error("公司文件数已满 5 个时应拒绝上传")
+	// 文件数不做限制：即使超过 MAX_FILES 配置也允许上传
+	db.Exec(`UPDATE cloud_quota SET FILE_COUNT = 40 WHERE ID = 1`)
+	if err := s.checkCompanyQuota(ctx, 1, 1); err != nil {
+		t.Errorf("文件数不应限制上传: %v", err)
 	}
 }
