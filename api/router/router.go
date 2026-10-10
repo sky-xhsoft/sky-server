@@ -123,7 +123,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	})
 
 	// 健康检查
-	engine.GET("/health", middleware.HealthCheck())
+	engine.GET("/health", middleware.HealthCheck()) // 路径须与 middleware.healthPath 一致
 
 	// 本地存储模式下云盘文件的访问地址（accessUrl 为 /files/cloud/...，与 COS 公开地址语义一致；
 	// 只开放 cloud 子目录，系统附件仍需经鉴权接口访问）

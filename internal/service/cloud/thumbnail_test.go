@@ -280,3 +280,24 @@ func TestThumbnailSaveAndReadFromStore(t *testing.T) {
 		t.Error("非 JPEG 内容应视为无效")
 	}
 }
+
+// 生成失败后短期内不再重试，过期后允许重试
+func TestThumbnailFailureCache(t *testing.T) {
+	old := thumbnailFailTTL
+	defer func() { thumbnailFailTTL = old }()
+	thumbnailFailTTL = 50 * time.Millisecond
+	key := filepath.Join(ThumbnailCacheDir, "ab", "v1_failure-test.jpg")
+	defer thumbnailFailures.Delete(key)
+
+	if thumbnailRecentlyFailed(key) {
+		t.Fatal("未失败过不应跳过")
+	}
+	markThumbnailFailed(key)
+	if !thumbnailRecentlyFailed(key) {
+		t.Fatal("刚失败过应跳过重试")
+	}
+	time.Sleep(80 * time.Millisecond)
+	if thumbnailRecentlyFailed(key) {
+		t.Fatal("超过有效期应允许重试")
+	}
+}

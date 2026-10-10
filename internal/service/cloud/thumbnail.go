@@ -111,6 +111,10 @@ func (s *service) GetThumbnail(ctx context.Context, fileID uint, userID uint) ([
 	if data, err := os.ReadFile(cachePath); err == nil {
 		return data, nil
 	}
+	// 近期生成失败过（如存储桶不可读、视频损坏）：短期内不再重试，避免每次浏览都重新调用 ffmpeg 读取云存储
+	if thumbnailRecentlyFailed(cachePath) {
+		return nil, errors.New(errors.ErrResourceNotFound, "缩略图暂不可用")
+	}
 
 	result, err, _ := thumbnailGroup.Do(cachePath, func() (interface{}, error) {
 		if data, err := os.ReadFile(cachePath); err == nil {
@@ -151,10 +155,35 @@ func (s *service) GetThumbnail(ctx context.Context, fileID uint, userID uint) ([
 		return data, nil
 	})
 	if err != nil {
+		markThumbnailFailed(cachePath)
 		logger.Warn("生成缩略图失败", zap.Uint("fileID", fileID), zap.String("error", signedQuery.ReplaceAllString(err.Error(), "?***")))
 		return nil, errors.Wrap(errors.ErrResourceNotFound, "缩略图不可用", err)
 	}
+	thumbnailFailures.Delete(cachePath)
 	return result.([]byte), nil
+}
+
+// thumbnailFailTTL 缩略图生成失败后，在该时长内同一文件不再重试（变量便于测试）
+var thumbnailFailTTL = 10 * time.Minute
+
+// thumbnailFailures 缩略图缓存路径 → 最近一次生成失败的时间
+var thumbnailFailures sync.Map
+
+func markThumbnailFailed(cachePath string) {
+	thumbnailFailures.Store(cachePath, time.Now())
+}
+
+// thumbnailRecentlyFailed 是否在 thumbnailFailTTL 内生成失败过；过期的记录顺便清除
+func thumbnailRecentlyFailed(cachePath string) bool {
+	v, ok := thumbnailFailures.Load(cachePath)
+	if !ok {
+		return false
+	}
+	if time.Since(v.(time.Time)) < thumbnailFailTTL {
+		return true
+	}
+	thumbnailFailures.Delete(cachePath)
+	return false
 }
 
 // thumbnailStore 缩略图同时保存到的公司存储（文件所有者所在公司）。

@@ -19,6 +19,12 @@ func Metrics() gin.HandlerFunc {
 		path := c.FullPath()
 		method := c.Request.Method
 
+		// 健康检查本身不计入请求统计：否则健康检查返回 503 也算一次错误，错误率自我放大
+		if path == healthPath {
+			c.Next()
+			return
+		}
+
 		// 记录请求开始
 		collector.IncrementCounter("http.requests.total", 1)
 		collector.IncrementCounter("http.requests."+method+".total", 1)
@@ -46,6 +52,10 @@ func Metrics() gin.HandlerFunc {
 			collector.IncrementCounter("http.requests.error", 1)
 		} else {
 			collector.IncrementCounter("http.requests.success", 1)
+		}
+		// 服务端错误（5xx）单独计数，健康检查只按它判断；4xx 是客户端结果（如缩略图不存在 404、未登录 401），不代表服务异常
+		if status >= 500 {
+			collector.IncrementCounter("http.requests.server_error", 1)
 		}
 
 		// 慢请求告警
@@ -144,13 +154,17 @@ func ResetMetrics(c *gin.Context) {
 	})
 }
 
-// HealthCheck 健康检查
+// healthPath 健康检查路由
+const healthPath = "/health"
+
+// HealthCheck 健康检查：按服务端错误（5xx）占比判断，4xx 客户端结果不计入
 func HealthCheck() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		collector := monitor.GetMetricsCollector()
 
 		totalRequests := collector.GetCounter("http.requests.total")
-		errorRequests := collector.GetCounter("http.requests.error")
+		errorRequests := collector.GetCounter("http.requests.server_error")
+		clientErrors := collector.GetCounter("http.requests.error") - errorRequests
 		successRequests := collector.GetCounter("http.requests.success")
 
 		var errorRate float64
@@ -180,6 +194,7 @@ func HealthCheck() gin.HandlerFunc {
 				"total_requests":   totalRequests,
 				"success_requests": successRequests,
 				"error_requests":   errorRequests,
+				"client_errors":    clientErrors,
 				"error_rate":       errorRate,
 				"timestamp":        time.Now().Format(time.RFC3339),
 			},
