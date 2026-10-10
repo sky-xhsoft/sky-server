@@ -31,8 +31,8 @@ type mediaPresigner interface {
 	PresignedDownloadURL(ctx context.Context, path string, expire time.Duration) (string, error)
 }
 
-// GetPlayURL 视频、音频的在线播放地址：云存储返回带签名的直链，浏览器按 Range 边下边播，不经过应用服务器；
-// 本地存储没有直链，返回空字符串（前端改为经服务器读取）
+// GetPlayURL 文件直链（视频 / 音频边下边播、图片显示、文档预览读取）：云存储返回带签名的直链，
+// 浏览器直接从云存储读取，不经过应用服务器；本地存储没有直链，返回空字符串（前端改为经服务器读取）
 func (s *service) GetPlayURL(ctx context.Context, fileID uint, userID uint) (string, error) {
 	file, err := s.readableFile(ctx, fileID, userID)
 	if err != nil {

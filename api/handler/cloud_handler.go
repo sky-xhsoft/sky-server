@@ -325,9 +325,9 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 	}
 }
 
-// GetPlayURL 视频、音频在线播放地址
-// @Summary 在线播放地址
-// @Description 云存储返回带签名的直链（浏览器边下边播，不经过应用服务器）；本地存储返回空 url，前端改为经服务器读取
+// GetPlayURL 文件直链（视频、音频、图片、文档预览）
+// @Summary 文件直链
+// @Description 云存储返回带签名的直链（浏览器直接从云存储读取，视频边下边播，不经过应用服务器）；本地存储返回空 url，前端改为经服务器读取
 // @Tags Cloud
 // @Produce json
 // @Param id path int true "文件ID"
