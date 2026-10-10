@@ -325,6 +325,61 @@ func (h *CloudHandler) DownloadFile(c *gin.Context) {
 	}
 }
 
+// GetPlayURL 视频、音频在线播放地址
+// @Summary 在线播放地址
+// @Description 云存储返回带签名的直链（浏览器边下边播，不经过应用服务器）；本地存储返回空 url，前端改为经服务器读取
+// @Tags Cloud
+// @Produce json
+// @Param id path int true "文件ID"
+// @Success 200 {object} map[string]string
+// @Router /api/v1/cloud/files/{id}/play-url [get]
+func (h *CloudHandler) GetPlayURL(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+	url, err := h.cloudService.GetPlayURL(c.Request.Context(), uint(id), userID.(uint))
+	if err != nil {
+		utils.FailFromError(c, "获取播放地址失败: ", err)
+		return
+	}
+	utils.Success(c, gin.H{"url": url})
+}
+
+// GetPreviewPDF 旧版 Word 文档转换后的 PDF（用于保留排版的预览）
+// @Summary 文档预览 PDF
+// @Description .doc / .dot / .wps 在服务器用 LibreOffice 转为 PDF，首次转换后缓存
+// @Tags Cloud
+// @Produce application/pdf
+// @Param id path int true "文件ID"
+// @Success 200 {file} binary
+// @Router /api/v1/cloud/files/{id}/preview-pdf [get]
+func (h *CloudHandler) GetPreviewPDF(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "ID格式错误")
+		return
+	}
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "未授权")
+		return
+	}
+	data, err := h.cloudService.GetPreviewPDF(c.Request.Context(), uint(id), userID.(uint))
+	if err != nil {
+		utils.FailFromError(c, "", err)
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=86400")
+	c.Data(200, "application/pdf", data)
+}
+
 // GetThumbnail 文件缩略图
 // @Summary 文件缩略图
 // @Description 图片返回缩小图，视频返回第一帧（JPEG）；其他类型或生成失败返回 404

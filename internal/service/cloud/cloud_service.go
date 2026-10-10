@@ -57,6 +57,10 @@ type Service interface {
 	GetCompanyStorage(ctx context.Context, userID uint) (*CompanyStorage, error)
 	// GetThumbnail 文件缩略图（JPEG）：图片为缩小图，视频为第一帧
 	GetThumbnail(ctx context.Context, fileID uint, userID uint) ([]byte, error)
+	// GetPlayURL 视频、音频在线播放直链（云存储签名地址）；本地存储返回空字符串
+	GetPlayURL(ctx context.Context, fileID uint, userID uint) (string, error)
+	// GetPreviewPDF 旧版 Word（.doc 等）转换为 PDF 预览
+	GetPreviewPDF(ctx context.Context, fileID uint, userID uint) ([]byte, error)
 	DeleteFile(ctx context.Context, fileID uint, userID uint) error
 	MoveFile(ctx context.Context, fileID uint, targetFolderID *uint, userID uint) error
 	RenameFile(ctx context.Context, fileID uint, newName string, userID uint) error
