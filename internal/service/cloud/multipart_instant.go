@@ -52,14 +52,7 @@ func (s *multipartUploadService) completeInstant(ctx context.Context, session *e
 	fileExt := filepath.Ext(session.FileName)
 
 	// 完整路径 = 父目录路径 + 名称（重名时由 BeforeCreate 自动改名并同步路径末段）
-	itemPath := "/" + session.FileName
-	if session.FolderID != nil {
-		var parentPath string
-		s.db.WithContext(ctx).Table("cloud_item").Select("PATH").Where("ID = ?", *session.FolderID).Scan(&parentPath)
-		if parentPath != "" {
-			itemPath = parentPath + "/" + session.FileName
-		}
-	}
+	itemPath := s.childPath(ctx, session.FolderID, session.FileName)
 
 	newFile := &entity.CloudItem{
 		BaseModel: entity.BaseModel{
@@ -93,4 +86,9 @@ func (s *multipartUploadService) completeInstant(ctx context.Context, session *e
 	// 秒传不新增存储占用，只增加文件数
 	s.cloudService.UpdateQuota(ctx, userID, 0, 1, 0)
 	return newFile, nil
+}
+
+// childPath 条目在父目录下的完整路径：父目录 PATH + "/" + 名称；根目录（或父目录无路径）为 "/" + 名称
+func (s *multipartUploadService) childPath(ctx context.Context, parentID *uint, name string) string {
+	return itemChildPath(s.db.WithContext(ctx), parentID, name)
 }

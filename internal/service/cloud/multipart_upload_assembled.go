@@ -78,6 +78,7 @@ func (s *multipartUploadService) completeAssembled(ctx context.Context, session 
 		ItemType:    "file",
 		Name:        session.FileName,
 		ParentID:    session.FolderID,
+		Path:        s.childPath(ctx, session.FolderID, session.FileName),
 		OwnerID:     userID,
 		StoragePath: &finalPath,
 		FileSize:    &fileSize,

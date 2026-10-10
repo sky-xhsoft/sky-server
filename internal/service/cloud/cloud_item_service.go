@@ -352,17 +352,10 @@ func (s *service) RenameItem(ctx context.Context, itemID uint, newName string, u
 	}
 
 	oldPath := item.Path
-	oldName := item.Name
 	item.Name = newName
 
-	// 重新计算路径
-	if item.ParentID == nil {
-		item.Path = "/" + newName
-	} else {
-		// 替换路径中的最后一部分
-		parentPath := item.Path[:len(item.Path)-len(oldName)-1]
-		item.Path = parentPath + "/" + newName
-	}
+	// 按父目录重新计算路径（不从旧路径截取：旧数据路径可能为空或不一致）
+	item.Path = itemChildPath(s.db.WithContext(ctx), item.ParentID, newName)
 	newPath := item.Path
 
 	// 使用事务确保原子性
@@ -420,4 +413,16 @@ func (s *service) deleteStorageIfUnreferenced(ctx context.Context, item *entity.
 	if err := storageInstance.Delete(ctx, *item.StoragePath); err != nil {
 		logger.Warn("Storage delete failed for item", zap.Uint("itemId", item.ID), zap.Error(err))
 	}
+}
+
+// itemChildPath 条目在父目录下的完整路径：父目录 PATH + "/" + 名称；根目录（或父目录无路径）为 "/" + 名称
+func itemChildPath(db *gorm.DB, parentID *uint, name string) string {
+	if parentID != nil {
+		var parentPath string
+		db.Table("cloud_item").Select("PATH").Where("ID = ?", *parentID).Scan(&parentPath)
+		if parentPath != "" {
+			return strings.TrimSuffix(parentPath, "/") + "/" + name
+		}
+	}
+	return "/" + name
 }
