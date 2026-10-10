@@ -82,6 +82,8 @@ type Service interface {
 	// 配额管理
 	GetUserQuota(ctx context.Context, userID uint) (*entity.CloudQuota, error)
 	CheckQuota(ctx context.Context, userID uint, fileSize int64) error
+	// CheckRelayUpload 经服务器上传前检查：云存储支持直传时，超过 MaxRelayUploadSize 的文件必须分片直传
+	CheckRelayUpload(ctx context.Context, userID uint, fileSize int64) error
 	UpdateQuota(ctx context.Context, userID uint, sizeDelta int64, fileDelta int, folderDelta int) error
 	RecalculateQuota(ctx context.Context, userID uint) error
 }

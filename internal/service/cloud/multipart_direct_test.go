@@ -57,3 +57,9 @@ func TestUploadModeOf(t *testing.T) {
 		t.Errorf("本地存储应中转，got %s", got)
 	}
 }
+
+func TestMaxRelayUploadSize(t *testing.T) {
+	if MaxRelayUploadSize != 50<<20 {
+		t.Fatalf("经服务器上传上限应为 50MB（与前端 RESUMABLE_THRESHOLD 一致），got %d", MaxRelayUploadSize)
+	}
+}

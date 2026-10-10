@@ -19,6 +19,10 @@ const (
 	UploadModeRelay = "relay"
 )
 
+// MaxRelayUploadSize 云存储支持直传时，经应用服务器上传的单个文件上限（50MB）；
+// 更大的文件由前端分片直传到云存储，不占用应用服务器带宽
+const MaxRelayUploadSize int64 = 50 << 20
+
 // directUploadExpireSeconds 直传分块地址的有效期
 const directUploadExpireSeconds = 3600
 
@@ -124,4 +128,19 @@ func verifiedPartETags(ctx context.Context, lister directPartStorage, session *e
 		return nil, errors.New(errors.ErrInvalidParam, "存储端分片数量与文件不一致，请重新上传")
 	}
 	return etags, nil
+}
+
+// CheckRelayUpload 经服务器上传（非分片）前检查：公司云存储支持直传时，超过 50MB 的文件拒绝中转
+func (s *service) CheckRelayUpload(ctx context.Context, userID uint, fileSize int64) error {
+	if fileSize <= MaxRelayUploadSize {
+		return nil
+	}
+	st, err := s.getCompanyStorage(ctx, userID)
+	if err != nil {
+		return nil // 存储不可用时由后续上传流程报错
+	}
+	if _, ok := st.(directPartStorage); ok {
+		return errors.New(errors.ErrInvalidParam, "超过 50MB 的文件需直传到云存储，请刷新页面后重新上传")
+	}
+	return nil
 }

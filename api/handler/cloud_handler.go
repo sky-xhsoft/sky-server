@@ -200,6 +200,9 @@ func (h *CloudHandler) RenameFolder(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "重命名文件夹成功"})
 }
 
+// relayFormOverhead 表单上传时请求体中除文件内容外的开销（分隔符、字段等）的宽松上限
+const relayFormOverhead = 64 << 10
+
 // UploadFile 上传文件
 // @Summary 上传文件
 // @Description 上传文件到指定文件夹
@@ -211,10 +214,25 @@ func (h *CloudHandler) RenameFolder(c *gin.Context) {
 // @Success 200 {object} entity.CloudFile
 // @Router /api/v1/cloud/files/upload [post]
 func (h *CloudHandler) UploadFile(c *gin.Context) {
+	// 读取请求体之前先按 Content-Length 拦截：大文件应直传云存储，不能先把整个文件收到服务器再拒绝
+	if uid, ok := c.Get("userID"); ok && c.Request.ContentLength > cloud.MaxRelayUploadSize+relayFormOverhead {
+		if err := h.cloudService.CheckRelayUpload(c.Request.Context(), uid.(uint), c.Request.ContentLength-relayFormOverhead); err != nil {
+			c.Header("Connection", "close")
+			utils.FailFromError(c, "", err)
+			return
+		}
+	}
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		utils.BadRequest(c, "未找到上传文件")
 		return
+	}
+	if uid, ok := c.Get("userID"); ok {
+		if err := h.cloudService.CheckRelayUpload(c.Request.Context(), uid.(uint), fileHeader.Size); err != nil {
+			utils.FailFromError(c, "", err)
+			return
+		}
 	}
 
 	folderIDStr := c.PostForm("folderId")
