@@ -17,6 +17,9 @@ type MultipartUploadService interface {
 	// GetChunkPresignedURL 获取分片预签名上传URL（前端直传模式）
 	GetChunkPresignedURL(ctx context.Context, sessionID uint, chunkIndex int, userID uint) (*ChunkPresignedURL, error)
 
+	// GetChunkPresignedURLs 批量签发分块直传地址（前端直传模式）
+	GetChunkPresignedURLs(ctx context.Context, sessionID uint, chunkIndexes []int, userID uint) ([]*ChunkPresignedURL, error)
+
 	// MarkChunkUploaded 标记分片已上传（前端直传模式，分片上传成功后调用）
 	MarkChunkUploaded(ctx context.Context, sessionID uint, chunkIndex int, etag string, userID uint) error
 
@@ -68,6 +71,8 @@ type UploadSessionInfo struct {
 	UploadedChunks []int  `json:"uploadedChunks"`
 	Status         string `json:"status"`
 	ExpireTime     string `json:"expireTime"`
+	// UploadMode 分块上传方式：direct 浏览器直传云存储（不经过应用服务器），relay 经应用服务器中转
+	UploadMode string `json:"uploadMode"`
 }
 
 // UploadStatus 上传状态

@@ -96,6 +96,16 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 		if completeProvider, ok := storageInstance.(interface {
 			CompleteMultipartUpload(ctx context.Context, path string, uploadID string, partETags []string) (string, error)
 		}); ok {
+			// 支持直传的存储（COS）：以存储端实际收到的分块为准（直传时分块不经过服务器，必须在此校验）
+			var verifiedETags []string
+			if lister, ok := storageInstance.(directPartStorage); ok {
+				etags, err := verifiedPartETags(ctx, lister, &session)
+				if err != nil {
+					return nil, err
+				}
+				verifiedETags = etags
+			}
+
 			// 查询所有分片的 ETag
 			var chunkRecords []entity.CloudChunkRecord
 			err := s.db.WithContext(ctx).
@@ -118,6 +128,10 @@ func (s *multipartUploadService) CompleteUpload(ctx context.Context, sessionID u
 					}
 					partETags = append(partETags, etag)
 				}
+			}
+
+			if verifiedETags != nil {
+				partETags = verifiedETags
 			}
 
 			// 检查所有分片都有 ETag

@@ -67,6 +67,10 @@ func (s *multipartUploadService) UploadChunk(ctx context.Context, req *UploadChu
 		logger.Error("获取存储实例失败", zap.Error(err))
 		return errors.Wrap(errors.ErrStorage, "获取存储实例失败", err)
 	}
+	// 支持直传的云存储必须由浏览器直传，不经服务器中转（避免应用服务器承担文件流量）
+	if uploadModeOf(storageInstance, session) == UploadModeDirect {
+		return errors.New(errors.ErrInvalidParam, "该存储需由浏览器直传，请刷新页面后重新上传")
+	}
 
 	chunkPath := fmt.Sprintf("%s/chunk_%d", session.StoragePath, req.ChunkIndex)
 	etag := ""
@@ -226,6 +230,10 @@ func (s *multipartUploadService) MarkChunkUploaded(ctx context.Context, sessionI
 			return errors.Wrap(errors.ErrDatabase, "查询上传会话失败", err)
 		}
 
+		if lockedSession.Status != "uploading" && lockedSession.Status != "paused" {
+			return errors.New(errors.ErrInvalidParam, "上传会话状态无效: "+lockedSession.Status)
+		}
+
 		// 2. 验证分片索引
 		if chunkIndex < 0 || chunkIndex >= lockedSession.TotalChunks {
 			return errors.New(errors.ErrInvalidParam, fmt.Sprintf("分片索引无效: %d", chunkIndex))
@@ -252,7 +260,7 @@ func (s *multipartUploadService) MarkChunkUploaded(ctx context.Context, sessionI
 			chunkRecord = entity.CloudChunkRecord{
 				SessionID:  sessionID,
 				ChunkIndex: chunkIndex,
-				ChunkSize:  int(lockedSession.ChunkSize),
+				ChunkSize:  int(expectedChunkSize(&lockedSession, chunkIndex)),
 				ChunkMD5:   "", // 直传模式下，MD5由前端计算，但我们不需要存储
 				ETag:       etag,
 				ChunkPath:  chunkPath,

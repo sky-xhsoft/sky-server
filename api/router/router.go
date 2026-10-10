@@ -711,6 +711,7 @@ func registerCloudRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, services *Servic
 				multipart.POST("/upload", multipartHandler.UploadChunk)
 				multipart.GET("/status", multipartHandler.GetUploadStatus)
 				multipart.GET("/:sessionId/presigned", multipartHandler.GetChunkPresignedURL)
+				multipart.POST("/:sessionId/presigned", multipartHandler.GetChunkPresignedURLs)
 				multipart.POST("/:sessionId/chunk", multipartHandler.MarkChunkUploaded)
 				multipart.POST("/complete", multipartHandler.CompleteUpload)
 				multipart.DELETE("/:sessionId", multipartHandler.AbortUpload)

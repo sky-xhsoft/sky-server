@@ -77,6 +77,7 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 			UploadedChunks: uploadedChunks,
 			Status:         "uploading", // 返回最新状态
 			ExpireTime:     newExpireTime.Format(time.RFC3339),
+			UploadMode:     s.sessionUploadMode(ctx, &existingSession),
 		}, nil
 	}
 	// 3. 设置默认分片大小（使用配置值）
@@ -221,6 +222,7 @@ func (s *multipartUploadService) InitUpload(ctx context.Context, req *InitUpload
 		UploadedChunks: uploadedChunks,
 		Status:         "uploading",
 		ExpireTime:     expireTime.Format(time.RFC3339),
+		UploadMode:     uploadModeOf(storageInstance, session),
 	}, nil
 }
 
@@ -305,6 +307,7 @@ func (s *multipartUploadService) ResumeUpload(ctx context.Context, fileMD5 strin
 		UploadedChunks: uploadedChunks,
 		Status:         "uploading",
 		ExpireTime:     newExpireTime.Format(time.RFC3339),
+		UploadMode:     s.sessionUploadMode(ctx, &session),
 	}, nil
 }
 

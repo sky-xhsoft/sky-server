@@ -47,13 +47,13 @@ func (s *multipartUploadService) StartComplete(ctx context.Context, sessionID ui
 		return s.CompleteUpload(ctx, sessionID, userID)
 	}
 
-	// 原生分块全部带 ETag、本地分片已直接组装（只需改名）或本会话未上传任何分片（秒传）：同步完成
+	// 原生分块全部带 ETag（或存储端可查到分块，如直传 COS）、本地分片已直接组装（只需改名）或本会话未上传任何分片（秒传）：同步完成
 	var uploaded, withETag int64
 	s.db.WithContext(ctx).Model(&entity.CloudChunkRecord{}).
 		Where("SESSION_ID = ? AND UPLOADED = ?", sessionID, true).Count(&uploaded)
 	s.db.WithContext(ctx).Model(&entity.CloudChunkRecord{}).
 		Where("SESSION_ID = ? AND UPLOADED = ? AND ETAG <> ''", sessionID, true).Count(&withETag)
-	if uploaded == 0 || (session.StorageUploadID != "" && int(withETag) == session.TotalChunks) || s.isAssembled(ctx, &session) {
+	if uploaded == 0 || (session.StorageUploadID != "" && (int(withETag) == session.TotalChunks || s.sessionUploadMode(ctx, &session) == UploadModeDirect)) || s.isAssembled(ctx, &session) {
 		return s.CompleteUpload(ctx, sessionID, userID)
 	}
 

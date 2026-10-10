@@ -317,6 +317,45 @@ func (h *MultipartUploadHandler) GetChunkPresignedURL(c *gin.Context) {
 	utils.Success(c, result)
 }
 
+// GetChunkPresignedURLs 批量获取分块直传地址
+// @Summary 批量获取分块直传地址
+// @Description 前端直传模式下一次签发多个分块的上传地址（最多 200 个），浏览器用地址直接 PUT 到云存储
+// @Tags Cloud-Multipart
+// @Accept json
+// @Produce json
+// @Param sessionId path int true "会话ID"
+// @Param body body PresignBatchRequest true "分片索引列表"
+// @Success 200 {array} cloud.ChunkPresignedURL
+// @Router /api/v1/cloud/files/multipart/{sessionId}/presigned [post]
+func (h *MultipartUploadHandler) GetChunkPresignedURLs(c *gin.Context) {
+	sessionID, err := utils.ParseUintParam(c, "sessionId")
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	var req PresignBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+	userID, err := utils.GetCurrentUserID(c)
+	if err != nil {
+		utils.Unauthorized(c, err.Error())
+		return
+	}
+	result, err := h.multipartService.GetChunkPresignedURLs(c.Request.Context(), sessionID, req.ChunkIndexes, userID)
+	if err != nil {
+		utils.FailFromError(c, "获取上传地址失败: ", err)
+		return
+	}
+	utils.Success(c, result)
+}
+
+// PresignBatchRequest 批量签发分块直传地址请求
+type PresignBatchRequest struct {
+	ChunkIndexes []int `json:"chunkIndexes" binding:"required"`
+}
+
 // MarkChunkUploaded 标记分片已上传（前端直传模式，分片上传成功后调用）
 // @Summary 标记分片已上传
 // @Description 前端直传模式下，分片上传成功后调用此接口标记分片已上传

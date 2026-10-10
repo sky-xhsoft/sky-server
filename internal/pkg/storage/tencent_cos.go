@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -443,34 +444,26 @@ func (s *TencentCOS) GetObjectInfo(ctx context.Context, path string) (*ObjectInf
 	}, nil
 }
 
-// PresignedUploadURL 获取预签名上传URL（用于前端直传）
+// PresignedUploadURL 获取预签名上传URL（用于前端直传）。签名放在 URL 查询参数中，浏览器直接 PUT 即可
 func (s *TencentCOS) PresignedUploadURL(ctx context.Context, path string, expireSeconds int, contentType string) (string, error) {
-	// 构建请求URL
-	uploadURL := fmt.Sprintf("%s/%s", s.bucketURL, path)
+	return s.presignedPutURL(ctx, path, nil, expireSeconds)
+}
 
-	// 创建请求
-	req, err := http.NewRequestWithContext(ctx, "PUT", uploadURL, nil)
+// presignedPutURL 生成带签名的 PUT 地址；query 中的参数（如 uploadId、partNumber）一并签入
+func (s *TencentCOS) presignedPutURL(ctx context.Context, path string, query *url.Values, expireSeconds int) (string, error) {
+	bucketURL, err := url.Parse(s.bucketURL)
 	if err != nil {
-		logger.Error("Failed to create presigned upload request",
-			zap.String("path", path),
-			zap.Int("expireSeconds", expireSeconds),
-			zap.Error(err),
-		)
-		return "", errors.Wrap(errors.ErrInternal, "创建预签名请求失败", err)
+		return "", errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
 	}
-
-	// 设置Content-Type
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-
-	// 使用COS SDK生成预签名URL
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, s.httpClient)
 	expire := time.Duration(expireSeconds) * time.Second
-	authTime := cos.NewAuthTime(expire)
-	cos.AddAuthorizationHeader(s.secretID, s.secretKey, "", req, authTime)
-
-	// 返回带签名的URL
-	return req.URL.String(), nil
+	presigned, err := client.Object.GetPresignedURL(ctx, http.MethodPut, path, s.secretID, s.secretKey, expire,
+		&cos.PresignedURLOptions{Query: query})
+	if err != nil {
+		logger.Error("Failed to create presigned upload url", zap.String("path", path), zap.Error(err))
+		return "", errors.Wrap(errors.ErrInternal, "生成上传地址失败", err)
+	}
+	return presigned.String(), nil
 }
 
 // signRequest 签名请求
@@ -514,38 +507,44 @@ func (s *TencentCOS) InitiateMultipartUpload(ctx context.Context, path string) (
 	return result.UploadID, nil
 }
 
-// PresignedChunkUploadURL 获取分块预签名上传URL
+// PresignedChunkUploadURL 获取原生分块的预签名上传地址（chunkNumber 从 0 开始，COS 分块编号从 1 开始）。
+// 浏览器用该地址直接 PUT 分块到 COS，不经过应用服务器
 func (s *TencentCOS) PresignedChunkUploadURL(ctx context.Context, path string, uploadID string, chunkNumber int, expireSeconds int, contentType string) (string, error) {
-	// chunkNumber 从 1 开始，COS要求分片编号从1开始
-	// 我们这里前端从0开始，需要加1
-	cosChunkNumber := chunkNumber + 1
+	query := url.Values{}
+	query.Set("partNumber", strconv.Itoa(chunkNumber+1))
+	query.Set("uploadId", uploadID)
+	return s.presignedPutURL(ctx, path, &query, expireSeconds)
+}
 
-	// 构建请求URL
-	chunkURL := fmt.Sprintf("%s/%s?uploadId=%s&partNumber=%d", s.bucketURL, path, uploadID, cosChunkNumber)
+// UploadedPart COS 端已上传的分块
+type UploadedPart struct {
+	PartNumber int // 从 1 开始
+	ETag       string
+	Size       int64
+}
 
-	// 创建请求
-	req, err := http.NewRequestWithContext(ctx, "PUT", chunkURL, nil)
+// ListUploadedParts 列出原生分块上传中 COS 端实际已收到的全部分块（自动翻页）
+func (s *TencentCOS) ListUploadedParts(ctx context.Context, path string, uploadID string) ([]UploadedPart, error) {
+	bucketURL, err := url.Parse(s.bucketURL)
 	if err != nil {
-		logger.Error("Failed to create presigned chunk upload request",
-			zap.String("path", path),
-			zap.String("uploadID", uploadID),
-			zap.Int("chunkNumber", chunkNumber),
-			zap.Error(err))
-		return "", errors.Wrap(errors.ErrInternal, "创建分块预签名请求失败", err)
+		return nil, errors.Wrap(errors.ErrInternal, "解析Bucket URL失败", err)
 	}
-
-	// 设置Content-Type
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
+	client := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, s.httpClient)
+	var parts []UploadedPart
+	opt := &cos.ObjectListPartsOptions{MaxParts: "1000"}
+	for {
+		result, _, err := client.Object.ListParts(ctx, path, uploadID, opt)
+		if err != nil {
+			return nil, errors.Wrap(errors.ErrStorage, "查询已上传分块失败", err)
+		}
+		for _, p := range result.Parts {
+			parts = append(parts, UploadedPart{PartNumber: p.PartNumber, ETag: strings.Trim(p.ETag, `"`), Size: p.Size})
+		}
+		if !result.IsTruncated || result.NextPartNumberMarker == "" {
+			return parts, nil
+		}
+		opt.PartNumberMarker = result.NextPartNumberMarker
 	}
-
-	// 使用COS SDK生成预签名URL
-	expire := time.Duration(expireSeconds) * time.Second
-	authTime := cos.NewAuthTime(expire)
-	cos.AddAuthorizationHeader(s.secretID, s.secretKey, "", req, authTime)
-
-	// 返回带签名的URL
-	return req.URL.String(), nil
 }
 
 // UploadPart 上传一个原生分块（chunkIndex 从 0 开始），返回 COS 的 ETag。
