@@ -68,6 +68,13 @@ func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 				username = name
 			}
 		}
+		// 所属公司：最新动态按公司隔离（原先未记录，全部为 0，各公司互相可见）
+		var companyID uint
+		if cid, exists := c.Get("companyID"); exists {
+			if id, ok := cid.(uint); ok {
+				companyID = id
+			}
+		}
 
 		// 判断操作状态
 		status := entity.StatusSuccess
@@ -81,6 +88,7 @@ func AuditLogger(auditService audit.Service) gin.HandlerFunc {
 		// 构建审计日志
 		log := audit.NewLogBuilder().
 			WithUser(userID, username).
+			WithCompanyID(companyID).
 			WithAction(action).
 			WithResource(resource, "", "").
 			WithRequest(c.Request.Method, c.Request.URL.Path, c.ClientIP(), c.Request.UserAgent()).
@@ -125,7 +133,23 @@ func shouldAudit(method, path string) bool {
 			return false
 		}
 	}
+	for _, p := range auditSkipPaths {
+		if strings.Contains(path, p) {
+			return false
+		}
+	}
 	return true
+}
+
+// auditSkipPaths 不审计的写请求：不是用户的业务操作，或是一次操作中的过程请求（如每个上传分片），
+// 原先全部记成 unknown 刷满「最新动态」
+var auditSkipPaths = []string{
+	"/live/callback/",          // 腾讯云回调（无操作人）
+	"/push-url/", "/pull-url/", // 生成推流 / 拉流地址（只读）
+	"/play-url/",                                                // 生成播放地址（只读）
+	"/multipart/upload", "/multipart/resume", "/multipart/init", // 分片上传过程：只记录完成
+	"/presigned", "/chunk", // 分片直传地址签发、分片登记
+	"/heartbeat", "/refresh-token", "/token/refresh", "/auth/refresh", // 心跳、刷新令牌
 }
 
 // shouldLogBody 判断是否应该记录请求体
@@ -135,6 +159,10 @@ func shouldLogBody(method string) bool {
 
 // parseActionAndResource 解析操作类型和资源类型
 func parseActionAndResource(method, path string) (action, resource string) {
+	if a, r, ok := parseBusinessAction(method, path); ok {
+		return a, r
+	}
+
 	// 根据HTTP方法映射操作类型
 	switch method {
 	case "GET":
@@ -191,4 +219,74 @@ func parseActionAndResource(method, path string) (action, resource string) {
 	}
 
 	return
+}
+
+// parseBusinessAction 云盘、直播、公司配置等业务路径的操作与资源（优先于通用规则：
+// 如分片上传完成 /multipart/complete 不是「完成任务」，开始直播 /live/rooms/:id/start 不是「发起流程」）
+func parseBusinessAction(method, path string) (action, resource string, ok bool) {
+	has := func(sub string) bool { return strings.Contains(path, sub) }
+	verb := func() string {
+		switch method {
+		case "POST":
+			return entity.ActionCreate
+		case "PUT", "PATCH":
+			return entity.ActionUpdate
+		case "DELETE":
+			return entity.ActionDelete
+		}
+		return "unknown"
+	}
+
+	switch {
+	case has("/cloud/shares") || has("/cloud/share"):
+		resource = entity.ResourceCloudShare
+		action = verb()
+		if method == "POST" {
+			action = entity.ActionShare
+		}
+	case has("/cloud/"):
+		resource = entity.ResourceCloudFile
+		action = verb()
+		switch {
+		case has("/multipart/complete") || has("/files/upload"):
+			action = entity.ActionUpload
+		case strings.HasSuffix(path, "/rename"):
+			action = entity.ActionRename
+		case strings.HasSuffix(path, "/move"):
+			action = entity.ActionMove
+		}
+	case has("/live/rooms"):
+		resource = entity.ResourceLiveRoom
+		action = verb()
+		switch {
+		case strings.HasSuffix(path, "/start"):
+			action = entity.ActionStartLive
+		case strings.HasSuffix(path, "/end"):
+			action = entity.ActionEndLive
+		}
+	case has("/live/pull-stream"):
+		resource = entity.ResourcePullStream
+		action = verb()
+	case has("/live/domains"):
+		resource = entity.ResourceLiveDomain
+		action = verb()
+	case has("/live/recordings") || has("/live/clips") || has("/live/highlight"):
+		resource = entity.ResourceLiveRecord
+		action = verb()
+	case has("/company"):
+		resource = entity.ResourceCompany
+		action = entity.ActionUpdateConfig
+		if method == "POST" && has("/register") {
+			action = entity.ActionCreate
+		}
+	case has("/menus"):
+		resource = entity.ResourceMenu
+		action = verb()
+	case has("/groups"):
+		resource = entity.ResourcePermission
+		action = verb()
+	default:
+		return "", "", false
+	}
+	return action, resource, true
 }

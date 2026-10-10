@@ -239,9 +239,11 @@ func (s *service) GetActivities(ctx context.Context, companyID uint, limit int) 
 		limit = 10
 	}
 
+	// 只看本公司、成功的、可识别的操作：历史上未记录公司（为 0）或资源未识别（unknown）的记录不展示，
+	// 否则各公司互相看到对方动态，且满屏 unknown
 	var logs []*entity.AuditLog
 	if err := s.db.WithContext(ctx).
-		Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", companyID).
+		Where("SYS_COMPANY_ID = ? AND STATUS = ? AND USERNAME <> '' AND RESOURCE <> '' AND RESOURCE <> ?", companyID, entity.StatusSuccess, "unknown").
 		Order("CREATED_AT DESC").
 		Limit(limit).
 		Find(&logs).Error; err != nil {

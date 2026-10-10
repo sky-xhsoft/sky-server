@@ -67,6 +67,14 @@ const (
 	ActionUpdateConfig  = "update_config"  // 更新配置
 	ActionRefreshCache  = "refresh_cache"  // 刷新缓存
 	ActionResetSequence = "reset_sequence" // 重置序号
+
+	// 云盘 / 直播操作
+	ActionUpload    = "upload"     // 上传文件
+	ActionRename    = "rename"     // 重命名
+	ActionMove      = "move"       // 移动
+	ActionShare     = "share"      // 分享
+	ActionStartLive = "start_live" // 开始直播
+	ActionEndLive   = "end_live"   // 结束直播
 )
 
 // AuditStatus 审计状态常量
@@ -85,4 +93,13 @@ const (
 	ResourceDict       = "dict"       // 字典
 	ResourceSequence   = "sequence"   // 序号
 	ResourcePermission = "permission" // 权限
+
+	ResourceCloudFile  = "cloud_file"  // 云盘文件 / 文件夹
+	ResourceCloudShare = "cloud_share" // 云盘分享
+	ResourceLiveRoom   = "live_room"   // 直播间
+	ResourcePullStream = "pull_stream" // 分发任务（拉流转推）
+	ResourceLiveDomain = "live_domain" // 直播域名
+	ResourceLiveRecord = "live_record" // 录制 / 切片
+	ResourceCompany    = "company"     // 公司配置
+	ResourceMenu       = "menu"        // 菜单
 )
