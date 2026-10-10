@@ -122,7 +122,7 @@ func TestCallback_RecordingFile_CloudItemsBelongToRoomCompany(t *testing.T) {
 	h, db, owner := setupCallbackCompanyTest(t)
 	postCallback(t, h.HandleRecordingFile, map[string]interface{}{
 		"stream_id": "501", "event_time": time.Now().Unix(), "file_format": "mp4",
-		"video_url": "https://example.com/r.mp4", "file_size": 1024,
+		"video_url": "https://1500000001.vod2.myqcloud.com/r.mp4", "file_size": 1024,
 	})
 
 	var items []entity.CloudItem
@@ -155,7 +155,7 @@ func countCallbackData(db *gorm.DB) (events, items int64) {
 func recordingFileBody() map[string]interface{} {
 	return map[string]interface{}{
 		"stream_id": "501", "event_time": time.Now().Unix(), "file_format": "mp4",
-		"video_url": "https://example.com/r.mp4", "file_size": 1024,
+		"video_url": "https://1500000001.vod2.myqcloud.com/r.mp4", "file_size": 1024,
 	}
 }
 
@@ -163,7 +163,7 @@ func highlightBody() map[string]interface{} {
 	now := time.Now().Unix()
 	return map[string]interface{}{
 		"stream_id": "501",
-		"items":     []map[string]interface{}{{"begin_time": now - 60, "end_time": now, "video_store_url": "https://example.com/c.mp4", "title": "精彩片段"}},
+		"items":     []map[string]interface{}{{"begin_time": now - 60, "end_time": now, "video_store_url": "https://1500000001.vod2.myqcloud.com/c.mp4", "title": "精彩片段"}},
 	}
 }
 
@@ -270,7 +270,7 @@ func TestCallback_RecordingFile_WritesRecordingList(t *testing.T) {
 	if r.SysCompanyID != 7 || r.RoomID == nil || *r.RoomID != 501 || r.CreateBy != "zhang" {
 		t.Errorf("录制记录应归属直播间：公司 7、直播间 501、创建人 zhang，实际 %d / %v / %q", r.SysCompanyID, r.RoomID, r.CreateBy)
 	}
-	if r.RecordURL != "https://example.com/r.mp4" || r.RecordType != "mp4" || r.FileSize != 1024 || r.Duration != 120 || r.Status != "ready" {
+	if r.RecordURL != "https://1500000001.vod2.myqcloud.com/r.mp4" || r.RecordType != "mp4" || r.FileSize != 1024 || r.Duration != 120 || r.Status != "ready" {
 		t.Errorf("录制记录字段不正确: %+v", r)
 	}
 }
@@ -290,7 +290,70 @@ func TestCallback_Highlight_WritesClipList(t *testing.T) {
 	if c.SysCompanyID != 7 || c.RoomID == nil || *c.RoomID != 501 || c.CreateBy != "zhang" || c.StreamID != "501" {
 		t.Errorf("切片记录应归属直播间：公司 7、直播间 501、创建人 zhang，实际 %d / %v / %q / %q", c.SysCompanyID, c.RoomID, c.CreateBy, c.StreamID)
 	}
-	if c.ClipName != "精彩片段" || c.ClipURL != "https://example.com/c.mp4" || c.Duration != 60 || c.Status != "ready" {
+	if c.ClipName != "精彩片段" || c.ClipURL != "https://1500000001.vod2.myqcloud.com/c.mp4" || c.Duration != 60 || c.Status != "ready" {
 		t.Errorf("切片记录字段不正确: %+v", c)
+	}
+}
+
+// 不配置回调密钥：腾讯云回调不带签名，release 模式下也应接受并处理
+func TestCallback_UnsignedAcceptedInRelease(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	h.cfg = &config.Config{}
+	h.cfg.App.Mode = "release"
+	raw, _ := json.Marshal(map[string]interface{}{
+		"stream_id": "501", "event_time": time.Now().Unix(), "file_format": "mp4",
+		"video_url": "https://1500000001.vod2.myqcloud.com/r.mp4", "file_size": 1024, "sign": "",
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/callback", bytes.NewReader(raw))
+	c.Request.Header.Set("Content-Type", "application/json")
+	h.HandleRecordingFile(c)
+	if !bytes.Contains(w.Body.Bytes(), []byte(`"code":0`)) {
+		t.Fatalf("未签名的回调应被接受: %s", w.Body.String())
+	}
+	var files int64
+	db.Model(&entity.CloudItem{}).Where("ITEM_TYPE = ?", "file").Count(&files)
+	if files != 1 {
+		t.Fatalf("录制文件应写入云盘，实际 %d", files)
+	}
+}
+
+// 带签名但签名错误仍拒绝
+func TestCallback_WrongSignRejected(t *testing.T) {
+	h, _, _ := setupCallbackCompanyTest(t)
+	exp := time.Now().Add(time.Minute).Unix()
+	raw, _ := json.Marshal(map[string]interface{}{"stream_id": "501", "t": exp, "sign": "bad"})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/callback", bytes.NewReader(raw))
+	c.Request.Header.Set("Content-Type", "application/json")
+	h.HandleRecordingFile(c)
+	if bytes.Contains(w.Body.Bytes(), []byte(`"code":0`)) {
+		t.Fatal("签名错误应拒绝")
+	}
+}
+
+// 未签名回调可被伪造：非腾讯云域名的文件地址不写入云盘
+func TestCallback_NonTencentURLNotWrittenToDrive(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	postCallback(t, h.HandleRecordingFile, map[string]interface{}{
+		"stream_id": "501", "event_time": time.Now().Unix(), "file_format": "mp4",
+		"video_url": "https://evil.example.com/r.mp4", "file_size": 1024,
+	})
+	var files int64
+	db.Model(&entity.CloudItem{}).Where("ITEM_TYPE = ?", "file").Count(&files)
+	if files != 0 {
+		t.Fatalf("非腾讯云地址不应写入云盘，实际 %d", files)
+	}
+	for _, u := range []string{"https://1500000001.vod2.myqcloud.com/a.mp4", "http://x.vod-qcloud.com/a.mp4"} {
+		if !isTencentMediaURL(u) {
+			t.Errorf("%s 应视为腾讯云地址", u)
+		}
+	}
+	for _, u := range []string{"https://myqcloud.com.evil.cn/a.mp4", "ftp://a.myqcloud.com/a", "javascript:alert(1)"} {
+		if isTencentMediaURL(u) {
+			t.Errorf("%s 不应视为腾讯云地址", u)
+		}
 	}
 }

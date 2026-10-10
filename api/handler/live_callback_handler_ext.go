@@ -386,7 +386,9 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				fileExists := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
 					"file", fileName, creatorUser.ID, highlightFolder.ID, "Y").First(&existingFile).Error == nil
 
-				if !fileExists {
+				if !fileExists && !isTencentMediaURL(item.VideoStoreURL) {
+					logger.Warn("切片文件地址不是腾讯云域名，不写入云盘", zap.String("videoUrl", item.VideoStoreURL))
+				} else if !fileExists {
 					fileItem := entity.CloudItem{
 						BaseModel: entity.BaseModel{
 							SysCompanyID: room.SysCompanyID,

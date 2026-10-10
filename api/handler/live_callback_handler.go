@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -418,11 +419,31 @@ func roomFolderSpec(room *entity.LiveRoom, ownerID uint, sub string) liveService
 	}
 }
 
+// 不使用回调密钥（腾讯云回调模板与本服务均不配置）：回调不带签名时直接接受；
+// 带签名且本服务配置了密钥时仍校验。未签名的回调可被伪造，写入云盘前另行校验文件地址（isTencentMediaURL）
 func (h *LiveCallbackHandler) checkSign(t int64, sign string) bool {
-	if h.callbackKey == "" {
-		return h.cfg == nil || h.cfg.App.Mode != "release"
+	if sign == "" || h.callbackKey == "" {
+		return true
 	}
 	return h.verifySign(t, sign)
+}
+
+// tencentMediaHostSuffixes 腾讯云点播 / 存储的文件域名（录制、切片回调中的文件地址）
+var tencentMediaHostSuffixes = []string{".myqcloud.com", ".vod-qcloud.com", ".qcloud.com", ".tencentcos.cn"}
+
+// isTencentMediaURL 回调中的文件地址是否为腾讯云域名：未签名的回调可被伪造，非腾讯云地址不写入云盘
+func isTencentMediaURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, suffix := range tencentMediaHostSuffixes {
+		if strings.HasSuffix(host, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // verifySign 验证回调签名
@@ -756,7 +777,9 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 			fileExists := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
 				"file", fileName, creatorUser.ID, recordingFolder.ID, "Y").First(&existingFile).Error == nil
 
-			if !fileExists {
+			if !fileExists && !isTencentMediaURL(event.VideoURL) {
+				logger.Warn("录制文件地址不是腾讯云域名，不写入云盘", zap.String("streamId", event.StreamID), zap.String("videoUrl", event.VideoURL))
+			} else if !fileExists {
 				fileItem := entity.CloudItem{
 					BaseModel: entity.BaseModel{
 						SysCompanyID: room.SysCompanyID,
