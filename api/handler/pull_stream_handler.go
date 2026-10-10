@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -87,6 +89,11 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 	}
 	if req.Operator == "" {
 		utils.BadRequest(c, "操作者不能为空")
+		return
+	}
+	// 调腾讯云之前统一并校验时间：否则腾讯云任务已创建、本地却因时间格式保存失败，重试还会重复创建
+	if err := normalizeTaskTimeRange(&req.StartTime, &req.EndTime); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 
@@ -287,6 +294,13 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 		return
 	}
 
+	if req.StartTime != "" || req.EndTime != "" {
+		if err := normalizeTaskTimeRange(&req.StartTime, &req.EndTime); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		}
+	}
+
 	// 更新腾讯云拉流任务
 	err := h.liveService.UpdatePullStreamTask(withCompanyID(c), &req)
 	if err != nil {
@@ -475,4 +489,41 @@ func (h *PullStreamHandler) DescribePullTransformPushInfoList(c *gin.Context) {
 	}
 
 	utils.Success(c, resp)
+}
+
+// taskTimeLayout 拉流任务时间格式（北京时间，与腾讯云请求、本地存储一致）
+const taskTimeLayout = "2006-01-02 15:04:05"
+
+// normalizeTaskTime 把前端传来的任务时间统一为 taskTimeLayout（按服务器本地时区，即北京时间）。
+// 兼容 "2026-10-10 14:00:00" 与带时区的 ISO 格式（如直播间时间 "2026-10-10T14:00:00+08:00"）
+func normalizeTaskTime(value string) (string, error) {
+	v := strings.TrimSpace(value)
+	if t, err := time.ParseInLocation(taskTimeLayout, v, time.Local); err == nil {
+		return t.Format(taskTimeLayout), nil
+	}
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t.In(time.Local).Format(taskTimeLayout), nil
+	}
+	if t, err := time.ParseInLocation("2006-01-02T15:04:05", v, time.Local); err == nil {
+		return t.Format(taskTimeLayout), nil
+	}
+	return "", fmt.Errorf("时间格式不正确：%s（应为 YYYY-MM-DD HH:mm:ss）", value)
+}
+
+// normalizeTaskTimeRange 统一开始、结束时间格式，并要求结束时间晚于开始时间（为空的不处理）
+func normalizeTaskTimeRange(start, end *string) error {
+	for _, p := range []*string{start, end} {
+		if *p == "" {
+			continue
+		}
+		v, err := normalizeTaskTime(*p)
+		if err != nil {
+			return err
+		}
+		*p = v
+	}
+	if *start != "" && *end != "" && *end <= *start {
+		return fmt.Errorf("结束时间必须晚于开始时间")
+	}
+	return nil
 }
