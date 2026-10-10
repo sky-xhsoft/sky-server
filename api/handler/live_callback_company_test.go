@@ -357,3 +357,31 @@ func TestCallback_NonTencentURLNotWrittenToDrive(t *testing.T) {
 		}
 	}
 }
+
+// 腾讯云推流 / 断流回调的实际字段：app（推流域名）、appname（应用名）、push_duration（毫秒）、errcode/errmsg
+func TestCallback_DisconnectUsesTencentFieldNames(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	postCallback(t, h.HandleDisconnectStream, map[string]interface{}{
+		"event_type": 0, "stream_id": "501", "event_time": time.Now().Unix(),
+		"app": "xt.skyzhou.cn", "appname": "live", "push_duration": 73500, "errcode": 1, "errmsg": "recv rtmp deleteStream",
+	})
+	var ev entity.LiveCallbackEvent
+	if err := db.Where("EVENT_TYPE = ?", "disconnect_stream").First(&ev).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ev.DomainName != "xt.skyzhou.cn" || ev.AppName != "live" || ev.StreamName != "501" {
+		t.Fatalf("断流事件字段应从腾讯云实际字段取值，got domain=%q app=%q stream=%q", ev.DomainName, ev.AppName, ev.StreamName)
+	}
+	if !strings.Contains(ev.EventData, `"duration":73`) || !strings.Contains(ev.EventData, "recv rtmp deleteStream") {
+		t.Errorf("推流时长（秒）与断流原因应写入事件数据：%s", ev.EventData)
+	}
+
+	postCallback(t, h.HandlePushStream, map[string]interface{}{
+		"event_type": 1, "stream_id": "501", "event_time": time.Now().Unix(), "app": "xt.skyzhou.cn", "appname": "live",
+	})
+	var push entity.LiveCallbackEvent
+	db.Where("EVENT_TYPE = ?", "push_stream").First(&push)
+	if push.DomainName != "xt.skyzhou.cn" || push.AppName != "live" || push.StreamName != "501" {
+		t.Fatalf("推流事件字段应从腾讯云实际字段取值，got domain=%q app=%q stream=%q", push.DomainName, push.AppName, push.StreamName)
+	}
+}

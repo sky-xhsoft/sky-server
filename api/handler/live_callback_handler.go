@@ -55,6 +55,10 @@ type PushStreamEvent struct {
 	PushDomain  string `json:"push_domain"`  // 推流域名
 	AppName     string `json:"app_name"`     // 应用名称
 	StreamName  string `json:"stream_name"`  // 流名称
+
+	// 腾讯云实际下发的字段（normalize 后合并到 PushDomain / AppName / StreamName 等）
+	App            string `json:"app"`     // 推流域名
+	AppNameTencent string `json:"appname"` // 应用名称
 }
 
 // DisconnectStreamEvent 断流事件通知
@@ -74,6 +78,34 @@ type DisconnectStreamEvent struct {
 	PushDomain  string `json:"push_domain"`  // 推流域名
 	AppName     string `json:"app_name"`     // 应用名称
 	StreamName  string `json:"stream_name"`  // 流名称
+
+	// 腾讯云实际下发的字段（normalize 后合并到 PushDomain / AppName / StreamName 等）
+	App            string `json:"app"`           // 推流域名
+	AppNameTencent string `json:"appname"`       // 应用名称
+	PushDuration   int64  `json:"push_duration"` // 推流时长（毫秒）
+	ErrCode        int    `json:"errcode"`       // 断流错误码
+	ErrMsg         string `json:"errmsg"`        // 断流原因
+}
+
+// normalize 腾讯云推流回调实际字段为 app（推流域名）、appname（应用名），流名即 stream_id；
+// 合并到文档字段，后续处理统一使用 PushDomain / AppName / StreamName
+func (e *PushStreamEvent) normalize() {
+	e.PushDomain = firstNonEmpty(e.PushDomain, e.App)
+	e.AppName = firstNonEmpty(e.AppName, e.AppNameTencent)
+	e.StreamName = firstNonEmpty(e.StreamName, e.StreamID)
+}
+
+// normalize 断流回调：同推流回调，另将 push_duration（毫秒）、errcode/errmsg 合并为 Duration（秒）、Reason
+func (e *DisconnectStreamEvent) normalize() {
+	e.PushDomain = firstNonEmpty(e.PushDomain, e.App)
+	e.AppName = firstNonEmpty(e.AppName, e.AppNameTencent)
+	e.StreamName = firstNonEmpty(e.StreamName, e.StreamID)
+	if e.Duration == 0 && e.PushDuration > 0 {
+		e.Duration = e.PushDuration / 1000
+	}
+	if e.Reason == "" && (e.ErrMsg != "" || e.ErrCode != 0) {
+		e.Reason = strings.TrimSpace(fmt.Sprintf("%d %s", e.ErrCode, e.ErrMsg))
+	}
 }
 
 // RecordingFileEvent 录制文件事件通知
@@ -484,6 +516,7 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid request"})
 		return
 	}
+	event.normalize()
 
 	// 验证签名
 	if !h.checkSign(event.T, event.Sign) {
@@ -568,6 +601,7 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 		c.JSON(200, gin.H{"code": 1, "msg": "invalid request"})
 		return
 	}
+	event.normalize()
 
 	// 验证签名
 	if !h.checkSign(event.T, event.Sign) {

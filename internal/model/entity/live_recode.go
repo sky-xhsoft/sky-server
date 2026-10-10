@@ -21,6 +21,8 @@ type LiveRecode struct {
 	UpdateBy     string    `gorm:"column:UPDATE_BY;type:varchar(80)" json:"updateBy"`
 	UpdateTime   time.Time `gorm:"column:UPDATE_TIME;not null;autoUpdateTime" json:"updateTime"`
 	IsActive     string    `gorm:"column:IS_ACTIVE;type:char(1);default:'Y'" json:"isActive"`
+
+	RoomName string `gorm:"-" json:"roomName"` // 直播间名称（查询列表时按 ROOM_ID 填充，不落库）
 }
 
 // TableName 指定表名

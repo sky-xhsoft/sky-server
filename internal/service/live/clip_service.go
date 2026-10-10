@@ -114,7 +114,8 @@ func (s *clipService) ListRecordings(ctx context.Context, filter *RecordingFilte
 		query = query.Where("STATUS = ?", filter.Status)
 	}
 	if filter.Keyword != "" {
-		query = query.Where("(RECORD_URL LIKE ? OR DESCRIPTION LIKE ?)", "%"+filter.Keyword+"%", "%"+filter.Keyword+"%")
+		kw := "%" + filter.Keyword + "%"
+		query = query.Where("(RECORD_URL LIKE ? OR DESCRIPTION LIKE ? OR ROOM_ID IN (SELECT ID FROM live_room WHERE ROOM_NAME LIKE ?))", kw, kw, kw)
 	}
 
 	var total int64
@@ -127,6 +128,36 @@ func (s *clipService) ListRecordings(ctx context.Context, filter *RecordingFilte
 	if err := query.Order("CREATE_TIME DESC").Offset(offset).Limit(filter.PageSize).Find(&records).Error; err != nil {
 		return nil, 0, err
 	}
+	s.fillRecordingRoomNames(ctx, records)
 
 	return records, total, nil
+}
+
+// fillRecordingRoomNames 按 ROOM_ID 批量查出直播间名称填入列表（列表展示直播间名称而不是流名称）
+func (s *clipService) fillRecordingRoomNames(ctx context.Context, records []*entity.LiveRecode) {
+	ids := make([]int64, 0, len(records))
+	for _, r := range records {
+		if r.RoomID != nil {
+			ids = append(ids, *r.RoomID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var rooms []struct {
+		ID       int64
+		RoomName string
+	}
+	if err := s.db.WithContext(ctx).Table("live_room").Select("ID, ROOM_NAME AS room_name").Where("ID IN ?", ids).Scan(&rooms).Error; err != nil {
+		return
+	}
+	names := make(map[int64]string, len(rooms))
+	for _, r := range rooms {
+		names[r.ID] = r.RoomName
+	}
+	for _, r := range records {
+		if r.RoomID != nil {
+			r.RoomName = names[*r.RoomID]
+		}
+	}
 }
