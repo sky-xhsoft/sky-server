@@ -149,6 +149,49 @@ func TestVideoThumbnail_RemoteViaProxy(t *testing.T) {
 	}
 }
 
+// 云存储视频索引（moov）在文件末尾且大于代理单次窗口（如 4.8GB 录像的 moov 约 3MB）：
+// ffmpeg 须按偏移分段续读，仍只读取文件的一小部分（未安装 ffmpeg 时跳过）
+func TestVideoThumbnail_RemoteMoovAtEndLargerThanWindow(t *testing.T) {
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("未安装 ffmpeg")
+	}
+	old := proxyWindow
+	proxyWindow = 8 << 10
+	defer func() { proxyWindow = old }()
+
+	dir := t.TempDir()
+	video := filepath.Join(dir, "v.mp4")
+	// 不加 faststart：moov 写在文件末尾
+	if out, err := exec.Command(ff, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25",
+		"-t", "60", "-b:v", "2M", "-pix_fmt", "yuv420p", video).CombinedOutput(); err != nil {
+		t.Fatalf("生成测试视频失败: %v %s", err, out)
+	}
+	data, _ := os.ReadFile(video)
+	if moov := bytes.LastIndex(data, []byte("moov")); moov < len(data)/2 || int64(len(data)-moov) <= proxyWindow {
+		t.Fatalf("测试视频的 moov 应在末尾且大于窗口：位置 %d，大小 %d", moov, len(data)-moov)
+	}
+
+	var served int64
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cw := &countingWriter{ResponseWriter: w, n: &served}
+		http.ServeContent(cw, r, "v.mp4", time.Now(), bytes.NewReader(data))
+	}))
+	defer remote.Close()
+
+	s := &service{}
+	thumb, err := s.videoThumbnailFrom(context.Background(), fakePresigner{url: remote.URL + "/v.mp4"}, "v.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := jpeg.Decode(bytes.NewReader(thumb)); err != nil {
+		t.Fatalf("输出不是 JPEG: %v", err)
+	}
+	if got := atomic.LoadInt64(&served); got*4 > int64(len(data)) {
+		t.Errorf("读取了 %d 字节，应只读取部分内容（文件 %d 字节）", got, len(data))
+	}
+}
+
 type countingWriter struct {
 	http.ResponseWriter
 	n *int64

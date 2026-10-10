@@ -305,18 +305,25 @@ func (s *service) videoThumbnailFrom(ctx context.Context, st interface{}, path s
 	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, ffmpegPath,
+	args := []string{
 		"-hide_banner", "-loglevel", "error",
 		// 只取第一帧：缩短流分析，避免为探测格式读取数秒的视频数据
 		"-analyzeduration", "100000", "-probesize", "1000000",
 		// 单线程解码：多线程解码要先缓冲多帧才输出第一帧，会多读取数帧数据
 		"-threads", "1",
+	}
+	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
+		// 代理每次最多返回 proxyWindow 字节：数据提前结束时按当前偏移重新请求（如 moov 在文件末尾且大于窗口）
+		args = append(args, "-reconnect", "1")
+	}
+	args = append(args,
 		"-i", input,
 		"-frames:v", "1",
 		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", thumbnailWidth),
 		"-f", "image2", "-c:v", "mjpeg", "-q:v", "5",
 		"pipe:1",
 	)
+	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	// ffmpeg 会走 http_proxy 环境变量，本机代理地址须直连
@@ -350,8 +357,8 @@ func findFFmpeg() string {
 // rangeProxyClient 代理请求云存储的客户端（支持 Range，单次请求最长 1 分钟）
 var rangeProxyClient = &http.Client{Timeout: time.Minute}
 
-// proxyWindow 代理单次响应的最大字节数
-const proxyWindow = 2 << 20
+// proxyWindow 代理单次响应的最大字节数（变量便于测试调小）
+var proxyWindow int64 = 2 << 20
 
 // capRange 把客户端的 Range 限制在 proxyWindow 以内（无 Range 视为从头读取）
 func capRange(header string) string {
@@ -399,7 +406,7 @@ func startRangeProxy(target string) (string, func(), error) {
 				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
 			}
-			// 每次最多返回 proxyWindow 字节，ffmpeg 需要更多时会按偏移继续请求，
+			// 每次最多返回 proxyWindow 字节，ffmpeg 需要更多时按偏移继续请求（依赖 -reconnect 1），
 			// 避免开放式 Range（bytes=0-）让代理在 ffmpeg 退出前持续从云存储拉取数据
 			req.Header.Set("Range", capRange(r.Header.Get("Range")))
 			resp, err := rangeProxyClient.Do(req)
