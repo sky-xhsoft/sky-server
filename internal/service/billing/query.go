@@ -36,7 +36,8 @@ type UsageSummary struct {
 	StorageLatestGB  float64            `json:"storageLatestGb"`  // 最近一天的存储
 	StorageLatestDay string             `json:"storageLatestDay"` // 最近一次存储快照的日期
 	StorageItems     map[string]float64 `json:"storageItems"`     // 最近一天的存储细项：record / clip / disk
-	FluxLatestDay    string             `json:"fluxLatestDay"`    // 播放流量已计到的日期（腾讯云次日出数据）
+	FluxLatestDay    string             `json:"fluxLatestDay"`    // 播放流量已计量到的日期（腾讯云次日出数据）
+	FluxDays         int                `json:"fluxDays"`         // 本月已计量播放流量的天数（以流量对账记录为准，含流量为 0 的天）
 	LiveRooms        int                `json:"liveRooms"`        // 有直播时长的直播间数
 	OnlineRooms      int                `json:"onlineRooms"`      // 正在推流的直播间数
 }
@@ -106,6 +107,15 @@ func (m *Meter) Summary(ctx context.Context, companyID uint, month string) (*Usa
 			}
 		}
 	}
+	// 流量为 0 的天没有用量行：以流量对账记录判断哪些天已计量
+	var fluxDays []string
+	m.db.WithContext(ctx).Model(&entity.BillFluxReconcile{}).
+		Where("USAGE_DATE >= ? AND USAGE_DATE < ? AND STATUS <> 'error'", d0.Format(dayLayout), d0.AddDate(0, 1, 0).Format(dayLayout)).
+		Distinct("USAGE_DATE").Order("USAGE_DATE").Pluck("USAGE_DATE", &fluxDays)
+	out.FluxDays = len(fluxDays)
+	if len(fluxDays) > 0 && fluxDays[len(fluxDays)-1] > out.FluxLatestDay {
+		out.FluxLatestDay = fluxDays[len(fluxDays)-1]
+	}
 	out.LiveRooms = len(liveRooms)
 	out.PlayGB = round3(out.PlayGB)
 	var online int64
@@ -171,6 +181,7 @@ type RoomUsage struct {
 	LiveSeconds float64 `json:"liveSeconds"`
 	PlayGB      float64 `json:"playGb"`
 	Sessions    int64   `json:"sessions"`
+	Deleted     bool    `json:"deleted"` // 直播间已删除，名称取自推流回调记录
 }
 
 // Rooms 公司某月各直播间的直播时长和播放流量，按时长倒序
@@ -213,10 +224,24 @@ func (m *Meter) Rooms(ctx context.Context, companyID uint, month string) ([]Room
 	}
 	var names []nameRow
 	m.db.WithContext(ctx).Table("live_room").Select("ID, ROOM_NAME").Where("ID IN ?", ids).Scan(&names)
+	found := map[uint]bool{}
 	for _, n := range names {
 		if u := byRoom[n.ID]; u != nil {
 			u.RoomName = n.Name
+			found[n.ID] = true
 		}
+	}
+	// 已删除的直播间：名称取推流回调中记录的最后一个
+	for id, u := range byRoom {
+		if found[id] {
+			continue
+		}
+		u.Deleted = true
+		var name string
+		m.db.WithContext(ctx).Model(&entity.LiveCallbackEvent{}).
+			Where("SYS_COMPANY_ID = ? AND STREAM_NAME = ? AND ROOM_NAME <> ''", companyID, fmt.Sprint(id)).
+			Order("ID DESC").Limit(1).Pluck("ROOM_NAME", &name)
+		u.RoomName = name
 	}
 	type cntRow struct {
 		RoomID uint  `gorm:"column:ROOM_ID"`
@@ -277,6 +302,10 @@ func (m *Meter) Sessions(ctx context.Context, companyID, roomID uint, month stri
 	}
 	if err := q.Order("START_TIME DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&out.Items).Error; err != nil {
 		return nil, err
+	}
+	for i := range out.Items {
+		it := &out.Items[i]
+		it.Counted = it.EndTime == nil || it.Seconds >= m.MinSessionSeconds
 	}
 	return out, nil
 }
@@ -387,7 +416,12 @@ func (m *Meter) Recompute(ctx context.Context, from, to string, meters []string)
 	}
 	want := map[string]bool{}
 	for _, mt := range meters {
-		want[mt] = true
+		switch mt {
+		case entity.MeterLiveDuration, entity.MeterPlayFlux, entity.MeterStorage:
+			want[mt] = true
+		default:
+			return fmt.Errorf("不支持的计费点：%s", mt)
+		}
 	}
 	all := len(want) == 0
 	if _, err := m.ProcessEvents(ctx); err != nil {

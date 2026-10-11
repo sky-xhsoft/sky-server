@@ -24,6 +24,7 @@ type BillLiveSession struct {
 	Seconds      int64      `gorm:"column:SECONDS;not null;default:0" json:"seconds"`
 	EndSource    string     `gorm:"column:END_SOURCE;type:varchar(20)" json:"endSource"` // callback 断流回调 / patrol 巡检 / cap 超过最长时长
 	PushEventID  int64      `gorm:"column:PUSH_EVENT_ID;not null;uniqueIndex:UK_BLS_PUSH_EVENT" json:"-"`
+	Counted      bool       `gorm:"-" json:"counted"` // 是否计入直播时长（已结束且不足最短时长的测试推流不计）
 	CreateTime   time.Time  `gorm:"column:CREATE_TIME;autoCreateTime" json:"createTime"`
 	UpdateTime   time.Time  `gorm:"column:UPDATE_TIME;autoUpdateTime" json:"-"`
 }

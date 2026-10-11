@@ -144,12 +144,27 @@ func (m *Meter) onDisconnect(ctx context.Context, e *entity.LiveCallbackEvent) e
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	// 没有对应的推流段落（漏了推流回调）：用断流回调里的推流时长补一段
 	d := disconnectDuration(e)
+	start := end.Add(-time.Duration(d) * time.Second)
+	// 已结束的段落与这次断流重叠：巡检或超时先结束的，用断流时间校正；已由断流回调结束的，是重复回调，忽略
+	var closed entity.BillLiveSession
+	err = db.Where("SYS_COMPANY_ID = ? AND STREAM_NAME = ? AND END_TIME IS NOT NULL AND START_TIME <= ? AND END_TIME >= ?",
+		e.SysCompanyID, stream, end, start.Add(-offlineGrace)).
+		Order("START_TIME DESC").First(&closed).Error
+	if err == nil {
+		if closed.EndSource == "callback" {
+			return nil
+		}
+		return db.Model(&entity.BillLiveSession{}).Where("ID = ?", closed.ID).
+			Updates(map[string]any{"END_TIME": end, "SECONDS": int64(end.Sub(closed.StartTime) / time.Second), "END_SOURCE": "callback"}).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	// 没有对应的推流段落（漏了推流回调）：用断流回调里的推流时长补一段
 	if d <= 0 {
 		return nil
 	}
-	start := end.Add(-time.Duration(d) * time.Second)
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&entity.BillLiveSession{
 		SysCompanyID: uint(e.SysCompanyID),
 		RoomID:       roomID,

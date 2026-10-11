@@ -19,6 +19,8 @@ const (
 	gbBytes   = 1024.0 * 1024 * 1024
 	// fluxDiffRate 监控流量与计费流量差异超过该比例时，对账标记为 diff
 	fluxDiffRate = 0.03
+	// fluxDiffMinMB 计费流量低于该值（MB）时不标记差异：几 KB 的零星流量不值得人工核对
+	fluxDiffMinMB = 1.0
 )
 
 // dayRange 自然日（本地时区）的起止
@@ -237,7 +239,8 @@ func (m *Meter) fluxOfAccount(ctx context.Context, day, account string, roomComp
 			monitor[k] += mb
 		}
 		switch {
-		case rec.MonitorMB == 0 && rec.BillingMB > 0:
+		case rec.BillingMB < fluxDiffMinMB:
+		case rec.MonitorMB == 0:
 			rec.Status, rec.Message = "diff", "有计费流量但没有按流数据，无法分摊到直播间"
 		case rec.BillingMB > 0 && math.Abs(rec.BillingMB-rec.MonitorMB)/rec.BillingMB > fluxDiffRate:
 			rec.Status, rec.Message = "diff", fmt.Sprintf("按流监控流量与计费流量相差 %.1f%%", math.Abs(rec.BillingMB-rec.MonitorMB)/rec.BillingMB*100)

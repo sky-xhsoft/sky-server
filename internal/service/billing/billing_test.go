@@ -213,6 +213,14 @@ func TestComputeDuration(t *testing.T) {
 	if _, ok := got[102]; ok {
 		t.Fatal("不足 60 秒不计")
 	}
+	page, _ := m.Sessions(ctx, 50, 102, "2026-10", 1, 20)
+	if len(page.Items) != 1 || page.Items[0].Counted {
+		t.Fatalf("不足 60 秒的段落标记为未计入：%+v", page.Items)
+	}
+	page, _ = m.Sessions(ctx, 1, 201, "2026-10", 1, 20)
+	if len(page.Items) != 1 || !page.Items[0].Counted {
+		t.Fatalf("进行中的段落计入：%+v", page.Items)
+	}
 	if got[201].Quantity != 5 || got[201].SysCompanyID != 1 {
 		t.Fatalf("未结束的段落：%+v", got[201])
 	}
@@ -261,6 +269,19 @@ func TestComputeFlux(t *testing.T) {
 	if rec.Status != "diff" || rec.MonitorMB != 1000 || rec.BillingMB != 1100 || rec.UnattributedMB != 110 || rec.StreamCount != 5 {
 		t.Fatalf("对账：%+v", rec)
 	}
+
+	// 零星流量（低于 1 MB）没有按流数据也不标记差异；达到 1 MB 才标记
+	acc.apis[GlobalAccount].domains = []string{"play.a.com", "play.tiny.com", "play.nostream.com"}
+	acc.apis[GlobalAccount].billing["play.tiny.com"] = 0.4
+	acc.apis[GlobalAccount].billing["play.nostream.com"] = 5
+	m.ComputeFlux(ctx, "2026-10-10")
+	var tiny, nostream entity.BillFluxReconcile
+	db.Where("PLAY_DOMAIN = ?", "play.tiny.com").First(&tiny)
+	db.Where("PLAY_DOMAIN = ?", "play.nostream.com").First(&nostream)
+	if tiny.Status != "ok" || nostream.Status != "diff" {
+		t.Fatalf("零星流量不标记：%s；有计费流量无按流数据标记：%s", tiny.Status, nostream.Status)
+	}
+	acc.apis[GlobalAccount].domains = []string{"play.a.com"}
 
 	// 自有账号拉取失败：该公司保留原值，平台账号照常更新
 	acc.apis["company:1"].err = errors.New("AuthFailure")
@@ -314,6 +335,14 @@ func TestComputeStorageAndSummary(t *testing.T) {
 	if len(days) != 31 || days[9].LiveMinutes != 30 || days[9].StorageGB != 3.5 {
 		t.Fatalf("每日：%d %+v", len(days), days[9])
 	}
+	db.Create(&entity.BillFluxReconcile{UsageDate: "2026-10-11", Account: GlobalAccount, PlayDomain: "p", Status: "ok"})
+	db.Create(&entity.BillFluxReconcile{UsageDate: "2026-10-09", Account: GlobalAccount, PlayDomain: "p", Status: "error"})
+	if sum, _ = m.Summary(ctx, 50, "2026-10"); sum.FluxDays != 1 || sum.FluxLatestDay != "2026-10-11" {
+		t.Fatalf("已计量流量的天数以对账记录为准（不含失败）：%+v", sum)
+	}
+	if apr, _ := m.Summary(ctx, 50, "2026-04"); apr.FluxDays != 0 || apr.FluxLatestDay != "" {
+		t.Fatalf("没有计量过的月份：%+v", apr)
+	}
 	if other, _ := m.Summary(ctx, 51, "2026-10"); other.LiveMinutes != 0 || other.StorageAvgGB != 0 {
 		t.Fatal("其他公司看不到")
 	}
@@ -327,6 +356,9 @@ func TestRecomputeValidation(t *testing.T) {
 			t.Fatalf("应拒绝 %v", c)
 		}
 	}
+	if err := m.Recompute(ctx, "2026-10-01", "2026-10-02", []string{"flux"}); err == nil {
+		t.Fatal("应拒绝不支持的计费点")
+	}
 	if err := m.Recompute(ctx, "2026-10-01", "2026-10-10", []string{entity.MeterLiveDuration, entity.MeterStorage}); err != nil {
 		t.Fatal(err)
 	}
@@ -337,5 +369,89 @@ func TestRoomIDOfStream(t *testing.T) {
 		if got := roomIDOfStream(s); got != want {
 			t.Fatalf("%q → %d，期望 %d", s, got, want)
 		}
+	}
+}
+
+func TestDisconnectAfterPatrolAndDuplicate(t *testing.T) {
+	m, acc, db := setup(t)
+	acc.apis[GlobalAccount] = &fakeLive{online: map[string]bool{}}
+	addEvent(t, db, 1, "push_stream", "101", 50, "2026-10-10 20:00:00", "")
+	m.ProcessEvents(ctx)
+	// 回调迟到：巡检先按最后在线时间结束
+	m.now = func() time.Time { return at("2026-10-10 20:15:00") }
+	m.Patrol(ctx)
+	if s := sessions(t, db)[0]; s.EndSource != "patrol" {
+		t.Fatalf("应先由巡检结束：%+v", s)
+	}
+	// 迟到的断流回调：校正结束时间，不另补一段
+	addEvent(t, db, 2, "disconnect_stream", "101", 50, "2026-10-10 20:12:00", `{"duration":720}`)
+	// 重复的断流回调：忽略
+	addEvent(t, db, 3, "disconnect_stream", "101", 50, "2026-10-10 20:12:00", `{"duration":720}`)
+	m.ProcessEvents(ctx)
+	got := sessions(t, db)
+	if len(got) != 1 || got[0].EndSource != "callback" || got[0].Seconds != 720 {
+		t.Fatalf("迟到与重复的断流不应重复计时：%d %+v", len(got), got)
+	}
+	// 之后真的漏了推流回调的另一段，照常补
+	addEvent(t, db, 4, "disconnect_stream", "101", 50, "2026-10-10 23:00:00", `{"duration":600}`)
+	m.ProcessEvents(ctx)
+	if got := sessions(t, db); len(got) != 2 || got[1].Seconds != 600 {
+		t.Fatalf("不重叠的断流照常补一段：%+v", got)
+	}
+}
+
+func TestTickDaily(t *testing.T) {
+	m, acc, db := setup(t)
+	acc.apis[GlobalAccount] = &fakeLive{domains: []string{}}
+	acc.apis["company:1"] = &fakeLive{err: errors.New("AuthFailure")}
+	cfg := SchedulerConfig{DailyHour: 4}
+	// 未到 4 点不跑每日计量
+	m.now = func() time.Time { return at("2026-10-11 03:30:00") }
+	m.Tick(ctx, cfg)
+	if m.getState(ctx, dailyDoneKey) != "" {
+		t.Fatal("4 点前不应执行每日计量")
+	}
+	// 自有账号拉取失败：重试，达到次数上限后不再重试
+	m.now = func() time.Time { return at("2026-10-11 04:05:00") }
+	for i := 1; i < dailyMaxAttempts; i++ {
+		m.Tick(ctx, cfg)
+		if m.getState(ctx, dailyDoneKey) != "" {
+			t.Fatalf("第 %d 次失败后应继续重试", i)
+		}
+	}
+	m.Tick(ctx, cfg)
+	if m.getState(ctx, dailyDoneKey) != "2026-10-10" {
+		t.Fatal("达到重试上限后应标记完成，不再重试")
+	}
+	var rec entity.BillFluxReconcile
+	db.Where("ACCOUNT = ?", "company:1").First(&rec)
+	if rec.ID != 0 {
+		t.Fatalf("没有播放域名时不应有对账记录：%+v", rec)
+	}
+	// 失败原因能在对账中看到：域名拉取失败记录为 error
+	acc.apis["company:1"] = &fakeLive{domains: []string{"play.own.com"}, err: nil}
+	acc.apis["company:1"].flux = map[string]map[string]float64{}
+	if err := m.ComputeFlux(ctx, "2026-10-10"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRoomsDeletedRoomName(t *testing.T) {
+	m, _, db := setup(t)
+	m.now = func() time.Time { return at("2026-10-11 12:00:00") }
+	// 直播间 301 已删除，名称取推流回调记录
+	addEvent(t, db, 1, "push_stream", "301", 50, "2026-10-10 20:00:00", "")
+	db.Model(&entity.LiveCallbackEvent{}).Where("ID = 1").Update("ROOM_NAME", "旧发布会")
+	db.Create(&entity.BillUsageDaily{SysCompanyID: 50, UsageDate: "2026-10-10", Meter: entity.MeterLiveDuration, RoomID: 301, Quantity: 5, Unit: "分钟", SourceKey: "d1"})
+	db.Create(&entity.BillUsageDaily{SysCompanyID: 50, UsageDate: "2026-10-10", Meter: entity.MeterLiveDuration, RoomID: 101, Quantity: 9, Unit: "分钟", SourceKey: "d2"})
+	rooms, err := m.Rooms(ctx, 50, "2026-10")
+	if err != nil || len(rooms) != 2 {
+		t.Fatalf("%v %+v", err, rooms)
+	}
+	if rooms[0].RoomID != 101 || rooms[0].Deleted || rooms[0].RoomName != "room" {
+		t.Fatalf("现有直播间：%+v", rooms[0])
+	}
+	if rooms[1].RoomID != 301 || !rooms[1].Deleted || rooms[1].RoomName != "旧发布会" {
+		t.Fatalf("已删除的直播间：%+v", rooms[1])
 	}
 }
