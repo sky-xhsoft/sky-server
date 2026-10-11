@@ -66,11 +66,15 @@ func setup(t *testing.T) (*Meter, *fakeAccounts, *gorm.DB) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(&entity.LiveCallbackEvent{},
-		&entity.BillLiveSession{}, &entity.BillUsageDaily{}, &entity.BillFluxReconcile{}, &entity.BillMeterState{}); err != nil {
+		&entity.BillLiveSession{}, &entity.BillUsageDaily{}, &entity.BillFluxReconcile{}, &entity.BillMeterState{},
+		&entity.BillPrice{}, &entity.BillPlan{}, &entity.BillPackDef{}, &entity.BillAccount{}, &entity.BillSubscription{},
+		&entity.BillResourcePack{}, &entity.BillCharge{}, &entity.BillTransaction{}, &entity.BillStatement{}, &entity.BillAdjustRequest{}); err != nil {
 		t.Fatal(err)
 	}
 	// 计量只用到直播间的 ID、公司、名称
 	mustExec(t, db, "CREATE TABLE live_room (ID INTEGER PRIMARY KEY, SYS_COMPANY_ID INTEGER, ROOM_NAME TEXT, STATUS TEXT, IS_ACTIVE TEXT)")
+	mustExec(t, db, "CREATE TABLE sys_company (ID INTEGER PRIMARY KEY, NAME TEXT, IS_ACTIVE TEXT)")
+	mustExec(t, db, "INSERT INTO sys_company (ID, NAME, IS_ACTIVE) VALUES (1, '平台', 'Y'), (50, '立祥', 'Y'), (51, '一二三', 'Y')")
 	// 存储快照只用到公司、大小、有效标记和创建时间
 	for _, tbl := range []string{"live_recode", "live_cut"} {
 		mustExec(t, db, "CREATE TABLE "+tbl+" (ID INTEGER PRIMARY KEY, SYS_COMPANY_ID INTEGER, FILE_SIZE INTEGER, IS_ACTIVE TEXT, CREATE_TIME DATETIME)")

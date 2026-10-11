@@ -266,3 +266,28 @@ func DirectoryIDFromParam(c *gin.Context, paramName string) (uint, error) {
 
 	return uint(id), nil
 }
+
+// TablePermissionByName 按表名检查表权限（表 ID 在各环境不同时使用，如迁移新增的菜单表）
+func TablePermissionByName(groupService groups.Service, metadataService metadata.Service, tableName string, requiredPerm int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := c.Get("userID")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": errors.ErrUnauthorized, "message": "未登录"})
+			c.Abort()
+			return
+		}
+		table, err := metadataService.GetTable(tableName)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"code": errors.ErrForbidden, "message": "无权限访问该功能"})
+			c.Abort()
+			return
+		}
+		ok, err := groupService.CheckUserTablePermission(c.Request.Context(), userID.(uint), table.ID, requiredPerm)
+		if err != nil || !ok {
+			c.JSON(http.StatusForbidden, gin.H{"code": errors.ErrForbidden, "message": "无权限访问该功能"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

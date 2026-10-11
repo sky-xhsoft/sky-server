@@ -102,5 +102,6 @@ const (
 	ResourceLiveRecord   = "live_record"   // 录制 / 切片
 	ResourceLiveTemplate = "live_template" // 直播回调、录制模板
 	ResourceCompany      = "company"       // 公司配置
+	ResourceBilling      = "billing"       // 计费：价格、套餐、充值、调账、购买
 	ResourceMenu         = "menu"          // 菜单
 )

@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	ratedDoneKey     = "rated_done" // 已完成计价的最后一天
 	dailyDoneKey     = "daily_done" // 已完成每日计量的最后一天
 	dailyMaxAttempts = 6            // 每日计量连续失败的最多重试次数
 )
@@ -35,9 +36,41 @@ func (m *Meter) Tick(ctx context.Context, cfg SchedulerConfig) {
 			zap.L().Error("计量：计算直播时长失败", zap.String("day", day), zap.Error(err))
 		}
 	}
-	if now.Hour() < cfg.DailyHour || m.getState(ctx, dailyDoneKey) >= yesterday {
+	if err := m.RenewDue(ctx); err != nil {
+		zap.L().Error("计费：处理到期套餐失败", zap.Error(err))
+	}
+	if now.Hour() < cfg.DailyHour {
 		return
 	}
+	if m.getState(ctx, dailyDoneKey) < yesterday {
+		m.dailyMeter(ctx, yesterday)
+	}
+	m.rateAndClose(ctx, now)
+}
+
+// rateAndClose 每日计量完成后计价昨天；上月最后一天计价后为上月出账
+func (m *Meter) rateAndClose(ctx context.Context, now time.Time) {
+	yesterday := now.AddDate(0, 0, -1).Format(dayLayout)
+	if m.getState(ctx, dailyDoneKey) >= yesterday && m.getState(ctx, ratedDoneKey) < yesterday {
+		if err := m.RateDay(ctx, yesterday); err != nil {
+			zap.L().Error("计费：计价未全部完成", zap.String("day", yesterday), zap.Error(err))
+		}
+		_ = m.setState(ctx, ratedDoneKey, yesterday)
+	}
+	month := now.Format(monthLayoutBill)
+	last := prevMonth(month)
+	lastDay := time.Date(now.Year(), now.Month(), 0, 0, 0, 0, 0, time.Local).Format(dayLayout)
+	if m.getState(ctx, statementClosedKey) < last && m.getState(ctx, ratedDoneKey) >= lastDay {
+		if err := m.GenerateStatements(ctx, last); err != nil {
+			zap.L().Error("计费：出账未全部完成", zap.String("month", last), zap.Error(err))
+		} else {
+			zap.L().Info("计费：月账单已生成", zap.String("month", last))
+		}
+	}
+}
+
+// dailyMeter 计算前一天的全部计费点（流量拉取失败时重试，达到次数上限后不再重试）
+func (m *Meter) dailyMeter(ctx context.Context, yesterday string) {
 	if err := m.RunDaily(ctx, yesterday); err != nil {
 		// 流量拉取失败时下一轮重试（成功的计费点已写入）；连续失败 dailyMaxAttempts 次后不再重试，
 		// 失败原因留在流量对账中，由平台在对账页手动重新计量

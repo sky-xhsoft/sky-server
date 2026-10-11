@@ -215,7 +215,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 			registerSpeechTaskRoutes(v1, jwtUtil, services.SpeechTask, services.SpeechGlossary, services.Groups)
 		}
 		if services.BillingMeter != nil {
-			registerBillingRoutes(v1, jwtUtil, services.BillingMeter, services.Groups)
+			registerBillingRoutes(v1, jwtUtil, services.BillingMeter, services.Groups, services.Metadata)
 		}
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg, services)
 		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom, services.Groups)

@@ -281,6 +281,9 @@ func parseBusinessAction(method, path string) (action, resource string, ok bool)
 	case has("/live/recordings") || has("/live/clips") || has("/live/highlight"):
 		resource = entity.ResourceLiveRecord
 		action = verb()
+	case has("/billing"):
+		resource = entity.ResourceBilling
+		action = verb()
 	case has("/company"):
 		resource = entity.ResourceCompany
 		action = entity.ActionUpdateConfig

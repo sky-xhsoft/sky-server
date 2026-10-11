@@ -440,5 +440,10 @@ func (m *Meter) Recompute(ctx context.Context, from, to string, meters []string)
 			errs = append(errs, m.ComputeFlux(ctx, day))
 		}
 	}
+	// 已计价的日期按新用量重新计价（差额补扣或退还）。从开始日期起把之后已计价的日期也按顺序重算，
+	// 让退回或多占的套餐额度、资源包在之后的日期中重新分配
+	if rated := m.getState(ctx, ratedDoneKey); rated >= from {
+		errs = append(errs, m.RateRange(ctx, from, rated))
+	}
 	return errors.Join(errs...)
 }
