@@ -283,12 +283,21 @@ func (h *LivePushURLHandler) GeneratePlayURL(c *gin.Context) {
 		return
 	}
 
+	// 未传播放密钥时取本公司播放域名的鉴权主 KEY（直播预览页只传域名），
+	// 否则开启了播放鉴权的域名生成的地址没有签名，腾讯云拒绝播放
+	playKey := req.PlayKey
+	if playKey == "" && h.liveService != nil {
+		if auth, err := h.liveService.GetDomainAuthKey(withCompanyID(c), req.PlayDomain, "play"); err == nil && auth != nil && auth.Enable == 1 {
+			playKey = auth.MasterKey
+		}
+	}
+
 	// 生成播放地址
 	playURLs, err := h.pushURLService.GeneratePlayURL(
 		req.PlayDomain,
 		req.AppName,
 		req.StreamName,
-		req.PlayKey,
+		playKey,
 		req.ExpireTime,
 	)
 	if err != nil {
