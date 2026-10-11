@@ -62,6 +62,15 @@ type TemplateDefaults struct {
 	TencentConfigured  bool   `json:"tencentConfigured"`
 }
 
+// CosBucketOption 录制模板可选的存储桶
+type CosBucketOption struct {
+	Bucket       string `json:"bucket"`   // 不含 -appid，录制模板中使用
+	FullName     string `json:"fullName"` // 含 -appid
+	Region       string `json:"region"`
+	CreationDate string `json:"creationDate"`
+	Company      bool   `json:"company"` // 公司配置中的 COS 存储桶
+}
+
 // TemplateRuleRef 模板绑定的域名
 type TemplateRuleRef struct {
 	DomainName string `json:"domainName"`
@@ -186,6 +195,7 @@ type StandardStepResult struct {
 // TemplateService 直播回调、录制模板管理：本地为准，保存后同步到公司自己的腾讯云账号
 type TemplateService interface {
 	Defaults(ctx context.Context) (*TemplateDefaults, error)
+	CosBuckets(ctx context.Context) ([]CosBucketOption, error)
 	ListCallbackTemplates(ctx context.Context) (*TemplateListResult[*CallbackTemplateView], error)
 	ListRecordTemplates(ctx context.Context) (*TemplateListResult[*RecordTemplateView], error)
 	SaveCallbackTemplate(ctx context.Context, id uint, in *entity.LiveCallbackTemplate, operator string) (*entity.LiveCallbackTemplate, error)
@@ -253,6 +263,31 @@ func (s *templateService) Defaults(ctx context.Context) (*TemplateDefaults, erro
 		RecordInterval:     standardRecordInterval,
 		TencentConfigured:  err == nil,
 	}, nil
+}
+
+// CosBuckets 公司腾讯云账号下的存储桶；公司配置的 COS 存储桶排在最前
+func (s *templateService) CosBuckets(ctx context.Context) ([]CosBucketOption, error) {
+	buckets, err := s.live.ListCosBuckets(ctx)
+	if err != nil {
+		if errors.Is(err, ErrNoCompanyTencent) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("获取腾讯云存储桶失败：%w", err)
+	}
+	companyBucket, companyRegion := s.companyCos(ctx)
+	out := make([]CosBucketOption, 0, len(buckets))
+	for _, b := range buckets {
+		name := tencentLive.StripBucketAppID(b.Name)
+		out = append(out, CosBucketOption{
+			Bucket:       name,
+			FullName:     b.Name,
+			Region:       b.Region,
+			CreationDate: b.CreationDate,
+			Company:      companyBucket != "" && name == companyBucket && b.Region == companyRegion,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Company && !out[j].Company })
+	return out, nil
 }
 
 // ==================== 转换与比较 ====================

@@ -25,6 +25,8 @@ type Service interface {
 
 	// 模板管理：只使用公司自己的腾讯云账号（未配置时返回 ErrNoCompanyTencent）
 	TemplateClient(ctx context.Context) (tencentLive.TemplateClient, error)
+	// ListCosBuckets 公司自己腾讯云账号下的 COS 存储桶（未配置时返回 ErrNoCompanyTencent）
+	ListCosBuckets(ctx context.Context) ([]tencent.CosBucket, error)
 	EnableDomain(ctx context.Context, domainName string) error
 	ForbidDomain(ctx context.Context, domainName string) error
 	AuthenticateDomainOwner(ctx context.Context, domainName string, verifyType string) (*tencentLive.DomainOwnerVerifyResult, error)
@@ -130,6 +132,15 @@ var ErrNoCompanyTencent = errors.New("本公司未配置腾讯云密钥，请先
 // TemplateClient 模板与规则管理只使用公司自己的腾讯云账号：未配置时报错，不回退到默认账号，
 // 避免把一个公司的模板写进其他账号
 func (s *liveService) TemplateClient(ctx context.Context) (tencentLive.TemplateClient, error) {
+	client, err := s.companyClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return tencentLive.NewTemplateManager(client.GetLiveClient(), client), nil
+}
+
+// companyClient 公司自己的腾讯云客户端；未配置时报错，不回退到默认账号
+func (s *liveService) companyClient(ctx context.Context) (*tencent.Client, error) {
 	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
 	if s.tencentMgr == nil || companyID == 0 || !s.tencentMgr.HasCompanyConfig(ctx, companyID) {
 		return nil, ErrNoCompanyTencent
@@ -138,7 +149,16 @@ func (s *liveService) TemplateClient(ctx context.Context) (tencentLive.TemplateC
 	if err != nil || client == nil {
 		return nil, ErrNoCompanyTencent
 	}
-	return tencentLive.NewTemplateManager(client.GetLiveClient(), client), nil
+	return client, nil
+}
+
+// ListCosBuckets 列出公司腾讯云账号下的存储桶，用于录制模板选择存储位置
+func (s *liveService) ListCosBuckets(ctx context.Context) ([]tencent.CosBucket, error) {
+	client, err := s.companyClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.ListCosBuckets(ctx)
 }
 
 // getDomainManager 获取域名管理器

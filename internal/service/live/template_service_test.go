@@ -10,6 +10,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/contextutil"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/fieldcrypto"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent"
 	tencentLive "github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	"gorm.io/gorm"
@@ -171,6 +172,14 @@ type fakeLiveForTemplate struct {
 	cloud      *fakeCloud
 	noTencent  bool
 	pushDomain map[string]int64 // 域名 → 类型（0 推流，1 播放）
+	buckets    []tencent.CosBucket
+}
+
+func (f *fakeLiveForTemplate) ListCosBuckets(ctx context.Context) ([]tencent.CosBucket, error) {
+	if f.noTencent {
+		return nil, ErrNoCompanyTencent
+	}
+	return f.buckets, nil
 }
 
 func (f *fakeLiveForTemplate) TemplateClient(ctx context.Context) (tencentLive.TemplateClient, error) {
@@ -209,6 +218,30 @@ func setupTemplateTest(t *testing.T) (*templateService, *fakeLiveForTemplate, co
 
 func standardCallbackInput() *entity.LiveCallbackTemplate {
 	return &entity.LiveCallbackTemplate{Name: "zigebo-callback-test", StreamBeginURL: testBase + callbackPathPush, StreamEndURL: testBase + callbackPathDisconnect}
+}
+
+func TestCosBuckets_CompanyBucketFirst(t *testing.T) {
+	svc, live, ctx := setupTemplateTest(t)
+	live.buckets = []tencent.CosBucket{
+		{Name: "backup-1503356301", Region: "ap-guangzhou"},
+		{Name: "zigebo-1503356301", Region: "ap-nanjing"},
+		{Name: "zigebo-1503356301", Region: "ap-shanghai"},
+	}
+	list, err := svc.CosBuckets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 3 || list[0].Bucket != "zigebo" || list[0].Region != "ap-shanghai" || !list[0].Company {
+		t.Fatalf("公司存储桶应排第一：%+v", list)
+	}
+	if list[1].Company || list[1].Bucket != "backup" || list[1].FullName != "backup-1503356301" {
+		t.Fatalf("其他存储桶：%+v", list[1])
+	}
+
+	live.noTencent = true
+	if _, err := svc.CosBuckets(ctx); err != ErrNoCompanyTencent {
+		t.Fatalf("未配置密钥应提示：%v", err)
+	}
 }
 
 func TestSaveCallbackTemplate_SyncsToCloud(t *testing.T) {

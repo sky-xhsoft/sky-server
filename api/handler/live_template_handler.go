@@ -57,6 +57,16 @@ func (h *LiveTemplateHandler) Defaults(c *gin.Context) {
 	utils.Success(c, d)
 }
 
+// CosBuckets 公司腾讯云账号下的存储桶（录制模板选择存储位置）
+func (h *LiveTemplateHandler) CosBuckets(c *gin.Context) {
+	list, err := h.svc.CosBuckets(withCompanyID(c))
+	if err != nil {
+		templateFail(c, err)
+		return
+	}
+	utils.Success(c, list)
+}
+
 // List 模板列表（同时与腾讯云对账）：GET /live/templates?kind=callback|record
 func (h *LiveTemplateHandler) List(c *gin.Context) {
 	ctx := withCompanyID(c)

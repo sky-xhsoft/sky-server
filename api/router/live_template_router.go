@@ -25,6 +25,7 @@ func registerLiveTemplateRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, svc liveSe
 	{
 		templates.GET("", h.List)                             // 模板列表（kind=callback|record，同时与腾讯云对账）
 		templates.GET("/defaults", h.Defaults)                // 新建模板默认值
+		templates.GET("/cos-buckets", h.CosBuckets)           // 公司腾讯云账号下的存储桶
 		templates.POST("/import", write, h.Import)            // 从腾讯云导入
 		templates.POST("/callback", write, h.SaveCallback)    // 新增回调模板（保存即同步）
 		templates.PUT("/callback/:id", write, h.SaveCallback) // 修改回调模板
