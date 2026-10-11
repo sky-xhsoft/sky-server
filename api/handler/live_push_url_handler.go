@@ -48,7 +48,8 @@ type GeneratePlayURLRequest struct {
 
 // GeneratePushURLByRoomRequest 根据直播间ID生成推流地址请求
 type GeneratePushURLByRoomRequest struct {
-	RoomID flexibleID `json:"roomId" binding:"required"` // 直播间ID（数字或字符串均可）
+	RoomID     flexibleID `json:"roomId" binding:"required"` // 直播间ID（数字或字符串均可）
+	ExpireTime int64      `json:"expireTime"`                // 可选，地址至少有效到此时间（Unix 秒），如字幕同传转推的结束时间
 }
 
 // GeneratePushURLByRoom 根据直播间ID生成推流地址
@@ -120,6 +121,10 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 		expireTime = room.EndTime.Unix()
 	} else {
 		expireTime = time.Now().Unix() + 7*86400
+	}
+	// 调用方需要更长的有效期（如转推结束时间晚于直播间结束时间），推流鉴权过期后断线重连会失败
+	if req.ExpireTime > expireTime {
+		expireTime = req.ExpireTime
 	}
 
 	pushResp, err := h.pushURLService.GeneratePushURL(pushDomain, appName, streamName, streamKey, expireTime)
