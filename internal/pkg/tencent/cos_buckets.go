@@ -2,6 +2,8 @@ package tencent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
@@ -51,3 +53,33 @@ func (c *Client) ListCosBuckets(ctx context.Context) ([]CosBucket, error) {
 	})
 	return out, nil
 }
+
+// CreateCosBucket 创建存储桶（公开读写），并设置 CORS 允许所有来源、请求头和常用方法。
+// bucket 为完整名称（含 -APPID）。存储桶已创建但 CORS 设置失败时返回 ErrCosBucketCORS
+func (c *Client) CreateCosBucket(ctx context.Context, bucket, region string) error {
+	u, err := url.Parse(fmt.Sprintf("https://%s.cos.%s.myqcloud.com", bucket, region))
+	if err != nil {
+		return err
+	}
+	client := cos.NewClient(&cos.BaseURL{BucketURL: u}, &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: &cos.AuthorizationTransport{SecretID: c.config.SecretID, SecretKey: c.config.SecretKey},
+	})
+	if _, err := client.Bucket.Put(ctx, &cos.BucketPutOptions{XCosACL: "public-read-write"}); err != nil {
+		return err
+	}
+	_, err = client.Bucket.PutCORS(ctx, &cos.BucketPutCORSOptions{Rules: []cos.BucketCORSRule{{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "HEAD"},
+		AllowedHeaders: []string{"*"},
+		ExposeHeaders:  []string{"*"},
+		MaxAgeSeconds:  600,
+	}}})
+	if err != nil {
+		return fmt.Errorf("%w：%v", ErrCosBucketCORS, err)
+	}
+	return nil
+}
+
+// ErrCosBucketCORS 存储桶已创建，但设置跨域访问失败
+var ErrCosBucketCORS = errors.New("存储桶已创建，但设置跨域访问（CORS）失败，请在腾讯云控制台手动设置")

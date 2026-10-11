@@ -67,6 +67,24 @@ func (h *LiveTemplateHandler) CosBuckets(c *gin.Context) {
 	utils.Success(c, list)
 }
 
+// CreateCosBucket 在公司腾讯云账号下新建存储桶（公开读写 + CORS 全部允许）：POST /live/templates/cos-buckets
+func (h *LiveTemplateHandler) CreateCosBucket(c *gin.Context) {
+	var req struct {
+		Bucket string `json:"bucket"`
+		Region string `json:"region"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误")
+		return
+	}
+	b, err := h.svc.CreateCosBucket(withCompanyID(c), req.Bucket, req.Region)
+	if err != nil {
+		templateFail(c, err)
+		return
+	}
+	utils.Success(c, b)
+}
+
 // List 模板列表（同时与腾讯云对账）：GET /live/templates?kind=callback|record
 func (h *LiveTemplateHandler) List(c *gin.Context) {
 	ctx := withCompanyID(c)

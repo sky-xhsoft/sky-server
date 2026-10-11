@@ -173,6 +173,16 @@ type fakeLiveForTemplate struct {
 	noTencent  bool
 	pushDomain map[string]int64 // 域名 → 类型（0 推流，1 播放）
 	buckets    []tencent.CosBucket
+	created    []string // 创建的存储桶：名称|地域
+	createErr  error
+}
+
+func (f *fakeLiveForTemplate) CreateCosBucket(ctx context.Context, bucket, region string) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
+	f.created = append(f.created, bucket+"|"+region)
+	return nil
 }
 
 func (f *fakeLiveForTemplate) ListCosBuckets(ctx context.Context) ([]tencent.CosBucket, error) {
@@ -241,6 +251,65 @@ func TestCosBuckets_CompanyBucketFirst(t *testing.T) {
 	live.noTencent = true
 	if _, err := svc.CosBuckets(ctx); err != ErrNoCompanyTencent {
 		t.Fatalf("未配置密钥应提示：%v", err)
+	}
+}
+
+func TestCreateCosBucket(t *testing.T) {
+	svc, live, ctx := setupTemplateTest(t)
+	live.buckets = []tencent.CosBucket{{Name: "zigebo-1503356301", Region: "ap-shanghai"}}
+
+	// 自动补 -APPID；公司配置的存储桶标为公司默认
+	b, err := svc.CreateCosBucket(ctx, " Rec-2026 ", "ap-nanjing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.FullName != "rec-2026-1503356301" || b.Bucket != "rec-2026" || b.Region != "ap-nanjing" || b.Company {
+		t.Fatalf("创建结果：%+v", b)
+	}
+	if len(live.created) != 1 || live.created[0] != "rec-2026-1503356301|ap-nanjing" {
+		t.Fatalf("调用腾讯云：%v", live.created)
+	}
+
+	// 输入带 -APPID
+	if b, err := svc.CreateCosBucket(ctx, "logs-1503356301", "ap-shanghai"); err != nil || b.FullName != "logs-1503356301" {
+		t.Fatalf("带 APPID：%+v %v", b, err)
+	}
+
+	bad := []struct{ name, region, want string }{
+		{"rec", "", "请选择地域"},
+		{"-rec", "ap-nanjing", "只能包含小写字母"},
+		{"rec_1", "ap-nanjing", "只能包含小写字母"},
+		{"zigebo", "ap-shanghai", "已存在"},
+		{strings.Repeat("a", 40), "ap-nanjing", "过长"},
+	}
+	for _, c := range bad {
+		if _, err := svc.CreateCosBucket(ctx, c.name, c.region); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%q %q：应提示「%s」，得到 %v", c.name, c.region, c.want, err)
+		}
+	}
+
+	// 腾讯云错误转中文；CORS 失败原样提示
+	live.createErr = fmt.Errorf("PUT https://x: 409 BucketAlreadyExists")
+	if _, err := svc.CreateCosBucket(ctx, "taken", "ap-nanjing"); err == nil || !strings.Contains(err.Error(), "已被占用") {
+		t.Errorf("重名：%v", err)
+	}
+	live.createErr = fmt.Errorf("PUT https://x: 451 UnavailableForLegalReasons(Message: Due to your account is arrears)")
+	if _, err := svc.CreateCosBucket(ctx, "x1", "ap-nanjing"); err == nil || !strings.Contains(err.Error(), "欠费") {
+		t.Errorf("欠费：%v", err)
+	}
+	live.createErr = fmt.Errorf("%w：timeout", tencent.ErrCosBucketCORS)
+	if _, err := svc.CreateCosBucket(ctx, "x2", "ap-nanjing"); err == nil || !strings.Contains(err.Error(), "存储桶已创建") {
+		t.Errorf("CORS 失败：%v", err)
+	}
+
+	// 账号下没有存储桶：须输入完整名称
+	live.createErr = nil
+	live.buckets = nil
+	if _, err := svc.CreateCosBucket(ctx, "first", "ap-nanjing"); err == nil || !strings.Contains(err.Error(), "无法确定 APPID") {
+		t.Errorf("无存储桶：%v", err)
+	}
+	if b, err := svc.CreateCosBucket(ctx, "first-1503356301", "ap-nanjing"); err != nil || b.FullName != "first-1503356301" {
+		t.Errorf("无存储桶带 APPID：%+v %v", b, err)
 	}
 }
 

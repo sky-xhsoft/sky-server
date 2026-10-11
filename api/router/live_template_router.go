@@ -23,17 +23,18 @@ func registerLiveTemplateRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, svc liveSe
 
 	templates := r.Group("/live/templates", auth...)
 	{
-		templates.GET("", h.List)                             // 模板列表（kind=callback|record，同时与腾讯云对账）
-		templates.GET("/defaults", h.Defaults)                // 新建模板默认值
-		templates.GET("/cos-buckets", h.CosBuckets)           // 公司腾讯云账号下的存储桶
-		templates.POST("/import", write, h.Import)            // 从腾讯云导入
-		templates.POST("/callback", write, h.SaveCallback)    // 新增回调模板（保存即同步）
-		templates.PUT("/callback/:id", write, h.SaveCallback) // 修改回调模板
-		templates.POST("/record", write, h.SaveRecord)        // 新增录制模板
-		templates.PUT("/record/:id", write, h.SaveRecord)     // 修改录制模板
-		templates.DELETE("/:kind/:id", write, h.Delete)       // 删除模板
-		templates.POST("/:kind/:id/sync", write, h.Sync)      // 以本地为准同步到腾讯云
-		templates.POST("/:kind/:id/pull", write, h.Pull)      // 用腾讯云配置更新本地
+		templates.GET("", h.List)                                // 模板列表（kind=callback|record，同时与腾讯云对账）
+		templates.GET("/defaults", h.Defaults)                   // 新建模板默认值
+		templates.GET("/cos-buckets", h.CosBuckets)              // 公司腾讯云账号下的存储桶
+		templates.POST("/cos-buckets", write, h.CreateCosBucket) // 新建存储桶（公开读写 + CORS）
+		templates.POST("/import", write, h.Import)               // 从腾讯云导入
+		templates.POST("/callback", write, h.SaveCallback)       // 新增回调模板（保存即同步）
+		templates.PUT("/callback/:id", write, h.SaveCallback)    // 修改回调模板
+		templates.POST("/record", write, h.SaveRecord)           // 新增录制模板
+		templates.PUT("/record/:id", write, h.SaveRecord)        // 修改录制模板
+		templates.DELETE("/:kind/:id", write, h.Delete)          // 删除模板
+		templates.POST("/:kind/:id/sync", write, h.Sync)         // 以本地为准同步到腾讯云
+		templates.POST("/:kind/:id/pull", write, h.Pull)         // 用腾讯云配置更新本地
 	}
 
 	domain := r.Group("/live/domains/:domainName/templates", auth...)
