@@ -2,10 +2,12 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
+	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
 	"go.uber.org/zap"
 )
@@ -42,6 +44,30 @@ type RegionClientProvider interface {
 type PullStreamManager struct {
 	client         *live.Client
 	clientProvider RegionClientProvider
+}
+
+// fallbackLiveRegion 公司配置的地域不支持直播接口（如 ap-nanjing）时改用的地域：
+// 任务列表等接口返回的是账号下所有地域的任务，换地域调用不影响结果
+const fallbackLiveRegion = "ap-guangzhou"
+
+// callLive 用默认客户端调用直播接口；返回 UnsupportedRegion（公司地域不支持直播接口）时改用 fallbackLiveRegion 重试
+func callLive[T any](m *PullStreamManager, call func(c *live.Client) (T, error)) (T, error) {
+	resp, err := call(m.client)
+	if err == nil || m.clientProvider == nil || !isUnsupportedRegion(err) {
+		return resp, err
+	}
+	client, cerr := m.clientProvider.GetLiveClientForRegion(fallbackLiveRegion)
+	if cerr != nil {
+		return resp, err
+	}
+	zap.L().Warn("公司配置的地域不支持直播接口，改用默认直播地域重试", zap.String("region", fallbackLiveRegion), zap.Error(err))
+	return call(client)
+}
+
+// isUnsupportedRegion 是否为腾讯云「该接口不支持此地域访问」错误
+func isUnsupportedRegion(err error) bool {
+	var sdkErr *tcerr.TencentCloudSDKError
+	return errors.As(err, &sdkErr) && sdkErr.Code == "UnsupportedRegion"
 }
 
 // NewPullStreamManager 创建拉流管理器
@@ -149,7 +175,9 @@ func (m *PullStreamManager) DeletePullStreamTask(ctx context.Context, taskID str
 	request.TaskId = common.StringPtr(taskID)
 	request.Operator = common.StringPtr(operator)
 
-	_, err := m.client.DeleteLivePullStreamTask(request)
+	_, err := callLive(m, func(c *live.Client) (*live.DeleteLivePullStreamTaskResponse, error) {
+		return c.DeleteLivePullStreamTask(request)
+	})
 	if err != nil {
 		logger.Error("Failed to delete pull stream task",
 			zap.String("taskID", taskID),
@@ -233,7 +261,9 @@ func (m *PullStreamManager) DescribePullStreamTasks(ctx context.Context, req *De
 		request.SpecifyTaskId = common.StringPtr(*req.SpecifyTaskId)
 	}
 
-	response, err := m.client.DescribeLivePullStreamTasks(request)
+	response, err := callLive(m, func(c *live.Client) (*live.DescribeLivePullStreamTasksResponse, error) {
+		return c.DescribeLivePullStreamTasks(request)
+	})
 	if err != nil {
 		logger.Error("Failed to describe pull stream tasks",
 			zap.Reflect("request", req),
@@ -345,7 +375,9 @@ func (m *PullStreamManager) RestartPullStreamTask(ctx context.Context, taskID st
 	request.TaskId = common.StringPtr(taskID)
 	request.Operator = common.StringPtr(operator)
 
-	_, err := m.client.RestartLivePullStreamTask(request)
+	_, err := callLive(m, func(c *live.Client) (*live.RestartLivePullStreamTaskResponse, error) {
+		return c.RestartLivePullStreamTask(request)
+	})
 	if err != nil {
 		logger.Error("Failed to restart pull stream task",
 			zap.String("taskID", taskID),
@@ -365,7 +397,9 @@ func (m *PullStreamManager) DescribePullTransformPushInfoList(ctx context.Contex
 	request.EndTime = common.StringPtr(req.EndTime)
 	request.TaskId = common.StringPtr(req.TaskId)
 
-	response, err := m.client.DescribePullTransformPushInfoList(request)
+	response, err := callLive(m, func(c *live.Client) (*live.DescribePullTransformPushInfoListResponse, error) {
+		return c.DescribePullTransformPushInfoList(request)
+	})
 	if err != nil {
 		logger.Error("Failed to describe pull transform push info list",
 			zap.String("taskId", req.TaskId),
@@ -449,7 +483,9 @@ func (m *PullStreamManager) UpdatePullStreamTask(ctx context.Context, req *Updat
 		request.Comment = common.StringPtr(req.Comment)
 	}
 
-	_, err := m.client.ModifyLivePullStreamTask(request)
+	_, err := callLive(m, func(c *live.Client) (*live.ModifyLivePullStreamTaskResponse, error) {
+		return c.ModifyLivePullStreamTask(request)
+	})
 	if err != nil {
 		logger.Error("Failed to update pull stream task",
 			zap.String("taskId", req.TaskID),
@@ -483,7 +519,9 @@ func (m *PullStreamManager) DescribePullStreamTaskStatus(ctx context.Context, ta
 	request := live.NewDescribeLivePullStreamTaskStatusRequest()
 	request.TaskId = common.StringPtr(taskID)
 
-	response, err := m.client.DescribeLivePullStreamTaskStatus(request)
+	response, err := callLive(m, func(c *live.Client) (*live.DescribeLivePullStreamTaskStatusResponse, error) {
+		return c.DescribeLivePullStreamTaskStatus(request)
+	})
 	if err != nil {
 		logger.Error("Failed to describe pull stream task status",
 			zap.String("taskId", taskID),
