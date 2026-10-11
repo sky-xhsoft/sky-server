@@ -44,11 +44,6 @@ var (
 	ErrNoCallbackBase = errors.New("未配置系统回调地址（tencentCloud.live.callbackURL），无法生成回调地址")
 
 	templateNameRe = regexp.MustCompile(`^[\p{Han}A-Za-z0-9_-]{1,255}$`)
-	// 存储桶名称：小写字母、数字和 -，不能以 - 开头或结尾；地域如 ap-nanjing
-	cosBucketNameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-	cosRegionRe     = regexp.MustCompile(`^[a-z]+(-[a-z]+)+(-[0-9]+)?$`)
-	// APPID 为 10 位数字
-	cosAppIDSuffixRe = regexp.MustCompile(`-[0-9]{10}$`)
 )
 
 // TemplateDefaults 新建模板时的默认值
@@ -297,17 +292,9 @@ func (s *templateService) CosBuckets(ctx context.Context) ([]CosBucketOption, er
 	return out, nil
 }
 
-// cosBucketMaxLen 存储桶完整名称（名称-APPID）最长 50 个字符
-const cosBucketMaxLen = 50
-
 // CreateCosBucket 在公司腾讯云账号下创建存储桶（公开读写，CORS 全部允许）。
 // name 可不带 -APPID，APPID 取自账号现有存储桶；不写回公司配置
 func (s *templateService) CreateCosBucket(ctx context.Context, name, region string) (*CosBucketOption, error) {
-	name = strings.ToLower(strings.TrimSpace(name))
-	region = strings.TrimSpace(region)
-	if !cosRegionRe.MatchString(region) {
-		return nil, errors.New("请选择地域")
-	}
 	buckets, err := s.live.ListCosBuckets(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNoCompanyTencent) {
@@ -315,61 +302,15 @@ func (s *templateService) CreateCosBucket(ctx context.Context, name, region stri
 		}
 		return nil, fmt.Errorf("获取腾讯云存储桶失败：%w", err)
 	}
-	appID := ""
-	for _, b := range buckets {
-		if full := tencentLive.StripBucketAppID(b.Name); full != b.Name {
-			appID = b.Name[len(full)+1:]
-			break
-		}
-	}
-	// 名称本身可以以数字结尾（如 rec-2026），只有与账号 APPID 一致的后缀才视为 -APPID
-	full := name
-	switch {
-	case appID != "" && strings.HasSuffix(name, "-"+appID):
-		name = strings.TrimSuffix(name, "-"+appID)
-	case appID != "":
-		full = name + "-" + appID
-	case cosAppIDSuffixRe.MatchString(name):
-		name = name[:strings.LastIndex(name, "-")]
-	default:
-		return nil, errors.New("账号下还没有存储桶，无法确定 APPID，请输入完整名称（名称-APPID）")
-	}
-	if !cosBucketNameRe.MatchString(name) {
-		return nil, errors.New("存储桶名称只能包含小写字母、数字和 -，且不能以 - 开头或结尾")
-	}
-	if len(full) > cosBucketMaxLen {
-		return nil, fmt.Errorf("存储桶名称过长：加上 -APPID 后不能超过 %d 个字符", cosBucketMaxLen)
-	}
-	for _, b := range buckets {
-		if b.Name == full {
-			return nil, fmt.Errorf("存储桶 %s 已存在（%s）", full, b.Region)
-		}
-	}
-	if err := s.live.CreateCosBucket(ctx, full, region); err != nil && !errors.Is(err, tencent.ErrCosBucketCORS) {
-		return nil, cosCreateError(err)
-	} else if err != nil {
+	short, full, region, err := tencent.ResolveNewCosBucket(buckets, name, region)
+	if err != nil {
 		return nil, err
 	}
-	companyBucket, companyRegion := s.companyCos(ctx)
-	return &CosBucketOption{Bucket: name, FullName: full, Region: region, Company: name == companyBucket && region == companyRegion}, nil
-}
-
-// cosCreateError 腾讯云创建存储桶的常见错误转为中文提示
-func cosCreateError(err error) error {
-	msg := err.Error()
-	switch {
-	case strings.Contains(msg, "BucketAlreadyExists"):
-		return errors.New("存储桶名称已被占用（腾讯云内全局唯一），请换一个名称")
-	case strings.Contains(msg, "TooManyBuckets"):
-		return errors.New("腾讯云账号的存储桶数量已达上限（200 个）")
-	case strings.Contains(msg, "arrears"), strings.Contains(msg, "451"):
-		return errors.New("腾讯云账号欠费，充值后才能创建存储桶")
-	case strings.Contains(msg, "AccessDenied"):
-		return errors.New("腾讯云密钥没有创建存储桶的权限（需要 cos:PutBucket）")
-	case strings.Contains(msg, "InvalidRegionName"), strings.Contains(msg, "no such host"):
-		return errors.New("地域不存在或不支持")
+	if err := s.live.CreateCosBucket(ctx, full, region); err != nil {
+		return nil, tencent.CosCreateError(err)
 	}
-	return fmt.Errorf("创建存储桶失败：%w", err)
+	companyBucket, companyRegion := s.companyCos(ctx)
+	return &CosBucketOption{Bucket: short, FullName: full, Region: region, Company: short == companyBucket && region == companyRegion}, nil
 }
 
 // ==================== 转换与比较 ====================

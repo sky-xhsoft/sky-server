@@ -28,6 +28,9 @@ func registerCompanyRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, companyService
 		{
 			config.GET("", companyHandler.GetCompanyConfig)
 			config.PUT("", middleware.AdminRequired(), companyHandler.UpdateCompanyConfig)
+			// 云盘存储：列出、新建存储桶（用云盘存储密钥，不修改配置）
+			config.GET("/cos-buckets", middleware.AdminRequired(), companyHandler.ListStorageBuckets)
+			config.POST("/cos-buckets", middleware.AdminRequired(), companyHandler.CreateStorageBucket)
 		}
 	}
 }
