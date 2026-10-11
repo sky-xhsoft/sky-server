@@ -1153,7 +1153,9 @@ func (s *templateService) checkIssues(ctx context.Context, ov *DomainTemplateOve
 		t := rec.Record
 		if t.CosStore != "Y" {
 			add("warning", "录制模板「%s」存储至云点播 VOD，录制文件不会进入本公司 COS", t.Name)
-		} else if bucket != "" && (t.CosBucket != bucket || t.CosRegion != region) {
+		} else if bucket == "" || region == "" {
+			add("info", "公司配置中的 COS 存储桶或地域未填写，无法判断录制是否存储至本公司 COS，也不能创建标准录制模板")
+		} else if t.CosBucket != bucket || t.CosRegion != region {
 			add("warning", "录制模板「%s」存储到 %s（%s），不是本公司配置的 COS 存储桶 %s（%s）", t.Name, t.CosBucket, t.CosRegion, bucket, region)
 		}
 		if rec.SyncStatus == entity.TemplateSyncDrift {
