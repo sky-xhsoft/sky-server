@@ -80,11 +80,35 @@ type DisconnectStreamEvent struct {
 	StreamName  string `json:"stream_name"`  // 流名称
 
 	// 腾讯云实际下发的字段（normalize 后合并到 PushDomain / AppName / StreamName 等）
-	App            string `json:"app"`           // 推流域名
-	AppNameTencent string `json:"appname"`       // 应用名称
-	PushDuration   int64  `json:"push_duration"` // 推流时长（毫秒）
-	ErrCode        int    `json:"errcode"`       // 断流错误码
-	ErrMsg         string `json:"errmsg"`        // 断流原因
+	App            string        `json:"app"`           // 推流域名
+	AppNameTencent string        `json:"appname"`       // 应用名称
+	PushDuration   flexibleInt64 `json:"push_duration"` // 推流时长（毫秒），腾讯云下发为字符串
+	ErrCode        flexibleInt64 `json:"errcode"`       // 断流错误码
+	ErrMsg         string        `json:"errmsg"`        // 断流原因
+}
+
+// flexibleInt64 兼容数字与字符串两种 JSON 写法的整数（腾讯云断流回调的 push_duration 为 "51196"）
+type flexibleInt64 int64
+
+// UnmarshalJSON 接受 123、"123" 或 ""
+func (f *flexibleInt64) UnmarshalJSON(data []byte) error {
+	var num json.Number
+	if err := json.Unmarshal(data, &num); err == nil {
+		v, err := num.Int64()
+		*f = flexibleInt64(v)
+		return err
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	if str = strings.TrimSpace(str); str == "" {
+		*f = 0
+		return nil
+	}
+	v, err := strconv.ParseInt(str, 10, 64)
+	*f = flexibleInt64(v)
+	return err
 }
 
 // normalize 腾讯云推流回调实际字段为 app（推流域名）、appname（应用名），流名即 stream_id；
@@ -101,7 +125,7 @@ func (e *DisconnectStreamEvent) normalize() {
 	e.AppName = firstNonEmpty(e.AppName, e.AppNameTencent)
 	e.StreamName = firstNonEmpty(e.StreamName, e.StreamID)
 	if e.Duration == 0 && e.PushDuration > 0 {
-		e.Duration = e.PushDuration / 1000
+		e.Duration = int64(e.PushDuration) / 1000
 	}
 	if e.Reason == "" && (e.ErrMsg != "" || e.ErrCode != 0) {
 		e.Reason = strings.TrimSpace(fmt.Sprintf("%d %s", e.ErrCode, e.ErrMsg))

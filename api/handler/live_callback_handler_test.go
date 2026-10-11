@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -87,5 +88,32 @@ func TestVerifySign_WithinWindow_Accepted(t *testing.T) {
 	sign := signCallback("secret-key", tWithin)
 	if !h.verifySign(tWithin, sign) {
 		t.Fatalf("窗口内合法签名应通过")
+	}
+}
+
+// 腾讯云断流回调的 push_duration 为字符串、errcode 为数字；两种写法都要能解析
+func TestDisconnectStreamEventFlexibleNumbers(t *testing.T) {
+	cases := []struct {
+		body     string
+		duration int64
+		reason   string
+	}{
+		{`{"app":"push.example.com","appname":"live","stream_id":"s1","push_duration":"51196","errcode":1,"errmsg":"推流断开"}`, 51, "1 推流断开"},
+		{`{"stream_id":"s1","push_duration":61000,"errcode":"0","errmsg":""}`, 61, ""},
+		{`{"stream_id":"s1","push_duration":"","duration":30}`, 30, ""},
+	}
+	for _, c := range cases {
+		var e DisconnectStreamEvent
+		if err := json.Unmarshal([]byte(c.body), &e); err != nil {
+			t.Fatalf("解析 %s 失败: %v", c.body, err)
+		}
+		e.normalize()
+		if e.Duration != c.duration || e.Reason != c.reason || e.StreamName != "s1" {
+			t.Fatalf("%s: duration=%d reason=%q stream=%q", c.body, e.Duration, e.Reason, e.StreamName)
+		}
+	}
+	var e DisconnectStreamEvent
+	if err := json.Unmarshal([]byte(`{"push_duration":"abc"}`), &e); err == nil {
+		t.Fatal("非数字的 push_duration 应报错")
 	}
 }
