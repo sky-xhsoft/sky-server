@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// DefaultBaseURL 火山方舟在线推理地址
+// DefaultBaseURL 火山方舟在线推理地址：固定使用北京区域（接入点须在北京区域创建）
 const DefaultBaseURL = "https://ark.cn-beijing.volces.com/api/v3"
 
 // Message 对话消息
