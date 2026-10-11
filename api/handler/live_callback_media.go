@@ -75,10 +75,7 @@ func (h *LiveCallbackHandler) saveClip(room *entity.LiveRoom, streamID string, i
 		return
 	}
 
-	name := strings.TrimSpace(item.Title)
-	if name == "" {
-		name = fmt.Sprintf("高光切片_%d", item.BeginTime)
-	}
+	name := clipName(item)
 	duration := 0
 	if item.EndTime > item.BeginTime {
 		duration = int(item.EndTime - item.BeginTime)
@@ -104,6 +101,31 @@ func (h *LiveCallbackHandler) saveClip(room *entity.LiveRoom, streamID string, i
 	if err := h.db.Create(clip).Error; err != nil {
 		logger.Error("保存切片记录失败", zap.Uint("roomId", room.ID), zap.String("url", item.VideoStoreURL), zap.Error(err))
 	}
+}
+
+// clipName 切片名称：回调标题为空（多数情况）时用「高光切片_开始时间戳」，切片列表与云盘文件名一致
+func clipName(item *HighlightItem) string {
+	if name := strings.TrimSpace(item.Title); name != "" {
+		return name
+	}
+	return fmt.Sprintf("高光切片_%d", item.BeginTime)
+}
+
+// clipFileName 云盘文件名：切片名称去掉文件名中不允许的字符，加 .mp4
+func clipFileName(item *HighlightItem) string {
+	name := strings.Map(func(r rune) rune {
+		switch r {
+		case '\\', '/', '*', '?', '"', '<', '>', '|':
+			return -1
+		case ':':
+			return '_'
+		}
+		return r
+	}, clipName(item))
+	if strings.TrimSpace(name) == "" {
+		name = fmt.Sprintf("高光切片_%d", item.BeginTime)
+	}
+	return name + ".mp4"
 }
 
 // mediaURLAllowed 允许查询大小的地址（测试中替换为本地服务）

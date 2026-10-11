@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -60,6 +61,11 @@ func setupCallbackCompanyTest(t *testing.T) (*LiveCallbackHandler, *gorm.DB, *en
 	if err := db.Create(&room).Error; err != nil {
 		t.Fatal(err)
 	}
+
+	// 测试中不向腾讯云查询文件大小
+	orig := mediaURLAllowed
+	mediaURLAllowed = func(string) bool { return false }
+	t.Cleanup(func() { mediaURLAllowed = orig })
 
 	h := NewLiveCallbackHandler(db, &config.Config{}, testCallbackKey, &fakeCloudService{db: db})
 	return h, db, &owner
@@ -383,5 +389,60 @@ func TestCallback_DisconnectUsesTencentFieldNames(t *testing.T) {
 	db.Where("EVENT_TYPE = ?", "push_stream").First(&push)
 	if push.DomainName != "xt.skyzhou.cn" || push.AppName != "live" || push.StreamName != "501" {
 		t.Fatalf("推流事件字段应从腾讯云实际字段取值，got domain=%q app=%q stream=%q", push.DomainName, push.AppName, push.StreamName)
+	}
+}
+
+// 腾讯云高光切片标题多为空：每个切片都要写入云盘，文件名用切片名称；同一地址重试或改名后不重复写入
+func TestCallback_Highlight_UntitledClipsAllWrittenToDrive(t *testing.T) {
+	h, db, _ := setupCallbackCompanyTest(t)
+	now := time.Now().Unix()
+	clip := func(begin int64, url, title string) map[string]interface{} {
+		return map[string]interface{}{"stream_id": "501", "items": []map[string]interface{}{
+			{"begin_time": begin, "end_time": begin + 5, "video_store_url": url, "title": title}}}
+	}
+	postCallback(t, h.HandleHighlight, clip(now-30, "https://1500000001.vod2.myqcloud.com/a.mp4", ""))
+	postCallback(t, h.HandleHighlight, clip(now-20, "https://1500000001.vod2.myqcloud.com/b.mp4", ""))
+	postCallback(t, h.HandleHighlight, clip(now-10, "https://1500000001.vod2.myqcloud.com/c.mp4", "精彩"))
+	postCallback(t, h.HandleHighlight, clip(now, "https://1500000001.vod2.myqcloud.com/d.mp4", "精彩"))
+
+	var files []entity.CloudItem
+	db.Where("ITEM_TYPE = ?", "file").Order("ID").Find(&files)
+	want := []string{
+		fmt.Sprintf("高光切片_%d.mp4", now-30),
+		fmt.Sprintf("高光切片_%d.mp4", now-20),
+		"精彩.mp4",
+		fmt.Sprintf("精彩_%d.mp4", now),
+	}
+	if len(files) != len(want) {
+		t.Fatalf("4 个切片都应写入云盘，实际 %d 个", len(files))
+	}
+	for i, f := range files {
+		if f.Name != want[i] {
+			t.Errorf("第 %d 个文件名应为 %q，实际 %q", i+1, want[i], f.Name)
+		}
+	}
+
+	// 用户改名后腾讯云重试同一切片：不重复写入
+	db.Model(&entity.CloudItem{}).Where("ID = ?", files[0].ID).Update("NAME", "改名.mp4")
+	postCallback(t, h.HandleHighlight, clip(now-30, "https://1500000001.vod2.myqcloud.com/a.mp4", ""))
+	var n int64
+	db.Model(&entity.CloudItem{}).Where("ITEM_TYPE = ?", "file").Count(&n)
+	if n != 4 {
+		t.Fatalf("重试回调不应重复写入云盘，实际 %d 个", n)
+	}
+}
+
+func TestClipFileName(t *testing.T) {
+	cases := map[string]string{
+		"":            "高光切片_100.mp4",
+		"  ":          "高光切片_100.mp4",
+		"a/b:c*?":     "ab_c.mp4",
+		"???":         "高光切片_100.mp4",
+		"情侣购物争执与情感隔阂": "情侣购物争执与情感隔阂.mp4",
+	}
+	for title, want := range cases {
+		if got := clipFileName(&HighlightItem{Title: title, BeginTime: 100}); got != want {
+			t.Errorf("标题 %q 的文件名应为 %q，实际 %q", title, want, got)
+		}
 	}
 }

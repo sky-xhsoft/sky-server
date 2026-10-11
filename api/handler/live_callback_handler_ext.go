@@ -371,26 +371,24 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 					continue
 				}
 
-				// 创建高光切片文件记录
-				fileName := fmt.Sprintf("%s.mp4", strings.TrimSpace(item.Title))
-				// 清理文件名中的无效字符
-				fileName = strings.ReplaceAll(fileName, "\\", "")
-				fileName = strings.ReplaceAll(fileName, "/", "")
-				fileName = strings.ReplaceAll(fileName, ":", "_")
-				fileName = strings.ReplaceAll(fileName, "*", "")
-				fileName = strings.ReplaceAll(fileName, "?", "")
-				fileName = strings.ReplaceAll(fileName, "\"", "")
-				fileName = strings.ReplaceAll(fileName, "<", "")
-				fileName = strings.ReplaceAll(fileName, ">", "")
-				fileName = strings.ReplaceAll(fileName, "|", "")
-
+				// 创建高光切片文件记录：标题为空时用切片名称，避免多个切片都叫「.mp4」
+				fileName := clipFileName(&item)
 				ext := ".mp4"
 				fileType := "video/mp4"
 
-				// 检查文件是否已存在（防止重复创建）
+				// 同一文件地址只写一次（腾讯云可能重试回调；用户改名后也不会重复创建）
 				var existingFile entity.CloudItem
-				fileExists := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-					"file", fileName, creatorUser.ID, highlightFolder.ID, "Y").First(&existingFile).Error == nil
+				fileExists := h.db.Where("ITEM_TYPE = ? AND ACCESS_URL = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+					"file", item.VideoStoreURL, highlightFolder.ID, "Y").First(&existingFile).Error == nil
+				// 不同切片重名（如标题相同）时加上开始时间区分
+				if !fileExists {
+					var sameName int64
+					h.db.Model(&entity.CloudItem{}).Where("ITEM_TYPE = ? AND NAME = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
+						"file", fileName, highlightFolder.ID, "Y").Count(&sameName)
+					if sameName > 0 {
+						fileName = fmt.Sprintf("%s_%d.mp4", strings.TrimSuffix(fileName, ext), item.BeginTime)
+					}
+				}
 
 				if !fileExists && !isTencentMediaURL(item.VideoStoreURL) {
 					logger.Warn("切片文件地址不是腾讯云域名，不写入云盘", zap.String("videoUrl", item.VideoStoreURL))
