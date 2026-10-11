@@ -2,6 +2,7 @@ package company
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -102,5 +103,16 @@ func TestCompanyService_Register_Success(t *testing.T) {
 	}
 	if isAdmin != "Y" {
 		t.Errorf("Expected IS_ADMIN=Y, got %s", isAdmin)
+	}
+}
+
+func TestCompanyService_UpdateConfig_OnlyTencentCOS(t *testing.T) {
+	svc := NewService(setupCompanyTestDB(t), nil)
+	for _, v := range []string{"local", "aliyunOSS", ""} {
+		st := v
+		_, err := svc.UpdateCompanyConfig(context.Background(), 1, &UpdateCompanyConfigRequest{StorageType: &st})
+		if err == nil || !strings.Contains(err.Error(), "云盘存储只支持腾讯云 COS") {
+			t.Errorf("存储类型 %q 应被拒绝，得到 %v", v, err)
+		}
 	}
 }

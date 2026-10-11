@@ -3,9 +3,11 @@ package company
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	apperrors "github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -154,6 +156,9 @@ func (s *service) Register(ctx context.Context, req *RegisterRequest) error {
 	})
 }
 
+// StorageTypeTencentCOS 云盘存储类型：腾讯云 COS（公司配置只支持此类型）
+const StorageTypeTencentCOS = "tencentCOS"
+
 // GetCompanyConfig 获取公司配置
 func (s *service) GetCompanyConfig(ctx context.Context, companyID uint) (*entity.SysCompanyConf, error) {
 	if companyID == 0 {
@@ -166,6 +171,16 @@ func (s *service) GetCompanyConfig(ctx context.Context, companyID uint) (*entity
 func (s *service) UpdateCompanyConfig(ctx context.Context, companyID uint, req *UpdateCompanyConfigRequest) (*entity.SysCompanyConf, error) {
 	if companyID == 0 {
 		return nil, fmt.Errorf("公司ID不能为空")
+	}
+	// 云盘存储只支持腾讯云 COS（不再支持服务器本地等）；统一写为 tencentCOS
+	if req.StorageType != nil {
+		switch strings.ToLower(strings.TrimSpace(*req.StorageType)) {
+		case "tencentcos", "cos":
+			v := StorageTypeTencentCOS
+			req.StorageType = &v
+		default:
+			return nil, apperrors.New(apperrors.ErrValidation, "云盘存储只支持腾讯云 COS")
+		}
 	}
 
 	conf, err := s.confRepo.GetByCompanyID(ctx, companyID)
