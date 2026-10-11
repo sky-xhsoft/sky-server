@@ -117,14 +117,15 @@ func (h *PullStreamHandler) CreatePullStreamTask(c *gin.Context) {
 		}
 	}
 
-	startTime, err := time.Parse("2006-01-02 15:04:05", req.StartTime)
+	// 按北京时间解析：time.Parse 会当作 UTC，入库后时间多出 8 小时
+	startTime, err := parseTaskTime(req.StartTime)
 	if err != nil {
 		zap.L().Error("解析开始时间失败", zap.Error(err))
 		utils.FailFromError(c, "解析开始时间失败: ", err)
 		return
 	}
 
-	endTime, err := time.Parse("2006-01-02 15:04:05", req.EndTime)
+	endTime, err := parseTaskTime(req.EndTime)
 	if err != nil {
 		zap.L().Error("解析结束时间失败", zap.Error(err))
 		utils.FailFromError(c, "解析结束时间失败: ", err)
@@ -327,14 +328,14 @@ func (h *PullStreamHandler) UpdatePullStreamTask(c *gin.Context) {
 	}
 
 	if req.StartTime != "" {
-		startTime, err := time.Parse("2006-01-02 15:04:05", req.StartTime)
+		startTime, err := parseTaskTime(req.StartTime)
 		if err == nil {
 			task.StartTime = startTime
 		}
 	}
 
 	if req.EndTime != "" {
-		endTime, err := time.Parse("2006-01-02 15:04:05", req.EndTime)
+		endTime, err := parseTaskTime(req.EndTime)
 		if err == nil {
 			task.EndTime = endTime
 		}
@@ -510,7 +511,15 @@ func normalizeTaskTime(value string) (string, error) {
 	return "", fmt.Errorf("时间格式不正确：%s（应为 YYYY-MM-DD HH:mm:ss）", value)
 }
 
-// normalizeTaskTimeRange 统一开始、结束时间格式，并要求结束时间晚于开始时间（为空的不处理）
+// maxTaskDuration 腾讯云拉流任务时长上限（结束时间 - 开始时间须小于 30 天）
+const maxTaskDuration = 30 * 24 * time.Hour
+
+// taskNow 当前时间（测试中可替换）
+var taskNow = time.Now
+
+// normalizeTaskTimeRange 统一开始、结束时间格式，并按腾讯云的限制提前校验（为空的不处理）：
+// 结束时间晚于开始时间、晚于当前时间，且任务时长不超过 30 天。
+// 提前给出明确提示，避免腾讯云只返回笼统的 InvalidTaskTime
 func normalizeTaskTimeRange(start, end *string) error {
 	for _, p := range []*string{start, end} {
 		if *p == "" {
@@ -522,8 +531,26 @@ func normalizeTaskTimeRange(start, end *string) error {
 		}
 		*p = v
 	}
-	if *start != "" && *end != "" && *end <= *start {
-		return fmt.Errorf("结束时间必须晚于开始时间")
+	if *end != "" {
+		endAt, _ := parseTaskTime(*end)
+		if !endAt.After(taskNow()) {
+			return fmt.Errorf("结束时间必须晚于当前时间")
+		}
+	}
+	if *start != "" && *end != "" {
+		startAt, _ := parseTaskTime(*start)
+		endAt, _ := parseTaskTime(*end)
+		if !endAt.After(startAt) {
+			return fmt.Errorf("结束时间必须晚于开始时间")
+		}
+		if endAt.Sub(startAt) >= maxTaskDuration {
+			return fmt.Errorf("任务时长不能超过 30 天（当前 %.1f 天），请缩短任务时间", endAt.Sub(startAt).Hours()/24)
+		}
 	}
 	return nil
+}
+
+// parseTaskTime 按服务器本地时区（北京时间）解析 taskTimeLayout 格式的任务时间
+func parseTaskTime(value string) (time.Time, error) {
+	return time.ParseInLocation(taskTimeLayout, value, time.Local)
 }

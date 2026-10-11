@@ -40,9 +40,11 @@ func withShanghai(t *testing.T) {
 	if err != nil {
 		t.Skip("缺少时区数据")
 	}
-	old := time.Local
+	old, oldNow := time.Local, taskNow
 	time.Local = loc
-	t.Cleanup(func() { time.Local = old })
+	// 固定「当前时间」为 2026-10-10 08:00（北京时间），用例中的任务时间都在其之后
+	taskNow = func() time.Time { return time.Date(2026, 10, 10, 8, 0, 0, 0, loc) }
+	t.Cleanup(func() { time.Local, taskNow = old, oldNow })
 }
 
 func TestNormalizeTaskTime(t *testing.T) {
@@ -97,6 +99,47 @@ func TestCreatePullStreamTask_RoomTimeFormat(t *testing.T) {
 	}
 	if len(store.saved) != 1 || store.saved[0].StartTime.Format(taskTimeLayout) != "2026-10-10 14:00:00" {
 		t.Fatalf("本地应保存任务，got %+v", store.saved)
+	}
+	// 按北京时间保存：14:00（北京）即 06:00 UTC，不能当成 14:00 UTC（入库后会多出 8 小时）
+	if got := store.saved[0].StartTime.UTC().Format(taskTimeLayout); got != "2026-10-10 06:00:00" {
+		t.Fatalf("保存的开始时间应为北京时间，UTC 应为 06:00，got %s", got)
+	}
+}
+
+func TestNormalizeTaskTimeRange_TencentLimits(t *testing.T) {
+	withShanghai(t)
+	cases := []struct {
+		start, end string
+		wantErr    string
+	}{
+		{"2026-10-10 13:45:11", "2026-11-11 13:45:11", "不能超过 30 天"}, // 32 天：腾讯云返回 InvalidTaskTime
+		{"2026-10-10 09:00:00", "2026-11-09 09:00:00", "不能超过 30 天"}, // 恰好 30 天也不行（须小于 30 天）
+		{"2026-10-09 09:00:00", "2026-10-10 07:00:00", "晚于当前时间"},
+		{"2026-10-10 09:00:00", "2026-10-24 09:00:00", ""},
+		{"2026-10-09 13:49:55", "2026-10-23 13:49:55", ""}, // 开始时间已过、结束时间在将来：腾讯云允许，立即开始
+	}
+	for _, c := range cases {
+		s, e := c.start, c.end
+		err := normalizeTaskTimeRange(&s, &e)
+		if c.wantErr == "" {
+			if err != nil {
+				t.Errorf("%s ~ %s 不应报错：%v", c.start, c.end, err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+			t.Errorf("%s ~ %s 应报错「%s」，got %v", c.start, c.end, c.wantErr, err)
+		}
+	}
+}
+
+func TestCreatePullStreamTask_Over30DaysDoesNotCallTencent(t *testing.T) {
+	withShanghai(t)
+	lv, store := &fakePullLive{}, &fakePullStore{}
+	w := postCreate(NewPullStreamHandler(lv, store), createBody("2026-10-10 13:45:11", "2026-11-11 13:45:11"))
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "30 天") {
+		t.Fatalf("超过 30 天应返回 400 并提示，got %d %s", w.Code, w.Body.String())
+	}
+	if len(lv.created) != 0 {
+		t.Fatal("超过 30 天时不应调用腾讯云")
 	}
 }
 
