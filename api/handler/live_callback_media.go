@@ -2,7 +2,10 @@ package handler
 
 import (
 	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
@@ -46,7 +49,7 @@ func (h *LiveCallbackHandler) saveRecording(room *entity.LiveRoom, event *Record
 		StreamID:     event.StreamID,
 		RecordURL:    event.VideoURL,
 		RecordType:   recordType,
-		FileSize:     event.FileSize,
+		FileSize:     fileSizeOr(event.FileSize, event.VideoURL),
 		Duration:     duration,
 		StartTime:    event.StartTime,
 		EndTime:      endTime,
@@ -60,8 +63,8 @@ func (h *LiveCallbackHandler) saveRecording(room *entity.LiveRoom, event *Record
 	}
 }
 
-// saveClip 高光切片回调写入切片列表
-func (h *LiveCallbackHandler) saveClip(room *entity.LiveRoom, streamID string, item *HighlightItem) {
+// saveClip 高光切片回调写入切片列表；size 为切片文件大小（回调不提供，由调用方从 COS 查询）
+func (h *LiveCallbackHandler) saveClip(room *entity.LiveRoom, streamID string, item *HighlightItem, size int64) {
 	if room == nil || room.ID == 0 || item.VideoStoreURL == "" {
 		return
 	}
@@ -90,6 +93,7 @@ func (h *LiveCallbackHandler) saveClip(room *entity.LiveRoom, streamID string, i
 		StartTime:    item.BeginTime,
 		EndTime:      item.EndTime,
 		Duration:     duration,
+		FileSize:     size,
 		Thumbnail:    item.CovImgStoreURL,
 		Status:       mediaStatusReady,
 		Description:  truncateRunes(item.Summary, 500),
@@ -100,6 +104,48 @@ func (h *LiveCallbackHandler) saveClip(room *entity.LiveRoom, streamID string, i
 	if err := h.db.Create(clip).Error; err != nil {
 		logger.Error("保存切片记录失败", zap.Uint("roomId", room.ID), zap.String("url", item.VideoStoreURL), zap.Error(err))
 	}
+}
+
+// mediaURLAllowed 允许查询大小的地址（测试中替换为本地服务）
+var mediaURLAllowed = isTencentMediaURL
+
+// mediaHeadClient 查询 COS 文件大小：超时短，不跟随跳转
+var mediaHeadClient = &http.Client{
+	Timeout: 5 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
+// mediaFileSize 用 HEAD 请求从腾讯云 COS 取文件大小（字节）。
+// 高光切片回调不带文件大小；只查询腾讯云域名的地址，失败返回 0
+func mediaFileSize(rawURL string) int64 {
+	if !mediaURLAllowed(rawURL) {
+		return 0
+	}
+	resp, err := mediaHeadClient.Head(strings.TrimSpace(rawURL))
+	if err != nil {
+		logger.Warn("查询媒体文件大小失败", zap.String("url", rawURL), zap.Error(err))
+		return 0
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		logger.Warn("查询媒体文件大小失败", zap.String("url", rawURL), zap.Int("status", resp.StatusCode))
+		return 0
+	}
+	if resp.ContentLength > 0 {
+		return resp.ContentLength
+	}
+	n, _ := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+	return n
+}
+
+// fileSizeOr 回调带了文件大小则直接用，否则从 COS 查询
+func fileSizeOr(size int64, rawURL string) int64 {
+	if size > 0 {
+		return size
+	}
+	return mediaFileSize(rawURL)
 }
 
 // truncateRunes 按字符截断，避免超出列长度

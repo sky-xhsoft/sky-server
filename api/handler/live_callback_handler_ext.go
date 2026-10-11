@@ -350,8 +350,14 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 				zap.String("videoUrl", item.VideoStoreURL))
 		}
 
+		// 回调不带文件大小，从 COS 查询一次，切片列表和云盘共用
+		clipSize := int64(0)
+		if room.ID != 0 {
+			clipSize = mediaFileSize(item.VideoStoreURL)
+		}
+
 		// 写入切片列表（live_cut）
-		h.saveClip(&room, event.StreamID, &item)
+		h.saveClip(&room, event.StreamID, &item, clipSize)
 
 		// 将高光切片保存到云盘（如果找到了对应的直播间）
 		if room.RoomName != "" {
@@ -401,7 +407,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 						ParentID:    &highlightFolder.ID,
 						Path:        highlightFolder.Path + "/" + fileName,
 						OwnerID:     creatorUser.ID,
-						FileSize:    func() *int64 { size := int64(0); return &size }(), // 高光切片大小通常在回调中不提供，设置为0
+						FileSize:    func() *int64 { size := clipSize; return &size }(), // 回调不提供大小，取自 COS
 						FileType:    &fileType,
 						FileExt:     &ext,
 						AccessURL:   &item.VideoStoreURL,                            // 使用回调中的 VideoStoreURL 作为访问地址
