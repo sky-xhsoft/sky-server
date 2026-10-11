@@ -111,7 +111,7 @@ func TestCompanyService_UpdateConfig_OnlyTencentCOS(t *testing.T) {
 	for _, v := range []string{"local", "aliyunOSS", ""} {
 		st := v
 		_, err := svc.UpdateCompanyConfig(context.Background(), 1, &UpdateCompanyConfigRequest{StorageType: &st})
-		if err == nil || !strings.Contains(err.Error(), "云盘存储只支持腾讯云 COS") {
+		if err == nil || !strings.Contains(err.Error(), "云盘存储只支持云存储") {
 			t.Errorf("存储类型 %q 应被拒绝，得到 %v", v, err)
 		}
 	}

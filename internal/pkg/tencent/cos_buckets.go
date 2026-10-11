@@ -95,7 +95,7 @@ func CreateCosBucket(ctx context.Context, secretID, secretKey, bucket, region st
 }
 
 // ErrCosBucketCORS 存储桶已创建，但设置跨域访问失败
-var ErrCosBucketCORS = errors.New("存储桶已创建，但设置跨域访问（CORS）失败，请在腾讯云控制台手动设置")
+var ErrCosBucketCORS = errors.New("存储桶已创建，但设置跨域访问（CORS）失败，请在云平台控制台手动设置")
 
 // CosBucketURL 存储桶访问地址
 func CosBucketURL(bucket, region string) string {
@@ -160,13 +160,13 @@ func CosCreateError(err error) error {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "BucketAlreadyExists"):
-		return errors.New("存储桶名称已被占用（腾讯云内全局唯一），请换一个名称")
+		return errors.New("存储桶名称已被占用（全局唯一），请换一个名称")
 	case strings.Contains(msg, "TooManyBuckets"):
-		return errors.New("腾讯云账号的存储桶数量已达上限（200 个）")
+		return errors.New("云账号的存储桶数量已达上限（200 个）")
 	case strings.Contains(msg, "arrears"), strings.Contains(msg, " 451 "):
-		return errors.New("腾讯云账号欠费，充值后才能创建存储桶")
+		return errors.New("云账号欠费，充值后才能创建存储桶")
 	case strings.Contains(msg, "AccessDenied"):
-		return errors.New("腾讯云密钥没有创建存储桶的权限（需要 cos:PutBucket）")
+		return errors.New("云账号密钥没有创建存储桶的权限（需要 cos:PutBucket）")
 	case strings.Contains(msg, "InvalidRegionName"), strings.Contains(msg, "no such host"):
 		return errors.New("地域不存在或不支持")
 	}

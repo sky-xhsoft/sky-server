@@ -238,19 +238,19 @@ func (s *storageConfigService) ValidateConfig(ctx context.Context, config *entit
 		}
 	case "tencentCOS":
 		if config.TencentCOSBucketURL == "" {
-			return errors.Wrap(errors.ErrInvalidParam, "腾讯云COS Bucket URL不能为空", nil)
+			return errors.Wrap(errors.ErrInvalidParam, "云存储 Bucket URL 不能为空", nil)
 		}
 		if config.TencentCOSSecretID == "" {
-			return errors.Wrap(errors.ErrInvalidParam, "腾讯云COS SecretID不能为空", nil)
+			return errors.Wrap(errors.ErrInvalidParam, "云存储 SecretID 不能为空", nil)
 		}
 		if config.TencentCOSSecretKey == "" {
-			return errors.Wrap(errors.ErrInvalidParam, "腾讯云COS SecretKey不能为空", nil)
+			return errors.Wrap(errors.ErrInvalidParam, "云存储 SecretKey 不能为空", nil)
 		}
 		if config.TencentCOSBucketName == "" {
-			return errors.Wrap(errors.ErrInvalidParam, "腾讯云COS Bucket名称不能为空", nil)
+			return errors.Wrap(errors.ErrInvalidParam, "云存储 Bucket 名称不能为空", nil)
 		}
 		if config.TencentCOSRegion == "" {
-			return errors.Wrap(errors.ErrInvalidParam, "腾讯云COS区域不能为空", nil)
+			return errors.Wrap(errors.ErrInvalidParam, "云存储区域不能为空", nil)
 		}
 	default:
 		return errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("不支持的存储类型: %s", config.StorageType), nil)

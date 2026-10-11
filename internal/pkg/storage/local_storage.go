@@ -292,7 +292,7 @@ func (s *LocalStorage) PresignedUploadURL(ctx context.Context, path string, expi
 	if err := s.validatePath(path); err != nil {
 		return "", err
 	}
-	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持前端直传，请使用腾讯云COS等云存储", nil)
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持前端直传，请使用云存储", nil)
 }
 
 // InitiateMultipartUpload 初始化分块上传
@@ -301,7 +301,7 @@ func (s *LocalStorage) InitiateMultipartUpload(ctx context.Context, path string)
 	if err := s.validatePath(path); err != nil {
 		return "", err
 	}
-	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用云存储", nil)
 }
 
 // PresignedChunkUploadURL 获取分块预签名上传URL
@@ -310,7 +310,7 @@ func (s *LocalStorage) PresignedChunkUploadURL(ctx context.Context, path string,
 	if err := s.validatePath(path); err != nil {
 		return "", err
 	}
-	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用云存储", nil)
 }
 
 // CompleteMultipartUpload 完成分块上传
@@ -319,7 +319,7 @@ func (s *LocalStorage) CompleteMultipartUpload(ctx context.Context, path string,
 	if err := s.validatePath(path); err != nil {
 		return "", err
 	}
-	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用腾讯云COS等云存储", nil)
+	return "", errors.Wrap(errors.ErrInternal, "本地存储不支持原生分块上传，请使用云存储", nil)
 }
 
 // WriteAt 把数据写入文件的指定偏移（文件不存在时创建）。

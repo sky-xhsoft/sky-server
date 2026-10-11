@@ -45,7 +45,7 @@ func NewCompanyTencentManager(
 	globalClient, err := NewClient(globalConfig)
 	if err != nil {
 		logger.Error("创建全局腾讯云客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("创建全局腾讯云客户端失败: %w", err)
+		return nil, fmt.Errorf("创建全局云直播客户端失败: %w", err)
 	}
 
 	manager := &CompanyTencentManager{

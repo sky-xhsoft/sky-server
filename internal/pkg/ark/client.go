@@ -70,7 +70,7 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("火山方舟返回错误（HTTP %d %s）：%s", e.Status, e.Code, e.Message)
+	return fmt.Sprintf("智能服务返回错误（HTTP %d %s）：%s", e.Status, e.Code, e.Message)
 }
 
 // Chat 发送对话，返回模型回复内容
@@ -103,7 +103,7 @@ func (c *Client) send(ctx context.Context, payload chatRequest) (string, error) 
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("调用火山方舟失败：%w", err)
+		return "", fmt.Errorf("调用智能服务失败：%w", err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -122,7 +122,7 @@ func (c *Client) send(ctx context.Context, payload chatRequest) (string, error) 
 		return "", e
 	}
 	if len(out.Choices) == 0 {
-		return "", fmt.Errorf("火山方舟未返回结果")
+		return "", fmt.Errorf("智能服务未返回结果")
 	}
 	return out.Choices[0].Message.Content, nil
 }

@@ -151,6 +151,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	// API路由组
 	v1 := engine.Group("/api/v1")
 	v1.Use(middleware.AuditLogger(services.Audit)) // 审计日志中间件
+	v1.Use(middleware.VendorNeutralMessages())     // 提示文字不出现第三方云平台名称
 	{
 		// 注册认证路由
 		registerAuthRoutes(v1, jwtUtil, services.SSO)

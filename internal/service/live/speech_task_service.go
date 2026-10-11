@@ -85,7 +85,7 @@ func (s *speechTaskService) getClient(ctx context.Context, companyID uint) (spee
 		return s.api, nil
 	}
 	if s.volcengineMgr == nil || !s.volcengineMgr.GlobalConfigured() {
-		return nil, fmt.Errorf("系统未配置火山引擎密钥，请联系平台管理员")
+		return nil, fmt.Errorf("系统未配置同传服务密钥，请联系平台管理员")
 	}
 	return s.volcengineMgr.GetGlobalClient(), nil
 }

@@ -25,7 +25,7 @@ type CreateKeywordLibRequest struct {
 // CreateKeywordLib 创建关键词库
 // 注意：此功能需要联系腾讯云开通审核功能
 func (m *AuditManager) CreateKeywordLib(ctx context.Context, req *CreateKeywordLibRequest) (int64, error) {
-	return 0, fmt.Errorf("audit feature not implemented: please contact Tencent Cloud to enable audit service")
+	return 0, fmt.Errorf("audit feature not implemented: please contact the cloud provider to enable audit service")
 }
 
 // CreateKeywordsRequest 创建关键词请求
@@ -36,12 +36,12 @@ type CreateKeywordsRequest struct {
 
 // CreateKeywords 创建关键词
 func (m *AuditManager) CreateKeywords(ctx context.Context, req *CreateKeywordsRequest) error {
-	return fmt.Errorf("audit feature not implemented: please contact Tencent Cloud to enable audit service")
+	return fmt.Errorf("audit feature not implemented: please contact the cloud provider to enable audit service")
 }
 
 // DeleteKeywords 删除关键词
 func (m *AuditManager) DeleteKeywords(ctx context.Context, libID int64, keywords []string) error {
-	return fmt.Errorf("audit feature not implemented: please contact Tencent Cloud to enable audit service")
+	return fmt.Errorf("audit feature not implemented: please contact the cloud provider to enable audit service")
 }
 
 // KeywordInfo 关键词信息
@@ -52,5 +52,5 @@ type KeywordInfo struct {
 
 // DescribeKeywords 查询关键词列表
 func (m *AuditManager) DescribeKeywords(ctx context.Context, libID int64) ([]*KeywordInfo, error) {
-	return nil, fmt.Errorf("audit feature not implemented: please contact Tencent Cloud to enable audit service")
+	return nil, fmt.Errorf("audit feature not implemented: please contact the cloud provider to enable audit service")
 }

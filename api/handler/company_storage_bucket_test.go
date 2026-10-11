@@ -75,7 +75,7 @@ func TestStorageBuckets_KeyChoice(t *testing.T) {
 	}
 	// 都没有
 	r, _, _ = setupStorageBucketTest(t, &entity.SysCompanyConf{})
-	if code, out := doJSON(r, http.MethodGet, "/cos-buckets", ""); code != http.StatusBadRequest || !strings.Contains(out["message"].(string), "请先保存腾讯云密钥") {
+	if code, out := doJSON(r, http.MethodGet, "/cos-buckets", ""); code != http.StatusBadRequest || !strings.Contains(out["message"].(string), "请先保存云账号密钥") {
 		t.Fatalf("无密钥：%d %v", code, out)
 	}
 }

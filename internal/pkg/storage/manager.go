@@ -33,7 +33,7 @@ func NewStorageManager(cfg *config.StorageConfig) (*StorageManager, error) {
 
 	// 初始化腾讯云COS存储
 	if err := manager.initTencentCOS(&cfg.TencentCOS); err != nil {
-		return nil, fmt.Errorf("初始化腾讯云COS存储失败: %w", err)
+		return nil, fmt.Errorf("初始化云存储失败: %w", err)
 	}
 
 	// 验证默认存储类型

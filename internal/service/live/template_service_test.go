@@ -364,7 +364,7 @@ func TestSaveCallbackTemplate_NoCompanyTencent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SyncStatus != entity.TemplateSyncFailed || !strings.Contains(got.SyncError, "未配置腾讯云密钥") {
+	if got.SyncStatus != entity.TemplateSyncFailed || !strings.Contains(got.SyncError, "未配置云直播密钥") {
 		t.Fatalf("未配置公司腾讯云时不能写入其他账号，应标记失败，got %+v", got)
 	}
 }

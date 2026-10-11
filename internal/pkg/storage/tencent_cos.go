@@ -109,7 +109,7 @@ func (s *TencentCOS) Upload(ctx context.Context, path string, reader io.Reader, 
 			zap.String("contentType", contentType),
 			zap.Error(err),
 		)
-		return "", errors.Wrap(errors.ErrInternal, "上传文件到COS失败", err)
+		return "", errors.Wrap(errors.ErrInternal, "上传文件到云存储失败", err)
 	}
 	defer resp.Body.Close()
 

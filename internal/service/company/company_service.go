@@ -179,7 +179,7 @@ func (s *service) UpdateCompanyConfig(ctx context.Context, companyID uint, req *
 			v := StorageTypeTencentCOS
 			req.StorageType = &v
 		default:
-			return nil, apperrors.New(apperrors.ErrValidation, "云盘存储只支持腾讯云 COS")
+			return nil, apperrors.New(apperrors.ErrValidation, "云盘存储只支持云存储（对象存储）")
 		}
 	}
 

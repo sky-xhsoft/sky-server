@@ -83,7 +83,7 @@ func (a *tencentAccounts) Of(ctx context.Context, companyID uint) string {
 
 func (a *tencentAccounts) API(ctx context.Context, account string) (LiveAPI, error) {
 	if a.mgr == nil {
-		return nil, fmt.Errorf("未配置腾讯云")
+		return nil, fmt.Errorf("未配置云直播账号")
 	}
 	a.mu.Lock()
 	client, ok := a.clients[account]
@@ -92,7 +92,7 @@ func (a *tencentAccounts) API(ctx context.Context, account string) (LiveAPI, err
 		client, ok = a.mgr.GetGlobalClient(), true
 	}
 	if !ok || client == nil || client.GetConfig() == nil || client.GetConfig().SecretID == "" {
-		return nil, fmt.Errorf("账号 %s 未配置腾讯云密钥", account)
+		return nil, fmt.Errorf("账号 %s 未配置云直播密钥", account)
 	}
 	lc, err := client.GetLiveClientForRegion(dataRegion)
 	if err != nil {

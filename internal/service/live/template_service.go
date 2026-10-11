@@ -274,7 +274,7 @@ func (s *templateService) CosBuckets(ctx context.Context) ([]CosBucketOption, er
 		if errors.Is(err, ErrNoCompanyTencent) {
 			return nil, err
 		}
-		return nil, fmt.Errorf("获取腾讯云存储桶失败：%w", err)
+		return nil, fmt.Errorf("获取存储桶失败：%w", err)
 	}
 	companyBucket, companyRegion := s.companyCos(ctx)
 	out := make([]CosBucketOption, 0, len(buckets))
@@ -300,7 +300,7 @@ func (s *templateService) CreateCosBucket(ctx context.Context, name, region stri
 		if errors.Is(err, ErrNoCompanyTencent) {
 			return nil, err
 		}
-		return nil, fmt.Errorf("获取腾讯云存储桶失败：%w", err)
+		return nil, fmt.Errorf("获取存储桶失败：%w", err)
 	}
 	short, full, region, err := tencent.ResolveNewCosBucket(buckets, name, region)
 	if err != nil {
@@ -448,7 +448,7 @@ func (s *templateService) markFailed(st *entity.TemplateSync, err error) {
 }
 
 func driftMessage(fields []string) string {
-	return "腾讯云上的配置与本地不一致：" + strings.Join(fields, "、")
+	return "云平台上的配置与本地不一致：" + strings.Join(fields, "、")
 }
 
 // ==================== 校验 ====================
@@ -510,7 +510,7 @@ func validateRecord(t *entity.LiveRecordTemplate) error {
 		return err
 	}
 	if t.CosBucket == "" || t.CosRegion == "" {
-		return errors.New("请填写 COS 存储桶与地域")
+		return errors.New("请填写存储桶与地域")
 	}
 	if !strings.HasPrefix(t.CosPath, "/") {
 		return errors.New("存储路径须以 / 开头")
@@ -543,10 +543,10 @@ func (s *templateService) reconcileStatus(st *entity.TemplateSync, cloudID int64
 	}
 	switch {
 	case !found:
-		if st.SyncStatus == entity.TemplateSyncDrift && st.SyncError == "腾讯云上已不存在该模板" {
+		if st.SyncStatus == entity.TemplateSyncDrift && st.SyncError == "云平台上已不存在该模板" {
 			return false
 		}
-		st.SyncStatus, st.SyncError = entity.TemplateSyncDrift, "腾讯云上已不存在该模板"
+		st.SyncStatus, st.SyncError = entity.TemplateSyncDrift, "云平台上已不存在该模板"
 	case len(diffs) > 0:
 		msg := driftMessage(diffs)
 		if st.SyncStatus == entity.TemplateSyncDrift && st.SyncError == msg {
@@ -883,7 +883,7 @@ func (s *templateService) PullTemplate(ctx context.Context, kind string, id uint
 	default:
 		return errors.New("未知的模板类型")
 	}
-	return errors.New("腾讯云上已不存在该模板，无法用云端更新")
+	return errors.New("云平台上已不存在该模板，无法用云端更新")
 }
 
 // ==================== 导入 ====================
@@ -1090,7 +1090,7 @@ func (s *templateService) DomainOverview(ctx context.Context, domain string) (*D
 		if lr := localRule(entity.TemplateKindCallback, r.AppName, ""); lr != nil {
 			seen[lr.ID] = true
 			if v.Managed && lr.TemplateID != v.Callback.ID {
-				v.SyncStatus, v.SyncError = entity.TemplateSyncDrift, "腾讯云上绑定的模板与本地不一致"
+				v.SyncStatus, v.SyncError = entity.TemplateSyncDrift, "云平台上绑定的模板与本地不一致"
 			}
 			v.SyncTime = lr.SyncTime
 		}
@@ -1113,7 +1113,7 @@ func (s *templateService) DomainOverview(ctx context.Context, domain string) (*D
 		if lr := localRule(entity.TemplateKindRecord, r.AppName, r.StreamName); lr != nil {
 			seen[lr.ID] = true
 			if v.Managed && lr.TemplateID != v.Record.ID {
-				v.SyncStatus, v.SyncError = entity.TemplateSyncDrift, "腾讯云上绑定的模板与本地不一致"
+				v.SyncStatus, v.SyncError = entity.TemplateSyncDrift, "云平台上绑定的模板与本地不一致"
 			}
 			v.SyncTime = lr.SyncTime
 		}
@@ -1126,7 +1126,7 @@ func (s *templateService) DomainOverview(ctx context.Context, domain string) (*D
 		}
 		v := DomainRuleView{AppName: lr.AppName, StreamName: lr.StreamName, Managed: true, SyncStatus: lr.SyncStatus, SyncError: lr.SyncError, SyncTime: lr.SyncTime}
 		if v.SyncStatus == entity.TemplateSyncSynced {
-			v.SyncStatus, v.SyncError = entity.TemplateSyncDrift, "腾讯云上已没有这条规则"
+			v.SyncStatus, v.SyncError = entity.TemplateSyncDrift, "云平台上已没有这条规则"
 		}
 		if lr.Kind == entity.TemplateKindCallback {
 			if t, err := s.loadCallback(ctx, lr.TemplateID); err == nil {
@@ -1210,11 +1210,11 @@ func (s *templateService) checkIssues(ctx context.Context, ov *DomainTemplateOve
 	} else {
 		t := rec.Record
 		if t.CosStore != "Y" {
-			add("warning", "录制模板「%s」存储至云点播 VOD，录制文件不会进入本公司 COS", t.Name)
+			add("warning", "录制模板「%s」存储至云点播，录制文件不会进入本公司存储桶", t.Name)
 		} else if bucket == "" || region == "" {
-			add("info", "公司配置中的 COS 存储桶或地域未填写，无法判断录制是否存储至本公司 COS，也不能创建标准录制模板")
+			add("info", "公司配置中的存储桶或地域未填写，无法判断录制是否存储至本公司存储桶，也不能创建标准录制模板")
 		} else if t.CosBucket != bucket || t.CosRegion != region {
-			add("warning", "录制模板「%s」存储到 %s（%s），不是本公司配置的 COS 存储桶 %s（%s）", t.Name, t.CosBucket, t.CosRegion, bucket, region)
+			add("warning", "录制模板「%s」存储到 %s（%s），不是本公司配置的存储桶 %s（%s）", t.Name, t.CosBucket, t.CosRegion, bucket, region)
 		}
 		if rec.SyncStatus == entity.TemplateSyncDrift {
 			add("warning", "录制规则：%s", rec.SyncError)
@@ -1227,7 +1227,7 @@ func (s *templateService) checkIssues(ctx context.Context, ov *DomainTemplateOve
 		}
 	}
 	if ov.Highlight.Count7d == 0 {
-		add("info", "近 7 天未收到高光切片，如需使用请在腾讯云控制台开启（高光切片仅支持在控制台配置）")
+		add("info", "近 7 天未收到高光切片，如需使用请在云平台控制台开启（高光切片仅支持在控制台配置）")
 	}
 	return issues
 }
@@ -1238,7 +1238,7 @@ func (s *templateService) checkIssues(ctx context.Context, ov *DomainTemplateOve
 func (s *templateService) checkPushDomain(ctx context.Context, domain string) error {
 	info, err := s.live.DescribeDomain(ctx, domain)
 	if err != nil || info == nil {
-		return fmt.Errorf("域名 %s 不存在或不属于本公司腾讯云账号", domain)
+		return fmt.Errorf("域名 %s 不存在或不属于本公司云账号", domain)
 	}
 	if info.Type != 0 {
 		return fmt.Errorf("%s 不是推流域名，模板只能绑定到推流域名", domain)
@@ -1449,7 +1449,7 @@ func (s *templateService) StandardPlan(ctx context.Context, domain string) (*Sta
 	p.Record.StandardName = s.standardRecordName(ctx)
 	p.Record.CosBucket, p.Record.CosRegion, p.Record.CosPath, p.Record.RecordInterval = bucket, region, standardRecordPath, standardRecordInterval
 	if bucket == "" || region == "" {
-		p.Record.Error = "公司未配置 COS 存储桶与地域，无法创建录制模板（请先在公司配置中填写）"
+		p.Record.Error = "公司未配置存储桶与地域，无法创建录制模板（请先在公司配置中填写）"
 	}
 	if r := findRule(ov.RecordRules); r != nil && r.Record != nil {
 		p.Record.Exists, p.Record.AppName = true, r.AppName
@@ -1495,7 +1495,7 @@ func (s *templateService) ApplyStandard(ctx context.Context, domain string, opt 
 			}
 		}
 		if c == nil {
-			result("补全回调模板", errors.New("腾讯云上找不到当前绑定的回调模板"), "")
+			result("补全回调模板", errors.New("云平台上找不到当前绑定的回调模板"), "")
 		} else if t, _, err := s.importCallback(ctx, c, operator); err != nil {
 			result("补全回调模板", err, "")
 		} else {
@@ -1537,7 +1537,7 @@ func (s *templateService) ApplyStandard(ctx context.Context, domain string, opt 
 		if err == nil {
 			_, err = s.bindRule(ctx, &BindTemplateRequest{Kind: entity.TemplateKindRecord, DomainName: domain, TemplateID: t.ID, AppName: ruleApp(plan.Record.Exists, plan.Record.AppName)}, operator)
 		}
-		result("绑定标准录制模板", err, fmt.Sprintf("已绑定「%s」（存储至本公司 COS，每 %d 分钟一段）", s.standardRecordName(ctx), plan.Record.RecordInterval/60))
+		result("绑定标准录制模板", err, fmt.Sprintf("已绑定「%s」（存储至本公司存储桶，每 %d 分钟一段）", s.standardRecordName(ctx), plan.Record.RecordInterval/60))
 	}
 	return steps, nil
 }
@@ -1577,7 +1577,7 @@ func (s *templateService) ensureStandardRecord(ctx context.Context, plan *Standa
 		return &t, nil
 	}
 	if err != nil {
-		t = entity.LiveRecordTemplate{SysCompanyID: companyOf(ctx), Name: name, Description: "本系统标准录制（MP4，存储至公司 COS）",
+		t = entity.LiveRecordTemplate{SysCompanyID: companyOf(ctx), Name: name, Description: "本系统标准录制（MP4，存储至公司存储桶）",
 			CosStore: "Y", Formats: "mp4", RemoveWatermark: "Y", Source: entity.TemplateSourceStandard, IsActive: "Y", CreateBy: operator}
 		t.SyncStatus = entity.TemplateSyncPending
 	}

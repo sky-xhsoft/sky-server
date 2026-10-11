@@ -7,6 +7,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/vendortext"
 )
 
 // 公司配置·云盘存储：用云盘存储的密钥（单独设置的 COS 密钥，未设置时用直播密钥）列出、新建存储桶。
@@ -56,7 +57,7 @@ func (h *CompanyHandler) storageConf(c *gin.Context) (*entity.SysCompanyConf, st
 	}
 	secretID, secretKey, has := storageKeys(conf)
 	if !has {
-		utils.BadRequest(c, "请先保存腾讯云密钥（云盘存储单独设置的 COS 密钥，或直播服务的密钥）")
+		utils.BadRequest(c, "请先保存云账号密钥（云盘存储单独设置的存储密钥，或直播服务的密钥）")
 		return nil, "", "", false
 	}
 	return conf, secretID, secretKey, true
@@ -80,7 +81,7 @@ func (h *CompanyHandler) ListStorageBuckets(c *gin.Context) {
 	}
 	buckets, err := listStorageBuckets(c.Request.Context(), id, key)
 	if err != nil {
-		utils.BadRequest(c, "获取腾讯云存储桶失败："+err.Error())
+		utils.BadRequest(c, "获取存储桶失败："+vendortext.Sanitize(err.Error()))
 		return
 	}
 	out := make([]storageBucketView, 0, len(buckets))
@@ -107,7 +108,7 @@ func (h *CompanyHandler) CreateStorageBucket(c *gin.Context) {
 	ctx := c.Request.Context()
 	buckets, err := listStorageBuckets(ctx, id, key)
 	if err != nil {
-		utils.BadRequest(c, "获取腾讯云存储桶失败："+err.Error())
+		utils.BadRequest(c, "获取存储桶失败："+vendortext.Sanitize(err.Error()))
 		return
 	}
 	_, full, region, err := tencent.ResolveNewCosBucket(buckets, req.Bucket, req.Region)

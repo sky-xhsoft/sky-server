@@ -129,7 +129,7 @@ func (s *liveService) getTencentClient(ctx context.Context) *tencent.Client {
 }
 
 // ErrNoCompanyTencent 公司未配置自己的腾讯云密钥（模板只能写入公司自己的账号）
-var ErrNoCompanyTencent = errors.New("本公司未配置腾讯云密钥，请先在公司配置中填写腾讯云 SecretId / SecretKey")
+var ErrNoCompanyTencent = errors.New("本公司未配置云直播密钥，请先在公司配置中填写 SecretId / SecretKey")
 
 // TemplateClient 模板与规则管理只使用公司自己的腾讯云账号：未配置时报错，不回退到默认账号，
 // 避免把一个公司的模板写进其他账号

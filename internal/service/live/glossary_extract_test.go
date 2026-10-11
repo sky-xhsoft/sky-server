@@ -185,7 +185,7 @@ func TestDeleteSpeechTask_OnlyOwnCompany(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "不属于本公司") {
 		t.Fatalf("应拒绝删除其他公司的任务，got %v", err)
 	}
-	if _, err := svc.CreateSpeechTask(context.Background(), 50, &volcengine.CreateSpeechTaskRequest{Name: "x"}); err == nil || !strings.Contains(err.Error(), "未配置火山引擎") {
+	if _, err := svc.CreateSpeechTask(context.Background(), 50, &volcengine.CreateSpeechTaskRequest{Name: "x"}); err == nil || !strings.Contains(err.Error(), "未配置同传服务密钥") {
 		t.Fatalf("未配置全局火山密钥应提示，got %v", err)
 	}
 }

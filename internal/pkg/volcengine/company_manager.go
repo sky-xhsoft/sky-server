@@ -45,7 +45,7 @@ func NewCompanyVolcengineManager(
 	globalClient, err := NewClient(globalConfig)
 	if err != nil {
 		logger.Error("创建全局火山引擎客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("创建全局火山引擎客户端失败: %w", err)
+		return nil, fmt.Errorf("创建全局同传服务客户端失败: %w", err)
 	}
 
 	manager := &CompanyVolcengineManager{

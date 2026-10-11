@@ -463,7 +463,7 @@ type GetStreamMetricsRequest struct {
 
 // GetStreamMetrics 获取直播流实时指标
 // ErrStreamMetricsNotSupported 直播流实时指标尚未接入腾讯云统计
-var ErrStreamMetricsNotSupported = errors.New("直播流实时指标尚未接入腾讯云统计")
+var ErrStreamMetricsNotSupported = errors.New("直播流实时指标尚未接入云直播统计")
 
 func (m *StreamManager) GetStreamMetrics(ctx context.Context, req *GetStreamMetricsRequest) (*StreamMetrics, error) {
 	// 真实在线统计需调用腾讯云实时流统计接口（如 DescribeLiveStreamPlayInfoList）。

@@ -319,19 +319,19 @@ func (m *CompanyStorageManager) createAliyunOSSStorage(config *entity.SysCompany
 func (m *CompanyStorageManager) createTencentCOSStorage(config *entity.SysCompanyConf) (Storage, error) {
 	// 验证必要的配置
 	if config.TencentCOSBucketURL == "" {
-		return nil, fmt.Errorf("腾讯云COS BucketURL未配置")
+		return nil, fmt.Errorf("云存储 BucketURL 未配置")
 	}
 	if config.TencentCOSSecretID == "" {
-		return nil, fmt.Errorf("腾讯云COS SecretID未配置")
+		return nil, fmt.Errorf("云存储 SecretID 未配置")
 	}
 	if config.TencentCOSSecretKey == "" {
-		return nil, fmt.Errorf("腾讯云COS SecretKey未配置")
+		return nil, fmt.Errorf("云存储 SecretKey 未配置")
 	}
 	if config.TencentCOSBucketName == "" {
-		return nil, fmt.Errorf("腾讯云COS BucketName未配置")
+		return nil, fmt.Errorf("云存储 BucketName 未配置")
 	}
 	if config.TencentCOSRegion == "" {
-		return nil, fmt.Errorf("腾讯云COS Region未配置")
+		return nil, fmt.Errorf("云存储 Region 未配置")
 	}
 
 	return NewTencentCOS(&TencentCOSConfig{

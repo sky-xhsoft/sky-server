@@ -13,6 +13,7 @@ import (
 
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/ark"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/vendortext"
 )
 
 // 整篇提取的限制
@@ -26,7 +27,7 @@ const (
 )
 
 // ErrNoArkConfig 系统未配置火山方舟
-var ErrNoArkConfig = errors.New("系统未配置火山方舟（API Key 与推理接入点），请联系平台管理员")
+var ErrNoArkConfig = errors.New("系统未配置智能服务（API Key 与推理接入点），请联系平台管理员")
 
 var glossaryLangNames = map[string]string{
 	"zh": "中文", "en": "英语", "de": "德语", "es": "西班牙语", "fr": "法语", "id": "印尼语", "ja": "日语", "pt": "葡萄牙语",
@@ -240,13 +241,13 @@ func glossaryError(err error) error {
 	if errors.As(err, &ae) {
 		switch {
 		case ae.Status == 401 || ae.Status == 403:
-			return errors.New("火山方舟 API Key 无效或无权限，请检查公司配置")
+			return errors.New("智能服务 API Key 无效或无权限，请联系平台管理员")
 		case ae.Status == 404:
-			return errors.New("火山方舟推理接入点不存在或未开通，请检查公司配置中的接入点 ID")
+			return errors.New("智能服务推理接入点不存在或未开通，请联系平台管理员")
 		case ae.Status == 429:
-			return errors.New("火山方舟调用频率或额度超限，请稍后重试")
+			return errors.New("智能服务调用频率或额度超限，请稍后重试")
 		}
-		return fmt.Errorf("火山方舟调用失败：%s", ae.Message)
+		return fmt.Errorf("智能服务调用失败：%s", vendortext.Sanitize(ae.Message))
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return errors.New("提取超时，请缩短文章后重试")

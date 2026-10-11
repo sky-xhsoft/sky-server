@@ -9,6 +9,8 @@ import (
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	live "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/live/v20180801"
 	"go.uber.org/zap"
+
+	"github.com/sky-xhsoft/sky-server/internal/pkg/vendortext"
 )
 
 // TemplateAPI 回调、录制模板与规则用到的腾讯云直播接口（*live.Client 实现；测试中可替换）
@@ -141,23 +143,23 @@ func TemplateErrorMessage(err error) string {
 		return ""
 	}
 	msgs := map[string]string{
-		"InternalError.ConfOutLimit":          "腾讯云模板数量已达上限（每个账号最多 50 个）",
+		"InternalError.ConfOutLimit":          "云平台模板数量已达上限（每个账号最多 50 个）",
 		"InternalError.RuleAlreadyExist":      "该域名已存在相同规则",
 		"FailedOperation.RuleAlreadyExist":    "该域名已存在相同规则",
 		"InternalError.ConfInUsed":            "模板正在被域名使用，请先解绑",
 		"FailedOperation.ConfInUsed":          "模板正在被域名使用，请先解绑",
-		"InternalError.ConfNotFound":          "腾讯云上的模板不存在",
-		"InvalidParameter.ConfNotFound":       "腾讯云上的模板不存在",
+		"InternalError.ConfNotFound":          "云平台上的模板不存在",
+		"InvalidParameter.ConfNotFound":       "云平台上的模板不存在",
 		"InvalidParameter.UrlNotSafe":         "回调地址无法解析，请检查域名",
 		"InvalidParameter.ArgsNotMatch":       "模板名称不符合要求",
 		"InvalidParameter.DomainFormatError":  "域名格式错误",
-		"ResourceNotFound.StopService":        "腾讯云账号已停服（可能欠费），请先恢复服务",
-		"ResourceNotFound.FreezeService":      "腾讯云直播服务已被冻结",
-		"ResourceNotFound.ForbidService":      "腾讯云账号已被禁用",
-		"ResourceNotFound.UserDisableService": "腾讯云直播服务已被主动停用",
-		"AuthFailure.SecretIdNotFound":        "腾讯云密钥不存在，请检查公司配置",
-		"AuthFailure.SignatureFailure":        "腾讯云密钥错误，请检查公司配置",
-		"AuthFailure.UnauthorizedOperation":   "腾讯云子账号无直播模板权限",
+		"ResourceNotFound.StopService":        "云账号已停服（可能欠费），请先恢复服务",
+		"ResourceNotFound.FreezeService":      "云直播服务已被冻结",
+		"ResourceNotFound.ForbidService":      "云账号已被禁用",
+		"ResourceNotFound.UserDisableService": "云直播服务已被主动停用",
+		"AuthFailure.SecretIdNotFound":        "云直播密钥不存在，请检查公司配置",
+		"AuthFailure.SignatureFailure":        "云直播密钥错误，请检查公司配置",
+		"AuthFailure.UnauthorizedOperation":   "云账号子账号无直播模板权限",
 	}
 	code := TencentErrorCode(err)
 	if msg, ok := msgs[code]; ok {
@@ -165,7 +167,7 @@ func TemplateErrorMessage(err error) string {
 	}
 	var sdkErr *tcerr.TencentCloudSDKError
 	if errors.As(err, &sdkErr) {
-		return fmt.Sprintf("腾讯云返回错误：%s（%s）", sdkErr.Message, sdkErr.Code)
+		return fmt.Sprintf("云平台返回错误：%s（%s）", vendortext.Sanitize(sdkErr.Message), sdkErr.Code)
 	}
 	return err.Error()
 }
