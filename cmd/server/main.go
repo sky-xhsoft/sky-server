@@ -18,10 +18,10 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/pkg/tencent"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/volcengine"
 	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
+	"github.com/sky-xhsoft/sky-server/internal/service/billing"
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/dashboard"
-	"github.com/sky-xhsoft/sky-server/internal/service/billing"
 	"github.com/sky-xhsoft/sky-server/internal/service/housekeeping"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/pref"
@@ -270,12 +270,12 @@ func main() {
 
 	// 10. 启动HTTP服务器
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.App.Port),
+		Addr:    fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port),
 		Handler: engine,
 	}
 
 	go func() {
-		logger.Info("Server started", zap.Int("port", cfg.App.Port))
+		logger.Info("Server started", zap.String("host", cfg.App.Host), zap.Int("port", cfg.App.Port))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("Server failed to start", zap.Error(err))
 		}

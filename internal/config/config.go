@@ -119,6 +119,7 @@ type AppConfig struct {
 	Env     string `mapstructure:"env"`
 	Port    int    `mapstructure:"port"`
 	Mode    string `mapstructure:"mode"`
+	Host    string `mapstructure:"host"` // 监听地址，如 127.0.0.1（只允许本机 nginx 转发）；空为所有地址
 }
 
 // DatabaseConfig 数据库配置

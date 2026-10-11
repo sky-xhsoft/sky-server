@@ -7,6 +7,7 @@ app:
   version: "1.0.2"
   env: "development"  # development, production
   port: 9090
+  # host: "127.0.0.1"  # 监听地址：生产只允许本机 nginx 转发时填 127.0.0.1；不填为所有地址
   mode: "debug"  # debug, release
 
 # 数据库配置
