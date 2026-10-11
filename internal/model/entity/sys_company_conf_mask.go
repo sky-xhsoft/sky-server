@@ -17,7 +17,6 @@ func (c *SysCompanyConf) Masked() *SysCompanyConf {
 	masked.TencentCloudSecretID = maskSecret(masked.TencentCloudSecretID)
 	masked.AliyunOSSAccessKeyID = maskSecret(masked.AliyunOSSAccessKeyID)
 	masked.VolcengineAccessKeyId = maskSecret(masked.VolcengineAccessKeyId)
-	masked.ArkAPIKey = maskSecret(masked.ArkAPIKey)
 	return &masked
 }
 

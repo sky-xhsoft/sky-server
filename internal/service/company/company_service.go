@@ -65,8 +65,6 @@ type UpdateCompanyConfigRequest struct {
 	VolcengineAccessKeySecret *string `json:"volcengineAccessKeySecret"`
 	VolcengineRegion          *string `json:"volcengineRegion"`
 	VolcengineService         *string `json:"volcengineService"`
-	ArkAPIKey                 *string `json:"arkApiKey"`
-	ArkModel                  *string `json:"arkModel"`
 
 	// 本地化与限制
 	DefaultLanguage *string `json:"defaultLanguage"`
@@ -223,8 +221,6 @@ func (s *service) UpdateCompanyConfig(ctx context.Context, companyID uint, req *
 	applyString(req.VolcengineAccessKeySecret, &conf.VolcengineAccessKeySecret)
 	applyString(req.VolcengineRegion, &conf.VolcengineRegion)
 	applyString(req.VolcengineService, &conf.VolcengineService)
-	applyString(req.ArkAPIKey, &conf.ArkAPIKey)
-	applyString(req.ArkModel, &conf.ArkModel)
 	applyString(req.DefaultLanguage, &conf.DefaultLanguage)
 	applyString(req.Timezone, &conf.Timezone)
 	applyString(req.Currency, &conf.Currency)

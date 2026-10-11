@@ -243,3 +243,14 @@ housekeeping:
   intervalSeconds: 3600
   # 审计日志保留天数，0 表示不删除
   auditRetentionDays: 180
+
+# 火山引擎（字幕同传）：全局统一配置，所有公司共用平台账号
+volcengine:
+  accessKeyId: ""
+  accessKeySecret: ""
+  region: "cn-north-1"
+  service: "live"
+  # 火山方舟大模型（字幕同传词库智能提取），固定使用北京区域
+  ark:
+    apiKey: ""
+    model: ""   # 推理接入点 ID（ep-…）

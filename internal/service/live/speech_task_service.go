@@ -59,11 +59,12 @@ func NewSpeechTaskService(mgr *volcengine.CompanyVolcengineManager, db *gorm.DB)
 }
 
 // getClient 获取公司级火山引擎客户端
+// getClient 火山引擎配置为全局统一（配置文件 volcengine），所有公司共用平台账号；任务记录仍按公司隔离
 func (s *speechTaskService) getClient(ctx context.Context, companyID uint) (*volcengine.Client, error) {
-	if s.volcengineMgr == nil {
-		return nil, fmt.Errorf("火山引擎客户端管理器未初始化")
+	if s.volcengineMgr == nil || !s.volcengineMgr.GlobalConfigured() {
+		return nil, fmt.Errorf("系统未配置火山引擎密钥，请联系平台管理员")
 	}
-	return s.volcengineMgr.GetClient(ctx, companyID)
+	return s.volcengineMgr.GetGlobalClient(), nil
 }
 
 // CreateSpeechTask 创建声影同传任务
@@ -115,6 +116,14 @@ func (s *speechTaskService) CreateSpeechTask(ctx context.Context, companyID uint
 
 // DeleteSpeechTask 删除声影同传任务
 func (s *speechTaskService) DeleteSpeechTask(ctx context.Context, companyID uint, req *volcengine.DeleteSpeechTaskRequest) error {
+	// 所有公司共用一个火山账号：只能删除本公司创建的任务
+	if s.db != nil {
+		var n int64
+		s.db.WithContext(ctx).Model(&SpeechTaskRecord{}).Where("SYS_COMPANY_ID = ? AND TASK_ID = ?", companyID, req.TaskID).Count(&n)
+		if n == 0 {
+			return fmt.Errorf("任务不存在或不属于本公司")
+		}
+	}
 	client, err := s.getClient(ctx, companyID)
 	if err != nil {
 		return err

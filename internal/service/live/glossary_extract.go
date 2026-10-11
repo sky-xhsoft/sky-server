@@ -11,9 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sky-xhsoft/sky-server/internal/model/entity"
+	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/ark"
-	"gorm.io/gorm"
 )
 
 // 整篇提取的限制
@@ -26,8 +25,8 @@ const (
 	glossaryExtractTimeout = 3 * time.Minute
 )
 
-// ErrNoArkConfig 公司未配置火山方舟
-var ErrNoArkConfig = errors.New("本公司未配置火山方舟（API Key 与推理接入点），请在「公司配置 → AI 同传 / 字幕」中填写")
+// ErrNoArkConfig 系统未配置火山方舟
+var ErrNoArkConfig = errors.New("系统未配置火山方舟（API Key 与推理接入点），请联系平台管理员")
 
 var glossaryLangNames = map[string]string{
 	"zh": "中文", "en": "英语", "de": "德语", "es": "西班牙语", "fr": "法语", "id": "印尼语", "ja": "日语", "pt": "葡萄牙语",
@@ -77,13 +76,15 @@ type GlossaryExtractor interface {
 }
 
 type glossaryExtractor struct {
-	db        *gorm.DB
+	apiKey    string
+	model     string
 	newClient func(apiKey, model string) GlossaryChatClient
 }
 
-// NewGlossaryExtractor 创建词库提取服务（使用各公司自己的火山方舟账号）
-func NewGlossaryExtractor(db *gorm.DB) GlossaryExtractor {
-	return &glossaryExtractor{db: db, newClient: func(k, m string) GlossaryChatClient { return ark.NewClient(k, m) }}
+// NewGlossaryExtractor 创建词库提取服务：火山方舟为全局统一配置（配置文件 volcengine.ark）
+func NewGlossaryExtractor(cfg config.VolcengineArkConfig) GlossaryExtractor {
+	return &glossaryExtractor{apiKey: strings.TrimSpace(cfg.APIKey), model: strings.TrimSpace(cfg.Model),
+		newClient: func(k, m string) GlossaryChatClient { return ark.NewClient(k, m) }}
 }
 
 func (g *glossaryExtractor) Extract(ctx context.Context, companyID uint, req *GlossaryExtractRequest) (*GlossaryExtractResult, error) {
@@ -102,11 +103,10 @@ func (g *glossaryExtractor) Extract(ctx context.Context, companyID uint, req *Gl
 		return nil, fmt.Errorf("原文、译文各不能超过 %d 个字符", glossaryMaxTextRunes)
 	}
 
-	var conf entity.SysCompanyConf
-	if err := g.db.WithContext(ctx).Where("SYS_COMPANY_ID = ?", companyID).First(&conf).Error; err != nil || conf.ArkAPIKey == "" || conf.ArkModel == "" {
+	if g.apiKey == "" || g.model == "" {
 		return nil, ErrNoArkConfig
 	}
-	client := g.newClient(conf.ArkAPIKey, conf.ArkModel)
+	client := g.newClient(g.apiKey, g.model)
 
 	ctx, cancel := context.WithTimeout(ctx, glossaryExtractTimeout)
 	defer cancel()

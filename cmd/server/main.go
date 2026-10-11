@@ -210,7 +210,7 @@ func main() {
 		PullStreamTask:  pullStreamTaskService,
 		LiveTemplate:    liveTemplateService,
 		SpeechTask:      speechTaskService,
-		SpeechGlossary:  live.NewGlossaryExtractor(app.DB),
+		SpeechGlossary:  live.NewGlossaryExtractor(cfg.Volcengine.Ark),
 		ClipService:     clipService,
 		WSManager:       app.WSManager,
 		Language:        app.LanguageService,

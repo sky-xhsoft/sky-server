@@ -271,6 +271,14 @@ type VolcengineConfig struct {
 	AccessKeySecret string `mapstructure:"accessKeySecret"` // 火山引擎访问密钥Secret
 	Region          string `mapstructure:"region"`          // 区域，如 cn-north-1
 	Service         string `mapstructure:"service"`         // 服务名称，如 live
+	// Ark 火山方舟大模型（字幕同传词库智能提取），全局统一配置
+	Ark VolcengineArkConfig `mapstructure:"ark"`
+}
+
+// VolcengineArkConfig 火山方舟配置（固定使用北京区域）
+type VolcengineArkConfig struct {
+	APIKey string `mapstructure:"apiKey"` // 火山方舟 API Key
+	Model  string `mapstructure:"model"`  // 推理接入点 ID（ep-…）或模型名
 }
 
 // loadDotEnv 加载 .env 文件到进程环境（仅当变量尚未设置时）

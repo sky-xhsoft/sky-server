@@ -132,6 +132,12 @@ func (m *CompanyVolcengineManager) GetGlobalClient() *Client {
 	return m.globalClient
 }
 
+// GlobalConfigured 全局火山引擎密钥是否已配置
+func (m *CompanyVolcengineManager) GlobalConfigured() bool {
+	return m.globalClient != nil && m.globalClient.config != nil &&
+		m.globalClient.config.AccessKeyId != "" && m.globalClient.config.AccessKeySecret != ""
+}
+
 // RefreshCompanyConfig 刷新公司火山引擎配置缓存
 func (m *CompanyVolcengineManager) RefreshCompanyConfig(ctx context.Context, companyID uint) error {
 	m.mu.Lock()

@@ -120,9 +120,6 @@ type SysCompanyConf struct {
 	VolcengineAccessKeySecret string `gorm:"column:VOLCENGINE_ACCESS_KEY_SECRET;size:255;serializer:encrypted" json:"volcengineAccessKeySecret"` // 火山引擎访问密钥Secret
 	VolcengineRegion          string `gorm:"column:VOLCENGINE_REGION;size:50" json:"volcengineRegion"`                                           // 火山引擎区域
 	VolcengineService         string `gorm:"column:VOLCENGINE_SERVICE;size:50" json:"volcengineService"`                                         // 火山引擎服务名称
-	// 火山方舟大模型（字幕同传词库智能提取）
-	ArkAPIKey string `gorm:"column:ARK_API_KEY;size:500;serializer:encrypted" json:"arkApiKey"` // 火山方舟 API Key
-	ArkModel  string `gorm:"column:ARK_MODEL;size:255" json:"arkModel"`                         // 推理接入点 ID（ep-…）或模型名
 	// 语言配置
 	DefaultLanguage string `gorm:"column:DEFAULT_LANGUAGE;size:50;default:zh-CN" json:"defaultLanguage"` // 默认语言
 	Timezone        string `gorm:"column:TIMEZONE;size:50;default:Asia/Shanghai" json:"timezone"`        // 时区

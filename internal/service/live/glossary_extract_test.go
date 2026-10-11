@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"io"
+
+	"github.com/glebarez/sqlite"
+	"github.com/sky-xhsoft/sky-server/internal/pkg/volcengine"
+	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/glebarez/sqlite"
-	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/ark"
-	"github.com/sky-xhsoft/sky-server/internal/pkg/fieldcrypto"
-	"gorm.io/gorm"
 )
 
 type fakeChat struct {
@@ -36,26 +36,17 @@ func (f *fakeChat) Chat(ctx context.Context, msgs []ark.Message, t float64, max 
 
 func setupGlossary(t *testing.T, withArk bool) (*glossaryExtractor, *fakeChat) {
 	t.Helper()
-	fieldcrypto.Setup("test-glossary-key")
-	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(&entity.SysCompanyConf{}); err != nil {
-		t.Fatal(err)
-	}
-	conf := entity.SysCompanyConf{SysCompanyID: 50}
-	if withArk {
-		conf.ArkAPIKey, conf.ArkModel = "ak-test", "ep-test"
-	}
-	db.Create(&conf)
 	fc := &fakeChat{}
-	return &glossaryExtractor{db: db, newClient: func(k, m string) GlossaryChatClient {
+	g := &glossaryExtractor{newClient: func(k, m string) GlossaryChatClient {
 		if k != "ak-test" || m != "ep-test" {
-			t.Fatalf("应使用公司自己的方舟配置，got %s %s", k, m)
+			t.Fatalf("应使用全局火山方舟配置，got %s %s", k, m)
 		}
 		return fc
-	}}, fc
+	}}
+	if withArk {
+		g.apiKey, g.model = "ak-test", "ep-test"
+	}
+	return g, fc
 }
 
 const glossarySrc = "尊敬的各位来宾，欢迎来到子格博主题大会。子格博今天发布基于火山引擎的声影同传。"
@@ -176,5 +167,25 @@ func TestArkClient_Chat(t *testing.T) {
 	var ae *ark.Error
 	if !errors.As(err, &ae) || ae.Status != 401 || ae.Code != "AuthenticationError" {
 		t.Fatalf("应返回方舟错误，got %v", err)
+	}
+}
+
+// 所有公司共用一个火山账号：不能删除其他公司的同传任务
+func TestDeleteSpeechTask_OnlyOwnCompany(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&SpeechTaskRecord{}); err != nil {
+		t.Fatal(err)
+	}
+	db.Create(&SpeechTaskRecord{CompanyID: 51, TaskID: "task-of-51", Name: "x"})
+	svc := NewSpeechTaskService(nil, db)
+	err = svc.DeleteSpeechTask(context.Background(), 50, &volcengine.DeleteSpeechTaskRequest{TaskID: "task-of-51"})
+	if err == nil || !strings.Contains(err.Error(), "不属于本公司") {
+		t.Fatalf("应拒绝删除其他公司的任务，got %v", err)
+	}
+	if _, err := svc.CreateSpeechTask(context.Background(), 50, &volcengine.CreateSpeechTaskRequest{Name: "x"}); err == nil || !strings.Contains(err.Error(), "未配置火山引擎") {
+		t.Fatalf("未配置全局火山密钥应提示，got %v", err)
 	}
 }
