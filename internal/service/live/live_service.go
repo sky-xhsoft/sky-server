@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,9 @@ type Service interface {
 	DeleteDomain(ctx context.Context, domainName string) error
 	DescribeDomain(ctx context.Context, domainName string) (*tencentLive.DomainInfo, error)
 	ListDomains(ctx context.Context, domainType *int64) ([]*tencentLive.DomainInfo, error)
+
+	// 模板管理：只使用公司自己的腾讯云账号（未配置时返回 ErrNoCompanyTencent）
+	TemplateClient(ctx context.Context) (tencentLive.TemplateClient, error)
 	EnableDomain(ctx context.Context, domainName string) error
 	ForbidDomain(ctx context.Context, domainName string) error
 	AuthenticateDomainOwner(ctx context.Context, domainName string, verifyType string) (*tencentLive.DomainOwnerVerifyResult, error)
@@ -118,6 +122,23 @@ func (s *liveService) getTencentClient(ctx context.Context) *tencent.Client {
 
 	// 如果没有companyID或获取失败，返回默认客户端
 	return s.tencentMgr.GetDefaultClient()
+}
+
+// ErrNoCompanyTencent 公司未配置自己的腾讯云密钥（模板只能写入公司自己的账号）
+var ErrNoCompanyTencent = errors.New("本公司未配置腾讯云密钥，请先在公司配置中填写腾讯云 SecretId / SecretKey")
+
+// TemplateClient 模板与规则管理只使用公司自己的腾讯云账号：未配置时报错，不回退到默认账号，
+// 避免把一个公司的模板写进其他账号
+func (s *liveService) TemplateClient(ctx context.Context) (tencentLive.TemplateClient, error) {
+	companyID, _ := ctx.Value(contextutil.CompanyIDKey).(uint)
+	if s.tencentMgr == nil || companyID == 0 || !s.tencentMgr.HasCompanyConfig(ctx, companyID) {
+		return nil, ErrNoCompanyTencent
+	}
+	client, err := s.tencentMgr.GetClient(ctx, companyID)
+	if err != nil || client == nil {
+		return nil, ErrNoCompanyTencent
+	}
+	return tencentLive.NewTemplateManager(client.GetLiveClient(), client), nil
 }
 
 // getDomainManager 获取域名管理器

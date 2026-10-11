@@ -147,6 +147,10 @@ func main() {
 	liveRoomService := live.NewLiveRoomService(app.DB, cloudService)
 	dashboardService := dashboard.NewService(app.DB)
 	pullStreamTaskService := live.NewPullStreamTaskService(app.DB)
+	var liveTemplateService live.TemplateService
+	if liveService != nil {
+		liveTemplateService = live.NewTemplateService(app.DB, liveService, cfg.TencentCloud.Live.CallbackURL)
+	}
 	clipService := live.NewClipService(app.DB)
 	var speechTaskService live.SpeechTaskService
 	if companyVolcengineManager != nil {
@@ -204,6 +208,7 @@ func main() {
 		Live:            liveService,
 		LiveRoom:        liveRoomService,
 		PullStreamTask:  pullStreamTaskService,
+		LiveTemplate:    liveTemplateService,
 		SpeechTask:      speechTaskService,
 		ClipService:     clipService,
 		WSManager:       app.WSManager,

@@ -63,13 +63,14 @@ type Services struct {
 	Live            live.Service
 	LiveRoom        live.LiveRoomService
 	PullStreamTask  live.PullStreamTaskService
+	LiveTemplate    live.TemplateService
 	SpeechTask      live.SpeechTaskService
 	ClipService     live.ClipService
 	WSManager       *ws.Manager
 	Language        language.Service // 语言管理服务
 	SMS             sms.Service
-	Pref            pref.Service           // 用户环境变量
-	Schedule        *schedule.Scheduler    // 自动任务调度器
+	Pref            pref.Service        // 用户环境变量
+	Schedule        *schedule.Scheduler // 自动任务调度器
 }
 
 // Repositories 仓储集合
@@ -206,6 +207,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerLiveDomainRoutes(v1, jwtUtil, services.Live, cfg, services.Groups, services.LiveRoom)
 		registerLiveStreamRoutes(v1, jwtUtil, services.Live, services.Groups)
 		registerPullStreamRoutes(v1, jwtUtil, services.Live, services.PullStreamTask, services.Groups)
+		registerLiveTemplateRoutes(v1, jwtUtil, services.LiveTemplate, services.Groups)
 		if services.SpeechTask != nil {
 			registerSpeechTaskRoutes(v1, jwtUtil, services.SpeechTask, services.Groups)
 		}

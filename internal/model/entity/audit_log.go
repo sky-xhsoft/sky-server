@@ -94,12 +94,13 @@ const (
 	ResourceSequence   = "sequence"   // 序号
 	ResourcePermission = "permission" // 权限
 
-	ResourceCloudFile  = "cloud_file"  // 云盘文件 / 文件夹
-	ResourceCloudShare = "cloud_share" // 云盘分享
-	ResourceLiveRoom   = "live_room"   // 直播间
-	ResourcePullStream = "pull_stream" // 分发任务（拉流转推）
-	ResourceLiveDomain = "live_domain" // 直播域名
-	ResourceLiveRecord = "live_record" // 录制 / 切片
-	ResourceCompany    = "company"     // 公司配置
-	ResourceMenu       = "menu"        // 菜单
+	ResourceCloudFile    = "cloud_file"    // 云盘文件 / 文件夹
+	ResourceCloudShare   = "cloud_share"   // 云盘分享
+	ResourceLiveRoom     = "live_room"     // 直播间
+	ResourcePullStream   = "pull_stream"   // 分发任务（拉流转推）
+	ResourceLiveDomain   = "live_domain"   // 直播域名
+	ResourceLiveRecord   = "live_record"   // 录制 / 切片
+	ResourceLiveTemplate = "live_template" // 直播回调、录制模板
+	ResourceCompany      = "company"       // 公司配置
+	ResourceMenu         = "menu"          // 菜单
 )

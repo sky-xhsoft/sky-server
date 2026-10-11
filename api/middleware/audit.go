@@ -267,6 +267,14 @@ func parseBusinessAction(method, path string) (action, resource string, ok bool)
 	case has("/live/pull-stream"):
 		resource = entity.ResourcePullStream
 		action = verb()
+	case has("/live/templates") || (has("/live/domains") && has("/templates")):
+		// 模板管理：同步、导入、绑定、标准配置都是对腾讯云配置的更新
+		resource = entity.ResourceLiveTemplate
+		action = verb()
+		if method == "POST" && (strings.HasSuffix(path, "/sync") || strings.HasSuffix(path, "/pull") ||
+			strings.HasSuffix(path, "/import") || strings.HasSuffix(path, "/bind") || strings.HasSuffix(path, "/standard")) {
+			action = entity.ActionUpdateConfig
+		}
 	case has("/live/domains"):
 		resource = entity.ResourceLiveDomain
 		action = verb()
