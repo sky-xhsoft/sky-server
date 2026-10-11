@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,11 +28,14 @@ type Client struct {
 	APIKey     string
 	Model      string // 推理接入点 ID（ep-…）或模型名
 	HTTPClient *http.Client
+	// DisableThinking 关闭深度思考：深度思考模型（如 doubao-seed 系列）对长文抽取会思考很久，
+	// 关闭后耗时从数分钟降到十几秒；模型不支持该参数时自动去掉后重试
+	DisableThinking bool
 }
 
 // NewClient 创建客户端
 func NewClient(apiKey, model string) *Client {
-	return &Client{BaseURL: DefaultBaseURL, APIKey: apiKey, Model: model, HTTPClient: &http.Client{Timeout: 120 * time.Second}}
+	return &Client{BaseURL: DefaultBaseURL, APIKey: apiKey, Model: model, HTTPClient: &http.Client{Timeout: 120 * time.Second}, DisableThinking: true}
 }
 
 type chatRequest struct {
@@ -39,6 +43,11 @@ type chatRequest struct {
 	Messages    []Message `json:"messages"`
 	Temperature float64   `json:"temperature"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Thinking    *thinking `json:"thinking,omitempty"`
+}
+
+type thinking struct {
+	Type string `json:"type"` // enabled / disabled / auto
 }
 
 type chatResponse struct {
@@ -66,7 +75,22 @@ func (e *Error) Error() string {
 
 // Chat 发送对话，返回模型回复内容
 func (c *Client) Chat(ctx context.Context, messages []Message, temperature float64, maxTokens int) (string, error) {
-	body, _ := json.Marshal(chatRequest{Model: c.Model, Messages: messages, Temperature: temperature, MaxTokens: maxTokens})
+	req := chatRequest{Model: c.Model, Messages: messages, Temperature: temperature, MaxTokens: maxTokens}
+	if c.DisableThinking {
+		req.Thinking = &thinking{Type: "disabled"}
+	}
+	out, err := c.send(ctx, req)
+	var ae *Error
+	if err != nil && req.Thinking != nil && errors.As(err, &ae) && ae.Status == http.StatusBadRequest && strings.Contains(strings.ToLower(ae.Message+ae.Code), "thinking") {
+		// 模型不支持 thinking 参数：去掉后重试
+		req.Thinking = nil
+		return c.send(ctx, req)
+	}
+	return out, err
+}
+
+func (c *Client) send(ctx context.Context, payload chatRequest) (string, error) {
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err

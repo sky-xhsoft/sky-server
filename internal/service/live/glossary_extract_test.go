@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -151,6 +152,25 @@ func TestArkClient_Chat(t *testing.T) {
 	if err != nil || out != `{"keywords":[]}` {
 		t.Fatalf("got %q %v", out, err)
 	}
+	// 默认关闭深度思考；模型不支持 thinking 参数时去掉后重试
+	var bodies []string
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(b))
+		if strings.Contains(string(b), `"thinking"`) {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(`{"error":{"code":"InvalidParameter","message":"The parameter thinking is not supported"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer srv2.Close()
+	c2 := ark.NewClient("ak-test", "ep-test")
+	c2.BaseURL = srv2.URL
+	if out, err := c2.Chat(context.Background(), []ark.Message{{Role: "user", Content: "hi"}}, 0.1, 100); err != nil || out != "ok" || len(bodies) != 2 || !strings.Contains(bodies[0], `"thinking":{"type":"disabled"}`) {
+		t.Fatalf("应先关闭深度思考，不支持时去掉参数重试：%q %v %v", out, err, bodies)
+	}
+
 	c.APIKey = "wrong"
 	_, err = c.Chat(context.Background(), []ark.Message{{Role: "user", Content: "hi"}}, 0.1, 100)
 	var ae *ark.Error
