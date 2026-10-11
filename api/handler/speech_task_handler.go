@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -117,7 +118,8 @@ func (h *SpeechTaskHandler) DeleteSpeechTask(c *gin.Context) {
 		return
 	}
 
-	if err := h.speechTaskService.DeleteSpeechTask(c.Request.Context(), companyID, &req); err != nil {
+	// 删除为彻底删除：火山连同历史一起删除（运行中的任务会先停止），并删除本地记录；只需结束任务时用 /stop
+	if err := h.speechTaskService.RemoveSpeechTask(c.Request.Context(), companyID, req.TaskID); err != nil {
 		zap.L().Error("删除声影同传任务失败", zap.Error(err))
 		utils.FailFromError(c, "删除声影同传任务失败: ", err)
 		return
@@ -146,6 +148,21 @@ func (h *SpeechTaskHandler) ListSpeechTasks(c *gin.Context) {
 		roomID = uint(v)
 	}
 
+	// 带 page 参数时分页，并从火山同步任务的实时状态
+	if c.Query("page") != "" {
+		pageNo, _ := strconv.Atoi(c.Query("page"))
+		pageSize, _ := strconv.Atoi(c.Query("pageSize"))
+		res, err := h.speechTaskService.ListSpeechTasksPaged(c.Request.Context(), companyID, liveService.SpeechTaskQuery{
+			RoomID: roomID, Keyword: c.Query("keyword"), Status: c.Query("status"), Page: pageNo, PageSize: pageSize,
+		})
+		if err != nil {
+			utils.FailFromError(c, "查询声影同传任务列表失败: ", err)
+			return
+		}
+		utils.Success(c, res)
+		return
+	}
+
 	items, err := h.speechTaskService.ListSpeechTasks(c.Request.Context(), companyID, roomID)
 	if err != nil {
 		zap.L().Error("查询声影同传任务列表失败", zap.Error(err))
@@ -156,4 +173,55 @@ func (h *SpeechTaskHandler) ListSpeechTasks(c *gin.Context) {
 		items = []liveService.SpeechTaskRecord{}
 	}
 	utils.Success(c, items)
+}
+
+type speechTaskIDRequest struct {
+	TaskID         string `json:"taskId"`
+	ReloadSubtitle bool   `json:"reloadSubtitle"`
+}
+
+func speechTaskFail(c *gin.Context, prefix string, err error) {
+	if errors.Is(err, liveService.ErrSpeechTaskNotFound) {
+		utils.NotFound(c, err.Error())
+		return
+	}
+	utils.BadRequest(c, prefix+err.Error())
+}
+
+// StopSpeechTask 停止同传任务（火山保留历史，本地记录保留，可复制新建）：POST /live/speech-tasks/stop
+func (h *SpeechTaskHandler) StopSpeechTask(c *gin.Context) {
+	var req speechTaskIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.TaskID == "" {
+		utils.BadRequest(c, "任务ID不能为空")
+		return
+	}
+	if err := h.speechTaskService.StopSpeechTask(c.Request.Context(), getCompanyID(c), req.TaskID); err != nil {
+		speechTaskFail(c, "停止任务失败：", err)
+		return
+	}
+	utils.Success(c, nil)
+}
+
+// RestartSpeechTask 重启运行中或启动中的同传任务：POST /live/speech-tasks/restart
+func (h *SpeechTaskHandler) RestartSpeechTask(c *gin.Context) {
+	var req speechTaskIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.TaskID == "" {
+		utils.BadRequest(c, "任务ID不能为空")
+		return
+	}
+	if err := h.speechTaskService.RestartSpeechTask(c.Request.Context(), getCompanyID(c), req.TaskID, req.ReloadSubtitle); err != nil {
+		speechTaskFail(c, "重启任务失败：", err)
+		return
+	}
+	utils.Success(c, nil)
+}
+
+// GetSpeechTaskRule 任务创建参数（复制新建）：GET /live/speech-tasks/:taskId/rule
+func (h *SpeechTaskHandler) GetSpeechTaskRule(c *gin.Context) {
+	rule, err := h.speechTaskService.GetSpeechTaskRule(c.Request.Context(), getCompanyID(c), c.Param("taskId"))
+	if err != nil {
+		speechTaskFail(c, "", err)
+		return
+	}
+	utils.Success(c, rule)
 }

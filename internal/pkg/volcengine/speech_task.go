@@ -2,6 +2,7 @@ package volcengine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -221,4 +222,86 @@ func (c *Client) DeleteSpeechTask(ctx context.Context, req *DeleteSpeechTaskRequ
 		return fmt.Errorf("删除声影同传任务失败: code=%d msg=%s", resp.Result.Code, resp.Result.Message)
 	}
 	return nil
+}
+
+// SpeechTaskInfo 火山上的同传任务信息（GetSpeechTask / SearchSpeechTask）
+// Status：init 准备中、prepare 启动中、running 运行中、prestop 关闭中、done 已结束
+type SpeechTaskInfo struct {
+	TaskID    string `json:"TaskID"`
+	Name      string `json:"Name"`
+	Status    string `json:"Status"`
+	CreatedAt string `json:"CreatedAt"`
+	UpdatedAt string `json:"UpdatedAt"`
+	StoppedAt string `json:"StoppedAt"`
+	Rule      string `json:"Rule"`
+}
+
+type speechTaskResult[T any] struct {
+	Result *struct {
+		Code    int    `json:"Code"`
+		Message string `json:"Message"`
+		Data    T      `json:"Data"`
+	} `json:"Result"`
+}
+
+func (r *speechTaskResult[T]) check(action string) error {
+	if r.Result == nil {
+		return fmt.Errorf("%s 失败: 响应为空", action)
+	}
+	if r.Result.Code != 0 {
+		return fmt.Errorf("%s 失败: code=%d msg=%s", action, r.Result.Code, r.Result.Message)
+	}
+	return nil
+}
+
+// GetSpeechTask 查询单个同传任务
+func (c *Client) GetSpeechTask(ctx context.Context, taskID string) (*SpeechTaskInfo, error) {
+	url := fmt.Sprintf("%s?Action=GetSpeechTask&Version=%s", LiveAPIEndpoint, SpeechTaskVersion)
+	var resp speechTaskResult[SpeechTaskInfo]
+	if err := c.PostRequest(ctx, url, map[string]any{"TaskID": taskID}, &resp); err != nil {
+		return nil, err
+	}
+	if err := resp.check("查询声影同传任务"); err != nil {
+		return nil, err
+	}
+	return &resp.Result.Data, nil
+}
+
+// SearchSpeechTaskRequest 搜索同传任务（CreateTimeSt / CreateTimeEd 为东八区 "2006-01-02 15:04:05"）
+type SearchSpeechTaskRequest struct {
+	TaskStatus   []string `json:"TaskStatus,omitempty"`
+	CreateTimeSt string   `json:"CreateTimeSt,omitempty"`
+	CreateTimeEd string   `json:"CreateTimeEd,omitempty"`
+	Page         int      `json:"Page"`
+	PageSize     int      `json:"PageSize"`
+}
+
+// SearchSpeechTask 搜索同传任务，返回总数与本页任务
+func (c *Client) SearchSpeechTask(ctx context.Context, req *SearchSpeechTaskRequest) (int, []SpeechTaskInfo, error) {
+	url := fmt.Sprintf("%s?Action=SearchSpeechTask&Version=%s", LiveAPIEndpoint, SpeechTaskVersion)
+	var resp speechTaskResult[struct {
+		Count int              `json:"Count"`
+		Tasks []SpeechTaskInfo `json:"Tasks"`
+	}]
+	if err := c.PostRequest(ctx, url, req, &resp); err != nil {
+		return 0, nil, err
+	}
+	if err := resp.check("搜索声影同传任务"); err != nil {
+		return 0, nil, err
+	}
+	return resp.Result.Data.Count, resp.Result.Data.Tasks, nil
+}
+
+// RestartSpeechTask 重启运行中或启动中的同传任务；reloadSubtitle 为 true 时不中断直播，仅重启字幕算法模块
+func (c *Client) RestartSpeechTask(ctx context.Context, taskID string, reloadSubtitle bool) error {
+	url := fmt.Sprintf("%s?Action=RestartSpeechTask&Version=%s", LiveAPIEndpoint, SpeechTaskVersion)
+	body := map[string]any{"TaskID": taskID}
+	if reloadSubtitle {
+		body["SetSiStatus"] = "reload"
+	}
+	var resp speechTaskResult[json.RawMessage]
+	if err := c.PostRequest(ctx, url, body, &resp); err != nil {
+		return err
+	}
+	return resp.check("重启声影同传任务")
 }

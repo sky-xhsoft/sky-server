@@ -45,10 +45,30 @@ type SpeechTaskService interface {
 	DeleteSpeechTask(ctx context.Context, companyID uint, req *volcengine.DeleteSpeechTaskRequest) error
 	// ListSpeechTasks 查询本地声影同传任务列表(按公司+可选直播间)
 	ListSpeechTasks(ctx context.Context, companyID, roomID uint) ([]SpeechTaskRecord, error)
+	// ListSpeechTasksPaged 分页查询本公司任务，并从火山同步未结束任务的实时状态
+	ListSpeechTasksPaged(ctx context.Context, companyID uint, q SpeechTaskQuery) (*SpeechTaskPage, error)
+	// StopSpeechTask 停止任务（火山保留历史，本地记录保留）
+	StopSpeechTask(ctx context.Context, companyID uint, taskID string) error
+	// RemoveSpeechTask 彻底删除任务（火山连同历史删除，并删除本地记录）
+	RemoveSpeechTask(ctx context.Context, companyID uint, taskID string) error
+	// RestartSpeechTask 重启运行中或启动中的任务
+	RestartSpeechTask(ctx context.Context, companyID uint, taskID string, reloadSubtitle bool) error
+	// GetSpeechTaskRule 任务创建参数（复制新建）
+	GetSpeechTaskRule(ctx context.Context, companyID uint, taskID string) (json.RawMessage, error)
+}
+
+// speechAPI 同传任务用到的火山接口（*volcengine.Client 实现；测试中可替换）
+type speechAPI interface {
+	CreateSpeechTask(ctx context.Context, req *volcengine.CreateSpeechTaskRequest) (string, error)
+	DeleteSpeechTask(ctx context.Context, req *volcengine.DeleteSpeechTaskRequest) error
+	GetSpeechTask(ctx context.Context, taskID string) (*volcengine.SpeechTaskInfo, error)
+	SearchSpeechTask(ctx context.Context, req *volcengine.SearchSpeechTaskRequest) (int, []volcengine.SpeechTaskInfo, error)
+	RestartSpeechTask(ctx context.Context, taskID string, reloadSubtitle bool) error
 }
 
 // speechTaskService 声影同传任务服务实现
 type speechTaskService struct {
+	api           speechAPI // 测试中替换火山接口
 	volcengineMgr *volcengine.CompanyVolcengineManager
 	db            *gorm.DB
 }
@@ -60,7 +80,10 @@ func NewSpeechTaskService(mgr *volcengine.CompanyVolcengineManager, db *gorm.DB)
 
 // getClient 获取公司级火山引擎客户端
 // getClient 火山引擎配置为全局统一（配置文件 volcengine），所有公司共用平台账号；任务记录仍按公司隔离
-func (s *speechTaskService) getClient(ctx context.Context, companyID uint) (*volcengine.Client, error) {
+func (s *speechTaskService) getClient(ctx context.Context, companyID uint) (speechAPI, error) {
+	if s.api != nil {
+		return s.api, nil
+	}
 	if s.volcengineMgr == nil || !s.volcengineMgr.GlobalConfigured() {
 		return nil, fmt.Errorf("系统未配置火山引擎密钥，请联系平台管理员")
 	}

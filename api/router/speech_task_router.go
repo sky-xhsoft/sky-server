@@ -17,9 +17,12 @@ func registerSpeechTaskRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, speechTaskSe
 	group := r.Group("/live/speech-tasks")
 	group.Use(middleware.AuthRequired(jwtUtil), middleware.TablePermissionRequired(groupService, 39, groups.PermCreate))
 	{
-		group.GET("", speechTaskHandler.ListSpeechTasks)          // 查询声影同传任务列表
-		group.POST("", speechTaskHandler.CreateSpeechTask)        // 创建声影同传任务
-		group.POST("/delete", speechTaskHandler.DeleteSpeechTask) // 删除声影同传任务
+		group.GET("", speechTaskHandler.ListSpeechTasks)                // 查询声影同传任务列表
+		group.POST("", speechTaskHandler.CreateSpeechTask)              // 创建声影同传任务
+		group.POST("/delete", speechTaskHandler.DeleteSpeechTask)       // 彻底删除（火山连同历史）
+		group.POST("/stop", speechTaskHandler.StopSpeechTask)           // 停止（保留历史，可复制新建）
+		group.POST("/restart", speechTaskHandler.RestartSpeechTask)     // 重启运行中 / 启动中的任务
+		group.GET("/:taskId/rule", speechTaskHandler.GetSpeechTaskRule) // 创建参数（复制新建）
 		if glossary != nil {
 			group.POST("/glossary/extract", handler.NewSpeechGlossaryHandler(glossary).Extract) // 整篇原文译文智能提取词库
 		}
