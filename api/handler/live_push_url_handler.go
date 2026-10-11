@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	tencentLive "github.com/sky-xhsoft/sky-server/internal/pkg/tencent/live"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/utils"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
 )
@@ -95,14 +96,8 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 
 	// 取当前公司的推流域名（Type=0）：从 live:domains:list 缓存读取，排除 tlivecloud.com 尾缀的系统域名
 	var pushDomain string
-	domains, err := h.liveService.ListDomains(ctx, int64Ptr(0))
-	if err == nil {
-		for _, d := range domains {
-			if d.Name != "" && !strings.HasSuffix(strings.ToLower(d.Name), ".tlivecloud.com") {
-				pushDomain = d.Name
-				break
-			}
-		}
+	if domains, err := h.liveService.ListDomains(ctx, int64Ptr(0)); err == nil {
+		pushDomain = pickRoomDomain(domains)
 	}
 	if pushDomain == "" {
 		utils.InternalError(c, "当前公司未配置推流域名")
@@ -137,6 +132,29 @@ func (h *LivePushURLHandler) GeneratePushURLByRoom(c *gin.Context) {
 }
 
 func int64Ptr(v int64) *int64 { return &v }
+
+// pickRoomDomain 选直播间使用的域名（排除 tlivecloud.com 系统域名）：
+// 优先已启用且 CNAME 已生效的，其次已启用的，最后任意一个；同一档按列表顺序。
+// 新加的域名排在列表最前，CNAME 未配置好时不能用它生成地址
+func pickRoomDomain(domains []*tencentLive.DomainInfo) string {
+	best, bestRank := "", -1
+	for _, d := range domains {
+		if d == nil || d.Name == "" || strings.HasSuffix(strings.ToLower(d.Name), ".tlivecloud.com") {
+			continue
+		}
+		rank := 0
+		if d.Status == 1 {
+			rank = 1
+			if d.BCName == 1 {
+				rank = 2
+			}
+		}
+		if rank > bestRank {
+			best, bestRank = d.Name, rank
+		}
+	}
+	return best
+}
 
 // GeneratePlayURLByRoomRequest 根据直播间ID生成播放地址请求
 type GeneratePlayURLByRoomRequest struct {
@@ -175,14 +193,8 @@ func (h *LivePushURLHandler) GeneratePlayURLByRoom(c *gin.Context) {
 
 	// 取当前公司的播放域名（Type=1）：从 live:domains:list 缓存读取，排除 tlivecloud.com 尾缀
 	var playDomain string
-	domains, err := h.liveService.ListDomains(ctx, int64Ptr(1))
-	if err == nil {
-		for _, d := range domains {
-			if d.Name != "" && !strings.HasSuffix(strings.ToLower(d.Name), ".tlivecloud.com") {
-				playDomain = d.Name
-				break
-			}
-		}
+	if domains, err := h.liveService.ListDomains(ctx, int64Ptr(1)); err == nil {
+		playDomain = pickRoomDomain(domains)
 	}
 	if playDomain == "" {
 		utils.InternalError(c, "当前公司未配置播放域名")
