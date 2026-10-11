@@ -21,6 +21,7 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/service/cloud"
 	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/dashboard"
+	"github.com/sky-xhsoft/sky-server/internal/service/billing"
 	"github.com/sky-xhsoft/sky-server/internal/service/housekeeping"
 	"github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/internal/service/pref"
@@ -185,6 +186,12 @@ func main() {
 	engine.MaxMultipartMemory = 32 << 20
 
 	// 8. 注册路由
+	// 直播计费计量（一期只计量）：推流段落、播放流量、存储空间
+	billingMeter := billing.NewMeter(app.DB, billing.NewTencentAccounts(companyTencentManager))
+	if cfg.Billing.MinSessionSeconds > 0 {
+		billingMeter.MinSessionSeconds = int64(cfg.Billing.MinSessionSeconds)
+	}
+
 	services := &router.Services{
 		SSO:             app.SSOService,
 		Metadata:        app.MetadataService,
@@ -211,6 +218,7 @@ func main() {
 		LiveTemplate:    liveTemplateService,
 		SpeechTask:      speechTaskService,
 		SpeechGlossary:  live.NewGlossaryExtractor(cfg.Volcengine.Ark),
+		BillingMeter:    billingMeter,
 		ClipService:     clipService,
 		WSManager:       app.WSManager,
 		Language:        app.LanguageService,
@@ -248,6 +256,13 @@ func main() {
 	go runStartupChecks(cfg, app.DB)
 
 	// 过期会话、超过保留期的审计日志、已过期分享状态的定时清理
+	if !cfg.Billing.MeterDisabled {
+		billingMeter.Start(ctx, billing.SchedulerConfig{
+			Interval:  time.Duration(cfg.Billing.MeterIntervalSeconds) * time.Second,
+			DailyHour: cfg.Billing.DailyHour,
+		})
+	}
+
 	housekeeping.Start(ctx, app.DB, housekeeping.Config{
 		Interval:           time.Duration(cfg.Housekeeping.IntervalSeconds) * time.Second,
 		AuditRetentionDays: cfg.Housekeeping.AuditRetentionDays,

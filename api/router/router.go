@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"github.com/sky-xhsoft/sky-server/internal/service/billing"
 	"math"
 	"time"
 
@@ -66,6 +67,7 @@ type Services struct {
 	LiveTemplate    live.TemplateService
 	SpeechTask      live.SpeechTaskService
 	SpeechGlossary  live.GlossaryExtractor
+	BillingMeter    *billing.Meter // 计费计量（一期：用量）
 	ClipService     live.ClipService
 	WSManager       *ws.Manager
 	Language        language.Service // 语言管理服务
@@ -211,6 +213,9 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerLiveTemplateRoutes(v1, jwtUtil, services.LiveTemplate, services.Groups)
 		if services.SpeechTask != nil {
 			registerSpeechTaskRoutes(v1, jwtUtil, services.SpeechTask, services.SpeechGlossary, services.Groups)
+		}
+		if services.BillingMeter != nil {
+			registerBillingRoutes(v1, jwtUtil, services.BillingMeter, services.Groups)
 		}
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg, services)
 		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom, services.Groups)

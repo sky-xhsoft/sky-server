@@ -42,6 +42,15 @@ type Config struct {
 	Email           EmailConfig           `mapstructure:"email"`
 	SMS             SMSConfig             `mapstructure:"sms"`
 	Housekeeping    HousekeepingConfig    `mapstructure:"housekeeping"` // 过期数据定时清理
+	Billing         BillingConfig         `mapstructure:"billing"`      // 直播计费
+}
+
+// BillingConfig 直播计费配置（一期只计量：直播时长、播放流量、存储空间）
+type BillingConfig struct {
+	MeterDisabled        bool `mapstructure:"meterDisabled"`        // 关闭计量定时任务（默认开启）
+	MeterIntervalSeconds int  `mapstructure:"meterIntervalSeconds"` // 推流段落整理与巡检间隔（秒），默认 300
+	DailyHour            int  `mapstructure:"dailyHour"`            // 每日计量时刻（腾讯云次日 3 点出前一天数据），默认 4
+	MinSessionSeconds    int  `mapstructure:"minSessionSeconds"`    // 单段推流不足该秒数不计时长，默认 60
 }
 
 // HousekeepingConfig 过期数据定时清理配置

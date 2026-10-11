@@ -244,6 +244,13 @@ housekeeping:
   # 审计日志保留天数，0 表示不删除
   auditRetentionDays: 180
 
+# 直播计费（一期只计量不扣费：直播时长、播放流量、存储空间）
+billing:
+  meterDisabled: false       # true 关闭计量定时任务
+  meterIntervalSeconds: 300  # 推流段落整理与在线巡检间隔
+  dailyHour: 4               # 每天几点计算前一天的流量和存储（腾讯云次日 3 点出数据）
+  minSessionSeconds: 60      # 单段推流不足该秒数不计时长
+
 # 火山引擎（字幕同传）：全局统一配置，所有公司共用平台账号
 volcengine:
   accessKeyId: ""
