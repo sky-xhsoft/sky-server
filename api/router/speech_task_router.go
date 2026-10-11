@@ -10,7 +10,7 @@ import (
 )
 
 // registerSpeechTaskRoutes 注册声影同传任务路由
-func registerSpeechTaskRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, speechTaskService liveService.SpeechTaskService, groupService groups.Service) {
+func registerSpeechTaskRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, speechTaskService liveService.SpeechTaskService, glossary liveService.GlossaryExtractor, groupService groups.Service) {
 	speechTaskHandler := handler.NewSpeechTaskHandler(speechTaskService)
 
 	// 声影同传任务路由组（需要认证 + 表权限, 表ID=39 同直播权限）
@@ -20,5 +20,8 @@ func registerSpeechTaskRoutes(r *gin.RouterGroup, jwtUtil *jwt.JWT, speechTaskSe
 		group.GET("", speechTaskHandler.ListSpeechTasks)          // 查询声影同传任务列表
 		group.POST("", speechTaskHandler.CreateSpeechTask)        // 创建声影同传任务
 		group.POST("/delete", speechTaskHandler.DeleteSpeechTask) // 删除声影同传任务
+		if glossary != nil {
+			group.POST("/glossary/extract", handler.NewSpeechGlossaryHandler(glossary).Extract) // 整篇原文译文智能提取词库
+		}
 	}
 }

@@ -65,6 +65,7 @@ type Services struct {
 	PullStreamTask  live.PullStreamTaskService
 	LiveTemplate    live.TemplateService
 	SpeechTask      live.SpeechTaskService
+	SpeechGlossary  live.GlossaryExtractor
 	ClipService     live.ClipService
 	WSManager       *ws.Manager
 	Language        language.Service // 语言管理服务
@@ -209,7 +210,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 		registerPullStreamRoutes(v1, jwtUtil, services.Live, services.PullStreamTask, services.Groups)
 		registerLiveTemplateRoutes(v1, jwtUtil, services.LiveTemplate, services.Groups)
 		if services.SpeechTask != nil {
-			registerSpeechTaskRoutes(v1, jwtUtil, services.SpeechTask, services.Groups)
+			registerSpeechTaskRoutes(v1, jwtUtil, services.SpeechTask, services.SpeechGlossary, services.Groups)
 		}
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg, services)
 		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom, services.Groups)

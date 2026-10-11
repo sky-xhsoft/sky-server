@@ -210,6 +210,7 @@ func main() {
 		PullStreamTask:  pullStreamTaskService,
 		LiveTemplate:    liveTemplateService,
 		SpeechTask:      speechTaskService,
+		SpeechGlossary:  live.NewGlossaryExtractor(app.DB),
 		ClipService:     clipService,
 		WSManager:       app.WSManager,
 		Language:        app.LanguageService,
