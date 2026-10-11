@@ -218,6 +218,7 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 			registerBillingRoutes(v1, jwtUtil, services.BillingMeter, services.Groups, services.Metadata)
 		}
 		registerLiveCallbackRoutes(v1, jwtUtil, db, cfg, services)
+		registerLiveShareRoutes(v1, jwtUtil, db, services.Live, services.Groups)
 		registerLiveRoomRoutes(v1, jwtUtil, services.LiveRoom, services.Groups)
 		registerLiveClipRoutes(v1, jwtUtil, services.ClipService, services.Groups)
 
@@ -775,6 +776,18 @@ func registerLiveCallbackRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.
 		callbackKey = cfg.TencentCloud.CallbackKey
 	}
 	SetupLiveCallbackRoutes(rg.Group("/live"), cfg, jwtUtil, db, callbackKey, services.Cloud)
+}
+
+// registerLiveShareRoutes 直播间分享：管理端开关分享（直播间表权限），分享页无需登录
+func registerLiveShareRoutes(rg *gin.RouterGroup, jwtUtil *jwt.JWT, db *gorm.DB, liveSvc live.Service, groupService groups.Service) {
+	h := handler.NewLiveRoomShareHandler(db, liveSvc, live.NewPushURLService())
+
+	manage := rg.Group("/live/rooms/:id/share", middleware.AuthRequired(jwtUtil), middleware.TablePermissionRequired(groupService, 54, groups.PermRead))
+	manage.GET("", h.GetShare)
+	manage.PUT("", middleware.TablePermissionRequired(groupService, 54, groups.PermUpdate), h.UpdateShare)
+
+	// 公开：分享页查询直播间状态与播放地址
+	rg.GET("/live/share/:code", h.GetPublicShare)
 }
 
 // registerLiveRoomRoutes 注册直播间管理路由

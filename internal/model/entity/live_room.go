@@ -31,6 +31,8 @@ type LiveRoom struct {
 	IsClip           string     `gorm:"column:IS_CLIP;type:char(1);default:'Y'" json:"isClip"`                                 // 是否切片：Y/N
 	RecordFolderID   *uint      `gorm:"column:RECORD_FOLDER_ID" json:"recordFolderId"`                                         // 录制存储位置（云盘文件夹 ID，空为根目录）
 	ClipFolderID     *uint      `gorm:"column:CLIP_FOLDER_ID" json:"clipFolderId"`                                             // 切片存储位置（云盘文件夹 ID，空为根目录）
+	ShareCode        *string    `gorm:"column:SHARE_CODE;type:varchar(64);uniqueIndex:UK_LIVE_ROOM_SHARE_CODE" json:"-"`       // 分享码（免登录观看链接），只由分享接口读写
+	ShareEnabled     string     `gorm:"column:SHARE_ENABLED;type:char(1);not null;default:'N'" json:"-"`                        // 是否开启分享：Y/N
 }
 
 // TableName 指定表名
