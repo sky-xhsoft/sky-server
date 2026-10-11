@@ -166,6 +166,24 @@ func TestShare_PublicView(t *testing.T) {
 		t.Fatalf("结束 2 小时应失效且不返回直播间信息：%v", view)
 	}
 
+	// 有更早的推流记录、刚手动结束：取较晚的直播间结束时间
+	recent := shareNow.Add(-20 * time.Minute)
+	db.Model(&entity.LiveRoom{}).Where("ID = 99").Update("END_TIME", recent)
+	if _, view = shareReq(t, r, http.MethodGet, path, ""); view["status"] != ShareStatusEnded {
+		t.Fatalf("推流记录 2 小时前、手动结束 20 分钟：%v", view)
+	}
+	// 没有推流记录：取直播间结束时间；不用更新时间（编辑直播间、开关分享都会改它），开关分享不会让已结束的链接复活
+	db.Where("ROOM_ID = 99").Delete(&entity.BillLiveSession{})
+	if _, view = shareReq(t, r, http.MethodGet, path, ""); view["status"] != ShareStatusEnded {
+		t.Fatalf("手动结束 20 分钟：%v", view)
+	}
+	db.Model(&entity.LiveRoom{}).Where("ID = 99").Update("END_TIME", nil)
+	db.Model(&entity.LiveRoom{}).Where("ID = 99").Update("UPDATE_TIME", shareNow)
+	shareReq(t, r, http.MethodPut, "/live/rooms/99/share", `{"enabled":true}`)
+	if _, view = shareReq(t, r, http.MethodGet, path, ""); view["status"] != ShareStatusInvalid {
+		t.Fatalf("没有结束时间应按早已结束：%v", view)
+	}
+
 	// 关闭分享、直播间删除、乱码
 	db.Model(&entity.LiveRoom{}).Where("ID = 99").Updates(map[string]any{"STATUS": "live", "SHARE_ENABLED": "N"})
 	if _, view = shareReq(t, r, http.MethodGet, path, ""); view["status"] != ShareStatusInvalid {

@@ -111,7 +111,8 @@ func (h *LiveRoomShareHandler) UpdateShare(c *gin.Context) {
 	if !ok {
 		return
 	}
-	updates := map[string]interface{}{"SHARE_ENABLED": "N", "UPDATE_BY": c.GetString("username")}
+	// 分享设置不算编辑直播间：不改更新人
+	updates := map[string]interface{}{"SHARE_ENABLED": "N"}
 	if req.Enabled {
 		updates["SHARE_ENABLED"] = "Y"
 	}
@@ -165,15 +166,19 @@ func shareStatus(room *entity.LiveRoom, endedAt *time.Time, now time.Time) strin
 	return ShareStatusUpcoming
 }
 
-// roomEndedAt 实际结束时间：最后一次推流结束（断流回调），没有推流记录时取状态变为已结束的时间
-func (h *LiveRoomShareHandler) roomEndedAt(room *entity.LiveRoom) *time.Time {
+// roomEndedAt 实际结束时间：最后一次推流结束（断流回调）与直播间结束时间（手动结束直播时写入）中较晚的一个。
+// 都没有返回 nil，按早已结束处理（不用更新时间：编辑直播间、开关分享都会改它）
+func (h *LiveRoomShareHandler) roomEndedAt(room *entity.LiveRoom, now time.Time) *time.Time {
+	var end *time.Time
 	var last entity.BillLiveSession
 	err := h.db.Where("ROOM_ID = ? AND END_TIME IS NOT NULL", room.ID).Order("END_TIME DESC").First(&last).Error
 	if err == nil && last.EndTime != nil && !last.EndTime.IsZero() {
-		return last.EndTime
+		end = last.EndTime
 	}
-	t := room.UpdateTime
-	return &t
+	if room.EndTime != nil && !room.EndTime.After(now) && (end == nil || room.EndTime.After(*end)) {
+		end = room.EndTime
+	}
+	return end
 }
 
 // GetPublicShare 分享页（无需登录）：GET /live/share/:code
@@ -192,7 +197,7 @@ func (h *LiveRoomShareHandler) GetPublicShare(c *gin.Context) {
 	}
 	var endedAt *time.Time
 	if room.Status == "ended" {
-		endedAt = h.roomEndedAt(&room)
+		endedAt = h.roomEndedAt(&room, now)
 	}
 	status := shareStatus(&room, endedAt, now)
 	if status == ShareStatusInvalid {
