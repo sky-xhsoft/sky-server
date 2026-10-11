@@ -14,27 +14,30 @@ const (
 // CreateSpeechTaskRequest 创建声影同传任务请求
 // 对应火山引擎 CreateSpeechTask 接口
 type CreateSpeechTaskRequest struct {
-	Name string               `json:"Name"`
-	Rule *SpeechTaskRule      `json:"Rule"`
-	RoomID    string          `json:"roomId,omitempty"` // 本地直播间ID
-	RoomName  string          `json:"roomName,omitempty"` // 本地直播间名称
+	Name     string          `json:"Name"`
+	Rule     *SpeechTaskRule `json:"Rule"`
+	RoomID   string          `json:"roomId,omitempty"`   // 本地直播间ID
+	RoomName string          `json:"roomName,omitempty"` // 本地直播间名称
 }
 
-// SpeechTaskRule 声影同传任务规则
+// SpeechTaskRule 声影同传任务规则（字段与火山控制台「新建任务」提交的参数一致）
+// Pipe：si=声影同传；realtime=实时同传或原文 ASR 实时流式；mix=原文 ASR 整句
 type SpeechTaskRule struct {
-	Pipe      string                `json:"Pipe"`      // si=声影同传, mix=仅字幕, realtime=实时同传
-	Delay     int                   `json:"Delay,omitempty"`     // 延迟秒(声影同传模式)
-	Source    *SpeechTaskSource     `json:"Source"`              // 拉流源
-	EndTime   string                `json:"EndTime"`             // 结束时间 ISO8601
-	StartTime string                `json:"StartTime"`           // 开始时间 ISO8601
-	Output    *SpeechTaskOutput     `json:"Output"`              // 转推输出
-	SI        *SpeechTaskSI         `json:"SI,omitempty"`        // 声影模式数字人参数
-	RealTime  *SpeechTaskRealTime   `json:"RealTime,omitempty"`  // 实时模式参数
-	Extra     *SpeechTaskExtra      `json:"Extra,omitempty"`     // 扩展参数
-	Subtitle  *SpeechTaskSubtitle   `json:"Subtitle,omitempty"`  // 字幕参数
-	GlossaryMap map[string]string   `json:"GlossaryMap,omitempty"` // 术语库
-	ReplaceMap  map[string]string   `json:"ReplaceMap,omitempty"`  // 纠错词
-	HotWords    []string            `json:"HotWords,omitempty"`    // 热词
+	Pipe      string              `json:"Pipe"`
+	Delay     int                 `json:"Delay"`              // 播出延迟秒：声影同传 1-60，原文 ASR 整句 0-20，实时为 0
+	Source    *SpeechTaskSource   `json:"Source"`             // 拉流源
+	EndTime   string              `json:"EndTime"`            // 结束时间 ISO8601
+	StartTime string              `json:"StartTime"`          // 开始时间 ISO8601
+	Output    *SpeechTaskOutput   `json:"Output"`             // 转推输出
+	SI        *SpeechTaskSI       `json:"SI,omitempty"`       // 声影同传：数字人口型
+	RealTime  *SpeechTaskRealTime `json:"RealTime,omitempty"` // 同传声音、原声配置
+	Extra     *SpeechTaskExtra    `json:"Extra,omitempty"`    // 降噪、音量均衡、原声音量
+	Subtitle  *SpeechTaskSubtitle `json:"Subtitle,omitempty"` // 字幕参数（含关键词库、易错词、热词）
+	Factory   *SpeechTaskFactory  `json:"Factory,omitempty"`  // 固定音色
+	// 兼容旧版：词库放在 Rule 下（新版放在 Subtitle 下）
+	GlossaryMap map[string]string `json:"GlossaryMap,omitempty"`
+	ReplaceMap  map[string]string `json:"ReplaceMap,omitempty"`
+	HotWords    []string          `json:"HotWords,omitempty"`
 }
 
 // SpeechTaskSource 拉流源
@@ -52,62 +55,73 @@ type SpeechTaskSI struct {
 	LipSync bool `json:"LipSync"`
 }
 
-// SpeechTaskRealTime 实时同传参数
+// SpeechTaskRealTime 同传声音与原声配置
 type SpeechTaskRealTime struct {
-	VoiceShow bool `json:"VoiceShow"`
+	VoiceShow bool  `json:"VoiceShow"`           // 同传声音
+	Separator *bool `json:"Separator,omitempty"` // 实时同传：true 仅保留翻译音频，false 原声自动叠加翻译
 }
 
 // SpeechTaskExtra 扩展参数
 type SpeechTaskExtra struct {
-	AMix      *SpeechTaskAMix               `json:"AMix,omitempty"`
-	Separator *SpeechTaskSeparator           `json:"Separator,omitempty"`
+	AMix      *SpeechTaskAMix      `json:"AMix,omitempty"`
+	Separator *SpeechTaskSeparator `json:"Separator,omitempty"`
 }
 
 // SpeechTaskAMix 音频混合
 type SpeechTaskAMix struct {
-	BGVolume     float64 `json:"BGVolume,omitempty"`
-	AudioEnhance bool    `json:"AudioEnhance,omitempty"`
+	BGVolume     *float64 `json:"BGVolume,omitempty"` // 原声音量 / 背景音（0-1）
+	AudioEnhance bool     `json:"AudioEnhance"`       // 音量均衡
 }
 
-// SpeechTaskSeparator 声道分离
+// SpeechTaskSeparator 降噪
 type SpeechTaskSeparator struct {
-	HandleType int  `json:"HandleType,omitempty"`
+	HandleType int  `json:"HandleType"` // 1 开启降噪，0 关闭
 	Separator  bool `json:"Separator,omitempty"`
+}
+
+// SpeechTaskFactory 固定音色（控制台填写 "TTS:SID"）
+type SpeechTaskFactory struct {
+	TTS string `json:"TTS"`
+	SID string `json:"SID"`
 }
 
 // SpeechTaskSubtitle 字幕参数
 type SpeechTaskSubtitle struct {
 	Position    *SpeechTaskSubtitlePosition `json:"Position,omitempty"`
 	Original    *SpeechTaskSubtitleStyle    `json:"Original,omitempty"`    // 原文样式
-	Translation []*SpeechTaskSubtitleStyle  `json:"Translation,omitempty"` // 译文样式列表
+	Translation []*SpeechTaskSubtitleStyle  `json:"Translation"`           // 译文样式列表（原文 ASR 为空数组）
+	GlossaryMap map[string]string           `json:"GlossaryMap,omitempty"` // 关键词库：原文 → 译文
+	ReplaceMap  map[string]string           `json:"ReplaceMap,omitempty"`  // 易错词：译文 → 纠正
+	HotWords    []string                    `json:"HotWords,omitempty"`    // 热词库（原文 ASR）
 }
 
-// SpeechTaskSubtitlePosition 字幕位置
+// SpeechTaskSubtitlePosition 字幕位置（边距为 0-1 的比例）
 type SpeechTaskSubtitlePosition struct {
-	Relative string  `json:"Relative,omitempty"` // bottom/top
-	MarginTb float64 `json:"MarginTb,omitempty"` // 上下边距
-	MarginLr float64 `json:"MarginLr,omitempty"` // 左右边距
+	Relative string  `json:"Relative,omitempty"`
+	MarginTb float64 `json:"MarginTb"` // 底部边距
+	MarginLr float64 `json:"MarginLr"` // 左右边距
 }
 
 // SpeechTaskSubtitleStyle 字幕样式
 type SpeechTaskSubtitleStyle struct {
-	Language      string                  `json:"Language"`
-	Font          string                  `json:"Font,omitempty"`
-	FontSize      int                     `json:"FontSize,omitempty"`
-	FontColor     string                  `json:"FontColor,omitempty"`
-	Alignment     int                     `json:"Alignment,omitempty"`
-	MaxRowNumber  int                     `json:"MaxRowNumber,omitempty"`
-	MaxCharNumber int                     `json:"MaxCharNumber,omitempty"`
-	Hidden        bool                    `json:"Hidden,omitempty"`
-	ShowPriority  int                     `json:"ShowPriority,omitempty"`
-	Box           *SpeechTaskSubtitleBox  `json:"Box,omitempty"`
-	Border        *SpeechTaskSubtitleBox  `json:"Border,omitempty"`
+	Language      string                 `json:"Language"`
+	Font          string                 `json:"Font,omitempty"`
+	FontSize      int                    `json:"FontSize,omitempty"`
+	FontColor     string                 `json:"FontColor,omitempty"`
+	Alignment     int                    `json:"Alignment,omitempty"`
+	MaxRowNumber  int                    `json:"MaxRowNumber"` // 0 为自适应
+	MaxCharNumber int                    `json:"MaxCharNumber,omitempty"`
+	Hidden        bool                   `json:"Hidden"`
+	ShowPriority  int                    `json:"ShowPriority"` // 原文在上：原文 100、译文 0；原文在下相反
+	Box           *SpeechTaskSubtitleBox `json:"Box,omitempty"`
+	Border        *SpeechTaskSubtitleBox `json:"Border,omitempty"`
 }
 
-// SpeechTaskSubtitleBox 字幕框/边框
+// SpeechTaskSubtitleBox 字幕底色 / 描边：颜色格式 #RRGGBB@透明度
 type SpeechTaskSubtitleBox struct {
-	W     float64 `json:"W,omitempty"`
-	Color string  `json:"Color,omitempty"`
+	W      float64  `json:"W,omitempty"`
+	Color  string   `json:"Color,omitempty"`
+	Filter *float64 `json:"Filter,omitempty"` // 底色透明度（0-1）
 }
 
 // CreateSpeechTaskResponse 创建声影同传任务响应
@@ -124,9 +138,9 @@ type CreateSpeechTaskResponse struct {
 
 // CreateSpeechTaskResult 创建结果（火山返回 Result.Data.TaskID 嵌套结构）
 type CreateSpeechTaskResult struct {
-	Code    int                    `json:"Code"`
-	Message string                 `json:"Message"`
-	Data    *CreateSpeechTaskData  `json:"Data"`
+	Code    int                   `json:"Code"`
+	Message string                `json:"Message"`
+	Data    *CreateSpeechTaskData `json:"Data"`
 }
 
 // CreateSpeechTaskData 创建任务返回数据
