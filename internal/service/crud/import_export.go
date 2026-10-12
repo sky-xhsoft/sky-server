@@ -40,12 +40,7 @@ func (s *service) Export(ctx context.Context, tableName string, filters map[stri
 		}
 	}
 
-	resp, err := s.GetList(ctx, &QueryRequest{
-		TableName: tableName,
-		Page:      1,
-		PageSize:  10000,
-		Filters:   filters,
-	}, userID)
+	records, err := s.exportRecords(ctx, tableName, filters, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +62,7 @@ func (s *service) Export(ctx context.Context, tableName string, filters map[stri
 	// 预载所有字典(DICT_ID -> {VALUE:DISPLAY_NAME ReverseDict})，供翻译
 	dictVals, _ := s.loadDictMaps(columns)
 
-	for rowIdx, record := range resp.Data {
+	for rowIdx, record := range records {
 		for colIdx, col := range columns {
 			cell, _ := excelize.CoordinatesToCellName(colIdx+1, rowIdx+3)
 			val, ok := record[col.DbName]
@@ -177,7 +172,7 @@ func (s *service) Import(ctx context.Context, tableName string, file multipart.F
 	// 预载字典反向映射(DISPLAY_NAME -> VALUE)，供导入翻译
 	_, dictRev := s.loadDictMaps(columns)
 	// 预载 FK 反向映射：{dbName: {displayName: id}}，供导入将显示名转回ID
-	fkRev := s.loadFkReverseMaps(columns)
+	fkRev := s.loadFkReverseMaps(columns, userID)
 	// 预载公司反向映射：{公司名称: 公司ID}，供 SYS_COMPANY_ID FK 关联（显示名 -> ID）
 	companyRev := s.loadCompanyReverseMap()
 	logger.Info("import companyRev", zap.Int("size", len(companyRev)))
@@ -330,6 +325,35 @@ func (s *service) loadDictMaps(columns []*entity.SysColumn) (map[string]map[stri
 	return dictVals, dictRev
 }
 
+// maxExportRows 单次导出上限
+const maxExportRows = 10000
+
+// exportRecords 按列表查询的分页上限（每页 100 条）分批取数，直到取完或达到导出上限；
+// 原先一次请求 10000 条，被列表查询截断为 100 条，导出只有第一页
+func (s *service) exportRecords(ctx context.Context, tableName string, filters map[string]interface{}, userID uint) ([]map[string]interface{}, error) {
+	const pageSize = 100
+	var records []map[string]interface{}
+	for page := 1; len(records) < maxExportRows; page++ {
+		resp, err := s.GetList(ctx, &QueryRequest{
+			TableName: tableName,
+			Page:      page,
+			PageSize:  pageSize,
+			Filters:   filters,
+		}, userID)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, resp.Data...)
+		if len(resp.Data) < pageSize || int64(len(records)) >= resp.Total {
+			break
+		}
+	}
+	if len(records) > maxExportRows {
+		records = records[:maxExportRows]
+	}
+	return records, nil
+}
+
 // ImportTemplate 生成导入模板（第1行中文表头、第2行 DB_NAME 映射、含 1 行示例空数据）
 func (s *service) ImportTemplate(ctx context.Context, tableName string, userID uint) (*excelize.File, error) {
 	table, err := s.metadataService.GetTable(tableName)
@@ -384,7 +408,8 @@ func (s *service) dictLabelToValue(dictRev map[string]string, cell string) strin
 
 // loadFkReverseMaps 预载外键反向映射：{dbName: {显示名: ID}}
 // 用于导入时把 Excel 中外键列的「显示名」转回关联记录 ID。
-func (s *service) loadFkReverseMaps(columns []*entity.SysColumn) map[string]map[string]string {
+// 只取当前用户读取范围内（本公司或公共）的关联记录，名称不会匹配到其他公司的数据
+func (s *service) loadFkReverseMaps(columns []*entity.SysColumn, userID uint) map[string]map[string]string {
 	res := make(map[string]map[string]string)
 	seen := make(map[string]bool)
 	for _, col := range columns {
@@ -404,8 +429,13 @@ func (s *service) loadFkReverseMaps(columns []*entity.SysColumn) map[string]map[
 		if err != nil {
 			continue
 		}
+		refColumns, err := s.metadataService.GetColumns(refTable.ID)
+		if err != nil {
+			continue
+		}
 		var rows []map[string]interface{}
-		if err := s.db.Table(refTable.Name).Select("ID, " + displayCol.DbName).Find(&rows).Error; err != nil {
+		q := s.applyCompanyScope(s.db.Table(refTable.Name).Select("ID, "+displayCol.DbName), refTable.Name, refColumns, userID)
+		if err := q.Find(&rows).Error; err != nil {
 			continue
 		}
 		m := make(map[string]string)

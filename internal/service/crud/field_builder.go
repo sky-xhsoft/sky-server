@@ -295,8 +295,9 @@ func (s *service) processFieldsForCreate(columns []*entity.SysColumn, data map[s
 		}
 
 		if exists && col.SetValueType == "fk" && col.RefTableID != nil {
-			if value != nil {
-				if err := s.validateForeignKeyValue(*col.RefTableID, value); err != nil {
+			// 所属公司由服务端赋值（见 scope.go），可能是公共数据的 0 / -1，不按外键校验
+			if value != nil && col.DbName != colSysCompanyID {
+				if err := s.validateForeignKeyValue(*col.RefTableID, value, userID); err != nil {
 					return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: %s", col.DisplayName, err.Error()), err)
 				}
 			}
@@ -387,8 +388,9 @@ func (s *service) processFieldsForUpdate(columns []*entity.SysColumn, data map[s
 		}
 
 		if exists && col.SetValueType == "fk" && col.RefTableID != nil {
-			if value != nil {
-				if err := s.validateForeignKeyValue(*col.RefTableID, value); err != nil {
+			// 所属公司由服务端赋值（见 scope.go），可能是公共数据的 0 / -1，不按外键校验
+			if value != nil && col.DbName != colSysCompanyID {
+				if err := s.validateForeignKeyValue(*col.RefTableID, value, userID); err != nil {
 					return nil, errors.Wrap(errors.ErrInvalidParam, fmt.Sprintf("字段 %s: %s", col.DisplayName, err.Error()), err)
 				}
 			}

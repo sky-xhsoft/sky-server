@@ -160,7 +160,8 @@ func (s *service) checkForeignKeyReferences(ctx context.Context, tableID uint, r
 }
 
 // validateForeignKeyValue 验证FK字段的值是否在关联表中存在
-func (s *service) validateForeignKeyValue(refTableID uint, value interface{}) error {
+// userID 不为 0 时还要求关联记录在当前用户的读取范围内（本公司或公共），防止引用其他公司的数据
+func (s *service) validateForeignKeyValue(refTableID uint, value interface{}, userID uint) error {
 	// 获取关联表信息
 	refTable, err := s.metadataService.GetTableByID(refTableID)
 	if err != nil {
@@ -177,5 +178,8 @@ func (s *service) validateForeignKeyValue(refTableID uint, value interface{}) er
 		return fmt.Errorf("关联记录不存在或已失效")
 	}
 
+	if userID != 0 {
+		return s.ensureRefReadable(refTable, value, userID)
+	}
 	return nil
 }

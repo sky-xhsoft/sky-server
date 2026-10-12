@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"strconv"
+	"sync"
 
 	"github.com/sky-xhsoft/sky-server/internal/domain/search"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
@@ -122,189 +123,8 @@ type service struct {
 	metadataRepo    repository.MetadataRepository
 	userRepo        repository.UserRepository
 	idgenService    idgen.Service
-}
-
-// SaveWithDetails 同时保存主表和明细
-func (s *service) SaveWithDetails(ctx context.Context, req *SaveWithDetailsRequest, userID uint) (*SaveWithDetailsResponse, error) {
-	mainTable, err := s.metadataService.GetTable(req.TableName)
-	if err != nil {
-		return nil, fmt.Errorf("表不存在: %s", req.TableName)
-	}
-	mainColumns, err := s.metadataService.GetColumns(mainTable.ID)
-	if err != nil {
-		return nil, fmt.Errorf("获取列信息失败: %s", err.Error())
-	}
-
-	tx := s.db.WithContext(ctx).Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-
-	var mainRecordID uint
-	mainRecord := req.MainRecord
-
-	if req.Mode == "create" {
-		newID, err := s.idgenService.GetNextID(ctx, req.TableName)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		mainRecord["ID"] = newID
-		mainRecordID = newID
-
-		processed, err := s.processFieldsForCreate(mainColumns, mainRecord, userID)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		mainRecord = processed
-
-		if err := tx.Table(req.TableName).Create(&mainRecord).Error; err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-	} else if req.Mode == "update" {
-		mainRecordID = req.MainRecordID
-
-		processed, err := s.processFieldsForUpdate(mainColumns, mainRecord, userID)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		mainRecord = processed
-
-		// 只更新传入的字段（前端只传变更字段）
-		updateFields := make([]string, 0, len(mainRecord))
-		for field := range mainRecord {
-			updateFields = append(updateFields, field)
-		}
-
-		if err := tx.Table(req.TableName).Where("id = ?", mainRecordID).Select(updateFields).Updates(&mainRecord).Error; err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		if err := tx.Table(req.TableName).Where("id = ?", mainRecordID).Take(&mainRecord).Error; err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-	} else {
-		tx.Rollback()
-		return nil, gorm.ErrInvalidTransaction
-	}
-
-	// 子表字段校验（外键存在性等）须在同一事务内进行，才能看到刚插入、尚未提交的主表记录
-	txSvc := *s
-	txSvc.db = tx
-
-	detailResponses := make([]DetailTableResponse, len(req.Details))
-	for i, detail := range req.Details {
-		detailTable, err := s.metadataService.GetTable(detail.TableName)
-		if err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("子表不存在: %s", detail.TableName)
-		}
-		detailColumns, err := s.metadataService.GetColumns(detailTable.ID)
-		if err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("获取子表列信息失败: %s", err.Error())
-		}
-
-		if req.Mode == "update" {
-			// 收集前端传入的已有记录 ID
-			incomingIDs := make(map[uint]bool)
-			for _, rec := range detail.Records {
-				if id, ok := rec["ID"]; ok {
-					if uid, ok := toUint(id); ok && uid > 0 {
-						incomingIDs[uid] = true
-					}
-				}
-			}
-
-			// 删除数据库中不在传入列表中旧记录
-			if len(incomingIDs) > 0 {
-				var existingIDs []uint
-				if err := tx.Table(detail.TableName).Where(detail.RefField+" = ?", mainRecordID).Pluck("ID", &existingIDs).Error; err != nil {
-					tx.Rollback()
-					return nil, fmt.Errorf("查询已有子表记录失败: %s", err.Error())
-				}
-				for _, eid := range existingIDs {
-					if !incomingIDs[eid] {
-						if err := tx.Table(detail.TableName).Where("ID = ?", eid).Delete(nil).Error; err != nil {
-							tx.Rollback()
-							return nil, fmt.Errorf("删除子表记录失败: %s", err.Error())
-						}
-					}
-				}
-			} else {
-				// 没有传入任何已有ID，全部删除
-				if err := tx.Table(detail.TableName).Where(detail.RefField+" = ?", mainRecordID).Delete(nil).Error; err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-			}
-		}
-
-		savedRecords := make([]map[string]interface{}, 0, len(detail.Records))
-		for _, record := range detail.Records {
-			record[detail.RefField] = mainRecordID
-
-			if req.Mode == "update" && hasID(record) {
-				// 已有记录：更新
-				rid := toUintVal(record["ID"])
-				delete(record, "ID")
-				processed, err := txSvc.processFieldsForUpdate(detailColumns, record, userID)
-				if err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-				// 只更新传入的字段
-				updateFields := make([]string, 0, len(processed))
-				for field := range processed {
-					updateFields = append(updateFields, field)
-				}
-				if err := tx.Table(detail.TableName).Where("ID = ?", rid).Select(updateFields).Updates(&processed).Error; err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-				// 取回最新数据
-				var updated map[string]interface{}
-				if err := tx.Table(detail.TableName).Where("ID = ?", rid).Take(&updated).Error; err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-				savedRecords = append(savedRecords, updated)
-			} else {
-				// 新记录：插入
-				processed, err := txSvc.processFieldsForCreate(detailColumns, record, userID)
-				if err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-				if err := tx.Table(detail.TableName).Create(&processed).Error; err != nil {
-					tx.Rollback()
-					return nil, err
-				}
-				savedRecords = append(savedRecords, processed)
-			}
-		}
-
-		detailResponses[i] = DetailTableResponse{
-			TableName: detail.TableName,
-			Records:   savedRecords,
-		}
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, err
-	}
-
-	return &SaveWithDetailsResponse{
-		MainRecord: mainRecord,
-		Details:    detailResponses,
-	}, nil
+	// companyColCache 物理表是否有 SYS_COMPANY_ID（见 scope.go）
+	companyColCache *sync.Map
 }
 
 func hasID(record map[string]interface{}) bool {
@@ -372,6 +192,7 @@ func NewService(
 		metadataRepo:    metadataRepo,
 		userRepo:        userRepo,
 		idgenService:    idgenService,
+		companyColCache: newCompanyColCache(),
 	}
 }
 

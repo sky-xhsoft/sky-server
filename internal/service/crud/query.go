@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/domain/search"
-	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/errors"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	"github.com/sky-xhsoft/sky-server/internal/service/groups"
@@ -111,56 +110,6 @@ func (s *service) GetOne(ctx context.Context, tableName string, id uint, userID 
 	return result, nil
 }
 
-// applyCompanyScope 公司隔离：表有 SYS_COMPANY_ID 字段时只返回本公司与公共（0/-1）数据。
-// 豁免：附属配置/子表（如 SYS_COMPANY_CONF 公司配置）不按当前用户公司隔离，
-// 其可见性由所在公司的详情页上下文决定（外部已按外键过滤）
-func (s *service) applyCompanyScope(query *gorm.DB, tableName string, columns []*entity.SysColumn, userID uint) *gorm.DB {
-	for _, rt := range []string{"SYS_COMPANY_CONF"} {
-		if strings.EqualFold(tableName, rt) {
-			return query
-		}
-	}
-	for _, col := range columns {
-		if col.DbName == "SYS_COMPANY_ID" {
-			user, userErr := s.userRepo.GetUserByID(userID)
-			if userErr == nil && user != nil {
-				query = query.Where("SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)", user.SysCompanyID)
-			}
-			break
-		}
-	}
-	return query
-}
-
-// ensureInCompanyScope 写操作前确认目标记录都在当前用户的公司范围内（与查询一致），否则视为记录不存在。
-// 写操作只按 ID 定位记录，缺少这一步会让有修改/删除权限的用户改动其他公司的数据。
-func (s *service) ensureInCompanyScope(tableName string, tableID uint, userID uint, ids ...uint) error {
-	uniq := make(map[uint]bool, len(ids))
-	for _, id := range ids {
-		uniq[id] = true
-	}
-	if len(uniq) == 0 {
-		return nil
-	}
-	columns, err := s.metadataService.GetColumns(tableID)
-	if err != nil {
-		return err
-	}
-	list := make([]uint, 0, len(uniq))
-	for id := range uniq {
-		list = append(list, id)
-	}
-	var n int64
-	q := s.applyCompanyScope(s.db.Table(tableName).Where("ID IN ?", list), tableName, columns, userID)
-	if err := q.Count(&n).Error; err != nil {
-		return errors.Wrap(errors.ErrDatabase, "查询记录失败", err)
-	}
-	if n < int64(len(list)) {
-		return errors.New(errors.ErrResourceNotFound, "记录不存在")
-	}
-	return nil
-}
-
 // GetList 查询列表
 func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (*QueryResponse, error) {
 	// 设置默认分页参数
@@ -261,6 +210,7 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 	}
 
 	// 添加排序（支持多字段，逗号分隔）- 安全版本
+	idOrdered := false
 	if req.OrderBy != "" {
 		// 分割排序字段和方向
 		orderByFields := strings.Split(req.OrderBy, ",")
@@ -291,6 +241,9 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 
 			// 字段已在白名单中校验；原先嵌套 gorm.Expr 生成的 SQL 不含 ORDER BY，排序不生效
 			query = query.Order(fmt.Sprintf("`%s` %s", fieldUpper, direction))
+			if fieldUpper == "ID" {
+				idOrdered = true
+			}
 		}
 	} else {
 		// 检查是否有ORDERNO字段，如果有则默认按ORDERNO升序排序
@@ -305,7 +258,12 @@ func (s *service) GetList(ctx context.Context, req *QueryRequest, userID uint) (
 			query = query.Order("ORDERNO ASC")
 		} else {
 			query = query.Order("ID DESC")
+			idOrdered = true
 		}
+	}
+	// 排序值相同时按 ID 兜底，保证翻页（含分批导出）不重复、不遗漏
+	if !idOrdered {
+		query = query.Order("ID DESC")
 	}
 
 	// 添加分页
@@ -423,6 +381,7 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 	}
 	allowedFields["ID"] = true
 
+	idOrdered := false
 	if req.OrderBy != "" {
 		orderByFields := strings.Split(req.OrderBy, ",")
 		orderDirections := strings.Split(req.Order, ",")
@@ -448,6 +407,9 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 			}
 
 			query = query.Order(fmt.Sprintf("`%s` %s", fieldUpper, direction))
+			if fieldUpper == "ID" {
+				idOrdered = true
+			}
 		}
 	} else {
 		hasOrderNo := false
@@ -461,7 +423,12 @@ func (s *service) Search(ctx context.Context, req *search.SearchRequest, tableNa
 			query = query.Order("ORDERNO ASC")
 		} else {
 			query = query.Order("ID DESC")
+			idOrdered = true
 		}
+	}
+	// 排序值相同时按 ID 兜底，保证翻页（含分批导出）不重复、不遗漏
+	if !idOrdered {
+		query = query.Order("ID DESC")
 	}
 
 	offset := (req.Page - 1) * req.PageSize
