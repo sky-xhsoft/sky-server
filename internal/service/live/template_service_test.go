@@ -175,6 +175,7 @@ type fakeLiveForTemplate struct {
 	buckets    []tencent.CosBucket
 	created    []string // 创建的存储桶：名称|地域
 	createErr  error
+	camAppID   string // 账号下没有存储桶时，云平台查询返回的 APPID（空表示查不到）
 }
 
 func (f *fakeLiveForTemplate) CreateCosBucket(ctx context.Context, bucket, region string) error {
@@ -183,6 +184,13 @@ func (f *fakeLiveForTemplate) CreateCosBucket(ctx context.Context, bucket, regio
 	}
 	f.created = append(f.created, bucket+"|"+region)
 	return nil
+}
+
+func (f *fakeLiveForTemplate) CosAppID(ctx context.Context, buckets []tencent.CosBucket) string {
+	if id := tencent.BucketsAppID(buckets); id != "" {
+		return id
+	}
+	return f.camAppID
 }
 
 func (f *fakeLiveForTemplate) ListCosBuckets(ctx context.Context) ([]tencent.CosBucket, error) {
@@ -306,8 +314,14 @@ func TestCreateCosBucket(t *testing.T) {
 	live.createErr = nil
 	live.buckets = nil
 	if _, err := svc.CreateCosBucket(ctx, "first", "ap-nanjing"); err == nil || !strings.Contains(err.Error(), "无法确定 APPID") {
-		t.Errorf("无存储桶：%v", err)
+		t.Errorf("无存储桶且查不到 APPID：%v", err)
 	}
+	// 账号下没有存储桶：自动查询 APPID
+	live.camAppID = "1503356301"
+	if b, err := svc.CreateCosBucket(ctx, "auto", "ap-nanjing"); err != nil || b.FullName != "auto-1503356301" || b.Bucket != "auto" {
+		t.Errorf("无存储桶自动取 APPID：%+v %v", b, err)
+	}
+	live.camAppID = ""
 	if b, err := svc.CreateCosBucket(ctx, "first-1503356301", "ap-nanjing"); err != nil || b.FullName != "first-1503356301" {
 		t.Errorf("无存储桶带 APPID：%+v %v", b, err)
 	}

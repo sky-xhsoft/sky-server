@@ -26,6 +26,7 @@ type storageBucketView struct {
 var (
 	listStorageBuckets  = tencent.ListCosBuckets
 	createStorageBucket = tencent.CreateCosBucket
+	storageAppID        = tencent.AccountAppID
 )
 
 // storageKeys 云盘存储使用的腾讯云密钥：单独设置的 COS 密钥优先，否则用直播密钥
@@ -111,7 +112,7 @@ func (h *CompanyHandler) CreateStorageBucket(c *gin.Context) {
 		utils.BadRequest(c, "获取存储桶失败："+vendortext.Sanitize(err.Error()))
 		return
 	}
-	_, full, region, err := tencent.ResolveNewCosBucket(buckets, req.Bucket, req.Region)
+	_, full, region, err := tencent.ResolveNewCosBucket(buckets, storageAppID(ctx, id, key, buckets), req.Bucket, req.Region)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return

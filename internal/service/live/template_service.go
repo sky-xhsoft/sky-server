@@ -293,7 +293,7 @@ func (s *templateService) CosBuckets(ctx context.Context) ([]CosBucketOption, er
 }
 
 // CreateCosBucket 在公司腾讯云账号下创建存储桶（公开读写，CORS 全部允许）。
-// name 可不带 -APPID，APPID 取自账号现有存储桶；不写回公司配置
+// name 可不带 -APPID：APPID 取自账号现有存储桶，账号下还没有存储桶时向云平台查询；不写回公司配置
 func (s *templateService) CreateCosBucket(ctx context.Context, name, region string) (*CosBucketOption, error) {
 	buckets, err := s.live.ListCosBuckets(ctx)
 	if err != nil {
@@ -302,7 +302,7 @@ func (s *templateService) CreateCosBucket(ctx context.Context, name, region stri
 		}
 		return nil, fmt.Errorf("获取存储桶失败：%w", err)
 	}
-	short, full, region, err := tencent.ResolveNewCosBucket(buckets, name, region)
+	short, full, region, err := tencent.ResolveNewCosBucket(buckets, s.live.CosAppID(ctx, buckets), name, region)
 	if err != nil {
 		return nil, err
 	}

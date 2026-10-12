@@ -42,7 +42,12 @@ func setupStorageBucketTest(t *testing.T, conf *entity.SysCompanyConf) (*gin.Eng
 		*created = append(*created, bucket+"|"+region)
 		return nil
 	}
-	t.Cleanup(func() { listStorageBuckets, createStorageBucket = origList, origCreate })
+	// 不访问云平台：现有存储桶里有 APPID 时直接取，否则视为查不到
+	origAppID := storageAppID
+	storageAppID = func(ctx context.Context, id, key string, buckets []tencent.CosBucket) string {
+		return tencent.BucketsAppID(buckets)
+	}
+	t.Cleanup(func() { listStorageBuckets, createStorageBucket, storageAppID = origList, origCreate, origAppID })
 
 	h := NewCompanyHandler(&storageConfService{conf: conf}, nil)
 	r := gin.New()
@@ -109,5 +114,31 @@ func TestStorageBuckets_ListAndCreate(t *testing.T) {
 		if code, out := doJSON(r, http.MethodPost, "/cos-buckets", body); code != http.StatusBadRequest || !strings.Contains(out["message"].(string), want) {
 			t.Errorf("%s：应提示「%s」，得到 %d %v", body, want, code, out)
 		}
+	}
+}
+
+// 账号下还没有存储桶：用密钥向云平台查询 APPID，名称自动补 -APPID
+func TestStorageBuckets_CreateFirstBucketFetchesAppID(t *testing.T) {
+	conf := &entity.SysCompanyConf{TencentCloudSecretID: "live-id", TencentCloudSecretKey: "k"}
+	r, created, _ := setupStorageBucketTest(t, conf)
+	listStorageBuckets = func(ctx context.Context, id, key string) ([]tencent.CosBucket, error) { return nil, nil }
+
+	// 查不到 APPID：提示输入完整名称
+	if code, out := doJSON(r, http.MethodPost, "/cos-buckets", `{"bucket":"first","region":"ap-nanjing"}`); code != http.StatusBadRequest || !strings.Contains(out["message"].(string), "请输入完整名称") {
+		t.Fatalf("查不到 APPID：%d %v", code, out)
+	}
+
+	var usedKey string
+	storageAppID = func(ctx context.Context, id, key string, buckets []tencent.CosBucket) string {
+		usedKey = id
+		return "1504307838"
+	}
+	code, out := doJSON(r, http.MethodPost, "/cos-buckets", `{"bucket":"first","region":"ap-nanjing"}`)
+	data, _ := out["data"].(map[string]any)
+	if code != http.StatusOK || data["bucket"] != "first-1504307838" || usedKey != "live-id" {
+		t.Fatalf("自动取 APPID：%d %v key=%s", code, out, usedKey)
+	}
+	if len(*created) != 1 || (*created)[0] != "first-1504307838|ap-nanjing" {
+		t.Fatalf("调用腾讯云：%v", *created)
 	}
 }

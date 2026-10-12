@@ -29,6 +29,8 @@ type Service interface {
 	ListCosBuckets(ctx context.Context) ([]tencent.CosBucket, error)
 	// CreateCosBucket 在公司自己的腾讯云账号下创建存储桶（公开读写 + CORS 全部允许）
 	CreateCosBucket(ctx context.Context, bucket, region string) error
+	// CosAppID 公司腾讯云账号的 APPID：优先取自现有存储桶，没有时向云平台查询；查不到返回空
+	CosAppID(ctx context.Context, buckets []tencent.CosBucket) string
 	EnableDomain(ctx context.Context, domainName string) error
 	ForbidDomain(ctx context.Context, domainName string) error
 	AuthenticateDomainOwner(ctx context.Context, domainName string, verifyType string) (*tencentLive.DomainOwnerVerifyResult, error)
@@ -170,6 +172,19 @@ func (s *liveService) CreateCosBucket(ctx context.Context, bucket, region string
 		return err
 	}
 	return client.CreateCosBucket(ctx, bucket, region)
+}
+
+// CosAppID 公司腾讯云账号的 APPID，见 tencent.AccountAppID
+func (s *liveService) CosAppID(ctx context.Context, buckets []tencent.CosBucket) string {
+	if id := tencent.BucketsAppID(buckets); id != "" {
+		return id
+	}
+	client, err := s.companyClient(ctx)
+	if err != nil {
+		return ""
+	}
+	cfg := client.GetConfig()
+	return tencent.AccountAppID(ctx, cfg.SecretID, cfg.SecretKey, buckets)
 }
 
 // getDomainManager 获取域名管理器

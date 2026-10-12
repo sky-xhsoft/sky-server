@@ -113,19 +113,16 @@ var (
 const cosBucketMaxLen = 50
 
 // ResolveNewCosBucket 校验新建存储桶的名称和地域，返回不含 / 含 -APPID 的名称。
-// name 可不带 -APPID（取自账号现有存储桶 buckets）；名称本身可以以数字结尾，只有与账号 APPID 一致的后缀才视为 -APPID
-func ResolveNewCosBucket(buckets []CosBucket, name, region string) (short, full, cleanRegion string, err error) {
+// name 可不带 -APPID：appID 为账号 APPID（见 AccountAppID），为空时取自账号现有存储桶 buckets；
+// 名称本身可以以数字结尾，只有与账号 APPID 一致的后缀才视为 -APPID
+func ResolveNewCosBucket(buckets []CosBucket, appID, name, region string) (short, full, cleanRegion string, err error) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	region = strings.TrimSpace(region)
 	if !cosRegionRe.MatchString(region) {
 		return "", "", "", errors.New("请选择地域")
 	}
-	appID := ""
-	for _, b := range buckets {
-		if i := strings.LastIndex(b.Name, "-"); i > 0 && cosAppIDSuffixRe.MatchString(b.Name) {
-			appID = b.Name[i+1:]
-			break
-		}
+	if appID == "" {
+		appID = BucketsAppID(buckets)
 	}
 	full = name
 	switch {
@@ -136,7 +133,7 @@ func ResolveNewCosBucket(buckets []CosBucket, name, region string) (short, full,
 	case cosAppIDSuffixRe.MatchString(name):
 		name = name[:strings.LastIndex(name, "-")]
 	default:
-		return "", "", "", errors.New("账号下还没有存储桶，无法确定 APPID，请输入完整名称（名称-APPID）")
+		return "", "", "", errors.New("无法确定 APPID（账号下还没有存储桶，且密钥没有查询 APPID 的权限 cam:GetUserAppId），请输入完整名称（名称-APPID）")
 	}
 	if !cosBucketNameRe.MatchString(name) {
 		return "", "", "", errors.New("存储桶名称只能包含小写字母、数字和 -，且不能以 - 开头或结尾")
