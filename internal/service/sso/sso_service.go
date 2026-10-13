@@ -269,8 +269,15 @@ func (s *service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 		return nil, err
 	}
 
+	// 用户名、所属公司从数据库读取当前值，不沿用旧令牌里的：用户改名、调整公司后，新令牌立即生效
+	// （业务表的 CREATE_BY 取自令牌中的用户名）。用户已停用或删除时不再续期
+	user, err := s.userRepo.GetUserByID(claims.UserID)
+	if err != nil || user == nil {
+		return nil, errors.InvalidToken
+	}
+
 	// 生成新的访问Token
-	newToken, err := s.jwtUtil.GenerateToken(claims.UserID, claims.CompanyID, claims.Username, claims.ClientType, claims.DeviceID, s.accessTokenExpire)
+	newToken, err := s.jwtUtil.GenerateToken(user.ID, user.SysCompanyID, user.Username, claims.ClientType, claims.DeviceID, s.accessTokenExpire)
 	if err != nil {
 		return nil, errors.Wrap(errors.ErrInternal, "生成Token失败", err)
 	}

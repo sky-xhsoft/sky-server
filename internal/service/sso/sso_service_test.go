@@ -3,6 +3,7 @@ package sso
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/jwt"
@@ -304,5 +305,40 @@ func TestSSO_Login_StoresTokenHashOnly(t *testing.T) {
 	}
 	if repo.created.Token == resp.Token || repo.created.RefreshToken == resp.RefreshToken {
 		t.Error("会话不应保存 token 原文")
+	}
+}
+
+// 刷新令牌时用户名、公司从数据库读取：改名后新令牌带新用户名
+func TestSSO_RefreshToken_UsesCurrentUsername(t *testing.T) {
+	jwtUtil := jwt.New("test-secret-key-for-unit-tests-only")
+	repo := &mockUserRepository{user: &entity.SysUser{BaseModel: entity.BaseModel{ID: 38, IsActive: "Y"}, SysCompanyID: 58, Username: "sajida_58"}}
+	svc := NewService(repo, jwtUtil, 3600, 7200)
+
+	old, err := jwtUtil.GenerateRefreshToken(38, 58, "sajida", "web", "dev-1", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := svc.RefreshToken(old)
+	if err != nil {
+		t.Fatalf("刷新失败: %v", err)
+	}
+	claims, err := jwtUtil.ParseToken(resp.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.Username != "sajida_58" || claims.CompanyID != 58 || claims.UserID != 38 || claims.DeviceID != "dev-1" {
+		t.Errorf("新令牌应带数据库中的当前用户名: %+v", claims)
+	}
+}
+
+// 用户已停用或删除时不能再续期
+func TestSSO_RefreshToken_InactiveUser(t *testing.T) {
+	jwtUtil := jwt.New("test-secret-key-for-unit-tests-only")
+	repo := &mockUserRepository{userErr: gorm.ErrRecordNotFound}
+	svc := NewService(repo, jwtUtil, 3600, 7200)
+
+	old, _ := jwtUtil.GenerateRefreshToken(38, 58, "sajida", "web", "dev-1", time.Hour)
+	if _, err := svc.RefreshToken(old); err == nil {
+		t.Error("用户不存在或已停用时应拒绝刷新")
 	}
 }
