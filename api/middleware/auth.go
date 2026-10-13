@@ -48,6 +48,17 @@ func AuthRequired(jwtUtil *jwt.JWT) gin.HandlerFunc {
 			return
 		}
 
+		// 只接受访问令牌：刷新令牌（有效期更长）不能直接用来访问接口
+		if claims.TokenType != "access" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":      pkgerrors.ErrInvalidToken,
+				"message":   "认证令牌类型错误",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			})
+			c.Abort()
+			return
+		}
+
 		// 账号已停用：已签发的令牌同样失效（状态缓存 30 秒）
 		status, known := resolveUserStatus(claims.UserID)
 		if known && !status.Active {
