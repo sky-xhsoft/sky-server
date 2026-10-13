@@ -13,11 +13,11 @@ app:
 # 数据库配置
 database:
   mysql:
-    host: "localhost"
+    host: "${DB_HOST:-localhost}"
     port: 3306
-    username: "root"
-    password: "abc123"
-    database: "skyserver"
+    username: "${DB_USER:-root}"
+    password: "${DB_PASSWORD}"
+    database: "${DB_NAME:-skyserver}"
     charset: "utf8mb4"
     parseTime: true
     loc: "Local"
@@ -37,7 +37,7 @@ redis:
 
 # JWT配置
 jwt:
-  secret: "your-secret-key-change-in-production"
+  secret: "${JWT_SECRET}"
   accessTokenExpire: 7200    # 2小时（秒）
   refreshTokenExpire: 604800 # 7天（秒）
 
@@ -210,9 +210,9 @@ cloud:
 # 腾讯云配置
 tencentCloud:
   # 腾讯云 SecretID
-  secretID: "your-tencent-secret-id"
+  secretID: "${TENCENT_SECRET_ID}"
   # 腾讯云 SecretKey
-  secretKey: "your-tencent-secret-key"
+  secretKey: "${TENCENT_SECRET_KEY}"
   # 区域，如 ap-guangzhou, ap-shanghai, ap-beijing
   region: "ap-guangzhou"
   # 回调密钥，用于验证腾讯云回调签名（可选，留空则不验证签名）
@@ -262,3 +262,23 @@ volcengine:
   ark:
     apiKey: ""
     model: ""   # 推理接入点 ID（ep-…）
+
+# 邮件（找回密码等通知）；密钥写在 .env
+email:
+  enabled: false
+  smtpHost: "${EMAIL_SMTP_HOST:-smtp.exmail.qq.com}"
+  smtpPort: 465
+  username: "${EMAIL_USERNAME}"
+  password: "${EMAIL_PASSWORD}"
+  from: "${EMAIL_FROM}"
+
+# 阿里云短信（企业注册验证码）；密钥写在 .env
+# 签名需在阿里云审核通过且运营商报备生效后才能送达（未生效时回执 PORT_NOT_REGISTERED）
+sms:
+  enabled: false
+  accessKeyID: "${SMS_ACCESS_KEY_ID}"
+  accessSecret: "${SMS_ACCESS_SECRET}"
+  signName: "${SMS_SIGN_NAME}"
+  templateCode: "${SMS_TEMPLATE_CODE}"
+  # 通用验证码：任意手机号输入此值即可通过校验，只用于本地调试，测试 / 正式环境必须留空
+  verifyCode: ""

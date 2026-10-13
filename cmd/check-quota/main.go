@@ -1,3 +1,6 @@
+// check-quota 核对每个用户 cloud_quota.USED_SPACE 与其云盘文件实际大小合计是否一致（只读）。
+//
+// 用法：go run ./cmd/check-quota
 package main
 
 import (
@@ -7,7 +10,6 @@ import (
 	"github.com/sky-xhsoft/sky-server/internal/config"
 	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/repository/mysql"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -29,7 +31,7 @@ func main() {
 		log.Fatalf("查询配额失败: %v", err)
 	}
 
-	fmt.Println("=== 配额准确性检查 ===\n")
+	fmt.Print("=== 配额准确性检查 ===\n\n")
 
 	for _, quota := range quotas {
 		fmt.Printf("用户 ID: %d\n", quota.UserID)
