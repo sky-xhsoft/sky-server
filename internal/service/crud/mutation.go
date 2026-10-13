@@ -85,6 +85,9 @@ func (s *service) prepareCreate(ctx context.Context, table *entity.SysTable, col
 	if err != nil {
 		return nil, err
 	}
+	if err := checkUniqueColumns(s.db, table.Name, 0, processedData); err != nil {
+		return nil, err
+	}
 
 	// 生成新的ID（在事务外，避免长时间持有锁）
 	newID, err := s.idgenService.GetNextID(ctx, table.Name)
@@ -167,6 +170,9 @@ func (s *service) prepareUpdate(table *entity.SysTable, columns []*entity.SysCol
 
 	processedData, err := s.processFieldsForUpdate(columns, data, userID)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := checkUniqueColumns(s.db, table.Name, id, processedData); err != nil {
 		return nil, nil, err
 	}
 	delete(processedData, colSysCompanyID)
