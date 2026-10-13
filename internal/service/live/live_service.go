@@ -82,9 +82,21 @@ const (
 	domainListCacheKeyPrefix = "live:domains:list:"
 	// 域名详情缓存key前缀
 	domainDetailCacheKeyPrefix = "live:domain:detail:"
-	// 缓存过期时间（5分钟）
+	// 域名都已配置好 CNAME 时的缓存时间
 	domainCacheExpiration = 24 * time.Hour
+	// 有域名 CNAME 未配置时的缓存时间：用户去 DNS 配好后，最多 5 分钟就能看到状态变化
+	domainCachePendingExpiration = 5 * time.Minute
 )
+
+// domainCacheTTL 域名缓存时间：任一域名 CNAME 未配置成功（BCName != 1）为 5 分钟，否则 24 小时
+func domainCacheTTL(domains ...*tencentLive.DomainInfo) time.Duration {
+	for _, d := range domains {
+		if d != nil && d.BCName != 1 {
+			return domainCachePendingExpiration
+		}
+	}
+	return domainCacheExpiration
+}
 
 // NewService 创建直播服务（已弃用，请使用 NewServiceWithCompanyManager）
 func NewService(cfg *config.TencentCloudConfig, redisClient *redis.Client) (Service, error) {
@@ -261,7 +273,7 @@ func (s *liveService) DescribeDomain(ctx context.Context, domainName string) (*t
 	if s.redisClient != nil && domainInfo != nil {
 		cacheKey := s.domainDetailCacheKey(ctx, domainName)
 		if data, err := json.Marshal(domainInfo); err == nil {
-			s.redisClient.Set(ctx, cacheKey, data, domainCacheExpiration)
+			s.redisClient.Set(ctx, cacheKey, data, domainCacheTTL(domainInfo))
 		}
 	}
 
@@ -303,7 +315,7 @@ func (s *liveService) ListDomains(ctx context.Context, domainType *int64) ([]*te
 	if s.redisClient != nil {
 		cacheKey := s.domainListCacheKey(ctx)
 		if data, err := json.Marshal(filteredDomains); err == nil {
-			s.redisClient.Set(ctx, cacheKey, data, domainCacheExpiration)
+			s.redisClient.Set(ctx, cacheKey, data, domainCacheTTL(filteredDomains...))
 		}
 	}
 

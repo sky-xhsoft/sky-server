@@ -82,7 +82,7 @@ func (s *service) GetStats(ctx context.Context, companyID uint) (*Stats, error) 
 
 	// 直播间总数
 	if err := s.db.WithContext(ctx).Model(&entity.LiveRoom{}).
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", companyID, "Y").
+		Where("SYS_COMPANY_ID = ? AND IS_ACTIVE = ?", companyID, "Y").
 		Count(&stats.TotalRooms).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "统计直播间失败", err)
 	}
@@ -90,7 +90,7 @@ func (s *service) GetStats(ctx context.Context, companyID uint) (*Stats, error) 
 	// 今日直播场次（START_TIME 落在今天）
 	todayStart, todayEnd := dayRange(time.Now())
 	if err := s.db.WithContext(ctx).Model(&entity.LiveRoom{}).
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ? AND STATUS IN (?, ?, ?)", companyID, "Y", "live", "ended", "archived").
+		Where("SYS_COMPANY_ID = ? AND IS_ACTIVE = ? AND STATUS IN (?, ?, ?)", companyID, "Y", "live", "ended", "archived").
 		Where("START_TIME >= ? AND START_TIME < ?", todayStart, todayEnd).
 		Count(&stats.TodayLiveSessions).Error; err != nil {
 		return nil, errors.Wrap(errors.ErrDatabase, "统计今日直播场次失败", err)
@@ -117,7 +117,7 @@ func (s *service) GetStats(ctx context.Context, companyID uint) (*Stats, error) 
 		var size int64
 		if err := s.db.WithContext(ctx).Table(table).
 			Select("COALESCE(SUM(FILE_SIZE), 0)").
-			Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ? AND FILE_SIZE > 0", companyID, "Y").
+			Where("SYS_COMPANY_ID = ? AND IS_ACTIVE = ? AND FILE_SIZE > 0", companyID, "Y").
 			Scan(&size).Error; err != nil {
 			return nil, errors.Wrap(errors.ErrDatabase, "统计直播录制空间失败", err)
 		}
@@ -185,8 +185,8 @@ func (s *service) countByDate(ctx context.Context, table, timeColumn string, com
 	}
 
 	query := fmt.Sprintf(
-		"SELECT DATE_FORMAT(%s, '%%Y-%%m-%%d') AS date, COUNT(*) AS count FROM %s WHERE (%s = ? OR %s IN (0, -1)) AND %s >= ? AND %s < ?",
-		timeColumn, table, companyColumn, companyColumn, timeColumn, timeColumn,
+		"SELECT DATE_FORMAT(%s, '%%Y-%%m-%%d') AS date, COUNT(*) AS count FROM %s WHERE %s = ? AND %s >= ? AND %s < ?",
+		timeColumn, table, companyColumn, timeColumn, timeColumn,
 	)
 	if table == "live_callback_event" {
 		query += " AND EVENT_TYPE = 'recording_file'"
@@ -212,7 +212,7 @@ func (s *service) GetRecentRooms(ctx context.Context, companyID uint, limit int)
 
 	var rooms []*entity.LiveRoom
 	if err := s.db.WithContext(ctx).
-		Where("(SYS_COMPANY_ID = ? OR SYS_COMPANY_ID IN (0, -1)) AND IS_ACTIVE = ?", companyID, "Y").
+		Where("SYS_COMPANY_ID = ? AND IS_ACTIVE = ?", companyID, "Y").
 		Order("CREATE_TIME DESC").
 		Limit(limit).
 		Find(&rooms).Error; err != nil {

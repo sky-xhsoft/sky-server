@@ -568,7 +568,11 @@ func (h *LiveCallbackHandler) HandlePushStream(c *gin.Context) {
 
 		// 将直播间状态设置为 live
 		if room.Status != "live" {
-			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Updates(map[string]interface{}{"STATUS": "live", "UPDATE_BY": room.CreateBy}).Error; err != nil {
+			// 开播时间以腾讯云事件时间为准（START_TIME 开播后即为实际开播时间），清掉上一场的结束时间与时长
+			startAt := liveService.EventTime(event.EventTime, time.Now())
+			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Updates(map[string]interface{}{
+				"STATUS": "live", "START_TIME": startAt, "END_TIME": nil, "DURATION": 0, "UPDATE_BY": room.CreateBy,
+			}).Error; err != nil {
 				logger.Error("更新直播间状态失败",
 					zap.String("streamId", event.StreamID),
 					zap.String("roomName", room.RoomName),
@@ -654,7 +658,13 @@ func (h *LiveCallbackHandler) HandleDisconnectStream(c *gin.Context) {
 
 		// 将直播间状态设置为 ended
 		if room.Status != "ended" {
-			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Updates(map[string]interface{}{"STATUS": "ended", "UPDATE_BY": room.CreateBy}).Error; err != nil {
+			endAt := liveService.EventTime(event.EventTime, time.Now())
+			updates := map[string]interface{}{"STATUS": "ended", "END_TIME": endAt, "UPDATE_BY": room.CreateBy}
+			// 只有直播中断流才记录时长；未开播（草稿等）收到断流时不改时长
+			if room.Status == "live" {
+				updates["DURATION"] = liveService.EndedDuration(room.StartTime, endAt, event.Duration)
+			}
+			if err := h.db.Model(&entity.LiveRoom{}).Where("ID = ?", room.ID).Updates(updates).Error; err != nil {
 				logger.Error("更新直播间状态失败",
 					zap.String("streamId", event.StreamID),
 					zap.String("roomName", room.RoomName),
@@ -850,7 +860,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 					ParentID:    &recordingFolder.ID,
 					Path:        recordingFolder.Path + "/" + fileName,
 					OwnerID:     creatorUser.ID,
-					FileSize:    &event.FileSize,
+					FileSize:    func() *int64 { size := fileSizeOr(event.FileSize, event.VideoURL); return &size }(), // 回调没带大小时从 COS 查询，与录制列表一致
 					FileType:    &fileType,
 					FileExt:     &ext,
 					AccessURL:   &event.VideoURL,                                // 使用回调中的 VideoURL 作为访问地址

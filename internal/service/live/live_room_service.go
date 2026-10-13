@@ -114,6 +114,9 @@ func (s *liveRoomService) UpdateRoom(ctx context.Context, room *entity.LiveRoom)
 		return err
 	}
 
+	// 直播间名称创建后不能修改：云盘的录制、切片目录按名称建立（结构体更新时空值不写入）
+	room.RoomName = ""
+
 	// 如果直播间正在直播中，限制某些字段的修改
 	if existingRoom.Status == "live" {
 		room.RoomType = existingRoom.RoomType
@@ -153,6 +156,7 @@ func (s *liveRoomService) GetRoom(ctx context.Context, id uint) (*entity.LiveRoo
 		}
 		return nil, err
 	}
+	room.ElapsedSeconds = LiveElapsedSeconds(&room, time.Now())
 	return &room, nil
 }
 
@@ -259,12 +263,9 @@ func (s *liveRoomService) EndLive(ctx context.Context, id uint) error {
 		return fmt.Errorf("直播间当前状态为%s，无法结束", room.Status)
 	}
 
-	// 计算直播时长
+	// 计算直播时长（不会为负）
 	now := time.Now()
-	var duration int
-	if room.StartTime != nil {
-		duration = int(now.Sub(*room.StartTime).Seconds())
-	}
+	duration := EndedDuration(room.StartTime, now, 0)
 
 	// 更新状态为已结束
 	updates := map[string]interface{}{

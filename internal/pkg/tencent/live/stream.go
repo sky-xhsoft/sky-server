@@ -252,7 +252,36 @@ func (m *StreamManager) DescribeStreamHistoryList(ctx context.Context, req *Desc
 		}
 	}
 
+	result.TotalNum, result.TotalPage = normalizeHistoryTotal(result.PageNum, result.PageSize, int64(len(result.HistoryInfo)), result.TotalNum)
 	return result, nil
+}
+
+// normalizeHistoryTotal 用当前页实际条数校正腾讯云返回的总数（TotalNum 不可靠，如页码超出时返回 0）：
+//   - 当前页不满一页且有数据：已经是最后一页，总数 = 前面各页 + 本页条数（精确值）
+//   - 当前页是满的：后面可能还有，总数至少要到本页末尾，否则分页器到不了下一页
+//   - 当前页没有数据（页码超出）：总数不会超过前面各页之和，偏大时压到这个上限
+func normalizeHistoryTotal(pageNum, pageSize, rows, reported int64) (total, totalPage int64) {
+	if pageNum < 1 {
+		pageNum = 1
+	}
+	total = reported
+	if pageSize > 0 && rows > 0 {
+		before := (pageNum - 1) * pageSize
+		if rows < pageSize {
+			total = before + rows
+		} else if total < before+rows {
+			total = before + rows
+		}
+	} else if pageSize > 0 && rows == 0 && pageNum > 1 && total > (pageNum-1)*pageSize {
+		total = (pageNum - 1) * pageSize
+	}
+	if total < 0 {
+		total = 0
+	}
+	if pageSize > 0 {
+		totalPage = (total + pageSize - 1) / pageSize
+	}
+	return total, totalPage
 }
 
 // DropLiveStreamRequest 断开直播推流请求
