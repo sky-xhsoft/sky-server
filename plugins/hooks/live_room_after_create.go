@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/sky-xhsoft/sky-server/internal/config"
-	"github.com/sky-xhsoft/sky-server/internal/model/entity"
 	"github.com/sky-xhsoft/sky-server/internal/pkg/logger"
 	liveService "github.com/sky-xhsoft/sky-server/internal/service/live"
 	"github.com/sky-xhsoft/sky-server/plugins/core"
@@ -55,13 +54,11 @@ func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(
 		// 获取公司 ID（可选）
 		companyID := GetUintOrZero(params, "SYS_COMPANY_ID")
 
-		// 查找创建者用户ID
-		var creatorUser entity.SysUser
-		var userID uint = 1 // 默认使用系统用户
-		if createBy != "" {
-			if err := txDB.Where("USERNAME = ? AND IS_ACTIVE = ?", createBy, "Y").First(&creatorUser).Error; err == nil {
-				userID = creatorUser.ID
-			}
+		// 查找创建者用户 ID（按直播间所属公司查找：不同公司可以有同名用户）。
+		// 找不到时不建目录，录制 / 切片回调到达时会再补建，避免把目录记到其他用户名下
+		userID, ok := liveService.RoomCreatorID(txDB, createBy, companyID)
+		if !ok {
+			logger.Warn("未找到直播间创建人，暂不创建云盘目录", zap.String("createBy", createBy), zap.Uint("companyId", companyID))
 		}
 
 		// 开启录制 / 切片时分别创建云盘目录：
@@ -73,6 +70,9 @@ func liveRoomAfterCreateHandler(manager *core.Manager, cfg *config.Config) func(
 			{"IS_CLIP", "CLIP_FOLDER_ID", liveService.RoomFolderClip},
 		}
 		for _, target := range targets {
+			if !ok {
+				break
+			}
 			if strings.EqualFold(GetStringOrEmpty(params, target.enabledKey), "N") {
 				continue
 			}

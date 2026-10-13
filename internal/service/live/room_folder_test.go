@@ -90,3 +90,45 @@ func TestEnsureRoomFolder_ReusesExisting(t *testing.T) {
 		t.Errorf("应复用已有目录：两次 ID %d/%d，共 %d 条（期望 3：直播间目录+两个子目录）", a.ID, b.ID, n)
 	}
 }
+
+// 不同公司有同名用户时，按直播间所属公司找创建人
+func TestRoomCreatorID_SameUsernameInOtherCompany(t *testing.T) {
+	db := setupRoomFolderDB(t)
+	// 实体声明了 USERNAME 唯一索引，但实际库中用户名只在公司内唯一，这里按实际库建表
+	if err := db.Exec("CREATE TABLE sys_user (ID INTEGER PRIMARY KEY, USERNAME TEXT, SYS_COMPANY_ID INTEGER, IS_ACTIVE TEXT)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO sys_user VALUES (31, 'sajida', 51, 'Y'), (38, 'sajida', 58, 'Y')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := RoomCreatorID(db, "sajida", 58); !ok || id != 38 {
+		t.Errorf("公司 58 的 sajida 应为 38，实际 %d（%v）", id, ok)
+	}
+	if _, ok := RoomCreatorID(db, "sajida", 99); ok {
+		t.Error("所属公司没有该用户、全库又有多个同名用户时不应猜测")
+	}
+	if err := db.Exec("INSERT INTO sys_user VALUES (40, 'zhang', 3, 'Y')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := RoomCreatorID(db, "zhang", 7); !ok || id != 40 {
+		t.Errorf("创建人已调到其他公司、全库唯一时应找到 40，实际 %d（%v）", id, ok)
+	}
+	if _, ok := RoomCreatorID(db, "", 58); ok {
+		t.Error("用户名为空时不应找到")
+	}
+}
+
+// 所有者在其他公司已有同名文件夹时不能复用（避免录制文件写进其他公司的目录）：报错或新建，都不能返回其他公司的目录
+func TestEnsureRoomFolder_DoesNotReuseOtherCompanyFolder(t *testing.T) {
+	db := setupRoomFolderDB(t)
+	other := newFolder(t, db, "3", "/3", 31, 51)
+	f, err := EnsureRoomFolder(db, RoomFolderSpec{RoomName: "3", CompanyID: 58, OwnerID: 31}, RoomFolderRecording)
+	if err != nil {
+		return
+	}
+	var room entity.CloudItem
+	db.First(&room, *f.ParentID)
+	if room.ID == other.ID || room.SysCompanyID != 58 {
+		t.Errorf("复用了公司 51 的目录：直播间目录 ID=%d 公司=%d", room.ID, room.SysCompanyID)
+	}
+}

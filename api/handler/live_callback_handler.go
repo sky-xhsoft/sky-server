@@ -813,10 +813,9 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 	// 如果找到了对应的直播间，将录制文件保存到云盘
 	if room.RoomName != "" {
 		// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
-		var creatorUser entity.SysUser
-		if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
+		if creatorID, ok := liveService.RoomCreatorID(h.db, room.CreateBy, room.SysCompanyID); ok {
 			// 目录：录制存储位置/直播间名称/直播录制
-			recordingFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID, liveService.RoomFolderRecording), liveService.RoomFolderRecording)
+			recordingFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorID, liveService.RoomFolderRecording), liveService.RoomFolderRecording)
 			if err != nil {
 				logger.Error("创建直播录制文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
 				c.JSON(200, gin.H{"code": 0})
@@ -843,7 +842,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 			// 检查文件是否已存在（防止重复创建）
 			var existingFile entity.CloudItem
 			fileExists := h.db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND PARENT_ID = ? AND IS_ACTIVE = ?",
-				"file", fileName, creatorUser.ID, recordingFolder.ID, "Y").First(&existingFile).Error == nil
+				"file", fileName, creatorID, recordingFolder.ID, "Y").First(&existingFile).Error == nil
 
 			if !fileExists && !isTencentMediaURL(event.VideoURL) {
 				logger.Warn("录制文件地址不是腾讯云域名，不写入云盘", zap.String("streamId", event.StreamID), zap.String("videoUrl", event.VideoURL))
@@ -859,7 +858,7 @@ func (h *LiveCallbackHandler) HandleRecordingFile(c *gin.Context) {
 					Name:        fileName,
 					ParentID:    &recordingFolder.ID,
 					Path:        recordingFolder.Path + "/" + fileName,
-					OwnerID:     creatorUser.ID,
+					OwnerID:     creatorID,
 					FileSize:    func() *int64 { size := fileSizeOr(event.FileSize, event.VideoURL); return &size }(), // 回调没带大小时从 COS 查询，与录制列表一致
 					FileType:    &fileType,
 					FileExt:     &ext,

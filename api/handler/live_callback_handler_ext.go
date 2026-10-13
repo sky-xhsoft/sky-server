@@ -362,10 +362,9 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 		// 将高光切片保存到云盘（如果找到了对应的直播间）
 		if room.RoomName != "" {
 			// 获取创建者的用户ID（从 CreateBy 字段映射到 User ID）
-			var creatorUser entity.SysUser
-			if err := h.db.Where("USERNAME = ? AND IS_ACTIVE = ?", room.CreateBy, "Y").First(&creatorUser).Error; err == nil {
+			if creatorID, ok := liveService.RoomCreatorID(h.db, room.CreateBy, room.SysCompanyID); ok {
 				// 目录：切片存储位置/直播间名称/直播切片
-				highlightFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorUser.ID, liveService.RoomFolderClip), liveService.RoomFolderClip)
+				highlightFolder, err := liveService.EnsureRoomFolder(h.db, roomFolderSpec(&room, creatorID, liveService.RoomFolderClip), liveService.RoomFolderClip)
 				if err != nil {
 					logger.Error("创建直播切片文件夹失败", zap.String("roomName", room.RoomName), zap.Error(err))
 					continue
@@ -404,7 +403,7 @@ func (h *LiveCallbackHandler) HandleHighlight(c *gin.Context) {
 						Name:        fileName,
 						ParentID:    &highlightFolder.ID,
 						Path:        highlightFolder.Path + "/" + fileName,
-						OwnerID:     creatorUser.ID,
+						OwnerID:     creatorID,
 						FileSize:    func() *int64 { size := clipSize; return &size }(), // 回调不提供大小，取自 COS
 						FileType:    &fileType,
 						FileExt:     &ext,

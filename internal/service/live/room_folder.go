@@ -22,6 +22,27 @@ type RoomFolderSpec struct {
 	StorageFolderID *uint // 本次目录的存储位置（录制或切片各自配置的云盘文件夹 ID），为空表示云盘根目录
 }
 
+// RoomCreatorID 查找直播间创建人的用户 ID。用户名只在公司内唯一（不同公司可以同名），因此：
+//  1. 先在直播间所属公司内按用户名查找；
+//  2. 公司内没有（如创建人已调到其他公司）时，只有全库唯一一个同名用户才使用，同名多个时不猜，返回 false。
+//
+// 不按公司区分会把云盘目录与文件记到其他公司的同名用户名下（该用户看不到，另一家公司反而能看到）。
+func RoomCreatorID(db *gorm.DB, username string, companyID uint) (uint, bool) {
+	if username == "" {
+		return 0, false
+	}
+	var users []entity.SysUser
+	if err := db.Select("ID").Where("USERNAME = ? AND SYS_COMPANY_ID = ? AND IS_ACTIVE = ?", username, companyID, "Y").
+		Limit(1).Find(&users).Error; err == nil && len(users) == 1 {
+		return users[0].ID, true
+	}
+	if err := db.Select("ID").Where("USERNAME = ? AND IS_ACTIVE = ?", username, "Y").
+		Limit(2).Find(&users).Error; err == nil && len(users) == 1 {
+		return users[0].ID, true
+	}
+	return 0, false
+}
+
 // EnsureRoomFolder 确保「存储位置/直播间名称[/子目录]」存在，返回最末一级目录。
 // 录制与切片可配置不同的存储位置，调用方按子目录传入对应的 StorageFolderID。
 // 存储位置须为直播间创建人自己的有效文件夹，否则放在云盘根目录，避免写入他人目录。
@@ -54,7 +75,8 @@ func resolveStorageFolder(db *gorm.DB, spec RoomFolderSpec) *entity.CloudItem {
 
 // ensureFolder 在 parent（nil 为根目录）下查找或创建名为 name 的文件夹
 func ensureFolder(db *gorm.DB, spec RoomFolderSpec, parent *entity.CloudItem, name string) (*entity.CloudItem, error) {
-	query := db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND IS_ACTIVE = ?", "folder", name, spec.OwnerID, "Y")
+	query := db.Where("ITEM_TYPE = ? AND NAME = ? AND OWNER_ID = ? AND SYS_COMPANY_ID = ? AND IS_ACTIVE = ?",
+		"folder", name, spec.OwnerID, spec.CompanyID, "Y")
 	path := "/" + name
 	var parentID *uint
 	if parent != nil {
