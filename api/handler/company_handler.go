@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	stderrors "errors"
 	"net/http"
 	"strings"
 
@@ -66,6 +67,14 @@ func (h *CompanyHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.svc.Register(c.Request.Context(), &req); err != nil {
+		switch {
+		case stderrors.Is(err, company.ErrInvalidPhone):
+			c.JSON(http.StatusBadRequest, gin.H{"code": 40001, "message": err.Error()})
+			return
+		case stderrors.Is(err, company.ErrUsernameTaken), stderrors.Is(err, company.ErrPhoneTaken):
+			c.JSON(http.StatusConflict, gin.H{"code": 40901, "message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    50001,
 			"message": "注册失败: " + err.Error(),
@@ -77,6 +86,23 @@ func (h *CompanyHandler) Register(c *gin.Context) {
 		"code":    0,
 		"message": "注册成功",
 	})
+}
+
+// CheckRegister 注册前检查用户名、手机号是否可用
+// @Summary 注册前检查用户名、手机号是否可用
+// @Tags Company
+// @Produce json
+// @Param username query string false "用户名"
+// @Param phone query string false "手机号"
+// @Success 200 {object} utils.Response{data=company.RegisterAvailability}
+// @Router /company/register/check [get]
+func (h *CompanyHandler) CheckRegister(c *gin.Context) {
+	res, err := h.svc.CheckRegisterAvailability(c.Request.Context(), c.Query("username"), c.Query("phone"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 50001, "message": "检查失败"})
+		return
+	}
+	utils.Success(c, res)
 }
 
 // GetCompanyConfig 获取当前公司配置

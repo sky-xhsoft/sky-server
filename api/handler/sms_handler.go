@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sky-xhsoft/sky-server/internal/service/company"
 	"github.com/sky-xhsoft/sky-server/internal/service/sms"
 )
 
@@ -60,20 +61,9 @@ func (h *SmsHandler) SendVerifyCode(c *gin.Context) {
 	})
 }
 
-// isValidPhone 简单校验中国大陆手机号
+// isValidPhone 中国大陆手机号（与注册校验一致）
 func isValidPhone(phone string) bool {
-	if len(phone) != 11 {
-		return false
-	}
-	if phone[0] != '1' {
-		return false
-	}
-	for _, r := range phone {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
+	return company.ValidPhone(phone)
 }
 
 // VerifySmsCode 校验短信验证码（供注册等内部使用）

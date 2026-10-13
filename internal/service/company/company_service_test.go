@@ -78,6 +78,7 @@ func TestCompanyService_Register_Success(t *testing.T) {
 		Name:            "Test Co",
 		Code:            "TC001",
 		Email:           "test@example.com",
+		Phone:           "13800000000",
 		Username:        "admin",
 		Password:        "Pass123!",
 		ConfirmPassword: "Pass123!",
@@ -114,5 +115,46 @@ func TestCompanyService_UpdateConfig_OnlyTencentCOS(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "云盘存储只支持云存储") {
 			t.Errorf("存储类型 %q 应被拒绝，得到 %v", v, err)
 		}
+	}
+}
+
+// 用户名、手机号全局唯一（不同公司也不能重复），手机号格式校验
+func TestCompanyService_Register_UniqueAndPhone(t *testing.T) {
+	db := setupCompanyTestDB(t)
+	svc := NewService(db, nil)
+	base := func(username, phone string) *RegisterRequest {
+		return &RegisterRequest{Name: "Co", Username: username, Phone: phone, Password: "Pass123!", ConfirmPassword: "Pass123!"}
+	}
+	if err := svc.Register(context.Background(), base("sajida", "13800000001")); err != nil {
+		t.Fatalf("首次注册应成功: %v", err)
+	}
+	cases := []struct {
+		req  *RegisterRequest
+		want error
+	}{
+		{base("sajida", "13800000002"), ErrUsernameTaken},
+		{base(" sajida ", "13800000003"), ErrUsernameTaken},
+		{base("other", "13800000001"), ErrPhoneTaken},
+		{base("other", "88888888888"), ErrInvalidPhone},
+		{base("other", "1380000000"), ErrInvalidPhone},
+	}
+	for _, c := range cases {
+		if err := svc.Register(context.Background(), c.req); err != c.want {
+			t.Errorf("%s / %s: 期望 %v，实际 %v", c.req.Username, c.req.Phone, c.want, err)
+		}
+	}
+	var companies int64
+	db.Raw("SELECT COUNT(*) FROM sys_company").Scan(&companies)
+	if companies != 1 {
+		t.Errorf("校验失败时不应创建公司，实际 %d 家", companies)
+	}
+
+	res, err := svc.CheckRegisterAvailability(context.Background(), "sajida", "13800000001")
+	if err != nil || !res.UsernameTaken || !res.PhoneTaken || !res.PhoneValid {
+		t.Errorf("查重结果不对: %+v %v", res, err)
+	}
+	res, _ = svc.CheckRegisterAvailability(context.Background(), "new", "88888888888")
+	if res.UsernameTaken || res.PhoneValid || res.PhoneTaken {
+		t.Errorf("新用户名、格式错误的手机号: %+v", res)
 	}
 }

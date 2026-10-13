@@ -2,7 +2,9 @@ package company
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -77,9 +79,32 @@ type UpdateCompanyConfigRequest struct {
 	MaxFiles        *int    `json:"maxFiles"`
 }
 
+// 注册校验错误（handler 据此返回 400 / 409 与提示）
+var (
+	ErrInvalidPhone  = errors.New("手机号格式不正确")
+	ErrPhoneTaken    = errors.New("该手机号已注册")
+	ErrUsernameTaken = errors.New("该用户名已被使用")
+)
+
+var phonePattern = regexp.MustCompile(`^1[3-9]\d{9}$`)
+
+// ValidPhone 中国大陆手机号：1 开头、第二位 3～9、共 11 位数字
+func ValidPhone(phone string) bool {
+	return phonePattern.MatchString(phone)
+}
+
+// RegisterAvailability 注册前的用户名、手机号可用性
+type RegisterAvailability struct {
+	UsernameTaken bool `json:"usernameTaken"`
+	PhoneValid    bool `json:"phoneValid"`
+	PhoneTaken    bool `json:"phoneTaken"`
+}
+
 // Service 公司服务接口
 type Service interface {
 	Register(ctx context.Context, req *RegisterRequest) error
+	// CheckRegisterAvailability 检查用户名、手机号能否用于注册（空值不检查）
+	CheckRegisterAvailability(ctx context.Context, username, phone string) (*RegisterAvailability, error)
 	GetCompanyConfig(ctx context.Context, companyID uint) (*entity.SysCompanyConf, error)
 	UpdateCompanyConfig(ctx context.Context, companyID uint, req *UpdateCompanyConfigRequest) (*entity.SysCompanyConf, error)
 }
@@ -114,8 +139,25 @@ func (s *service) Register(ctx context.Context, req *RegisterRequest) error {
 	if req.Password != req.ConfirmPassword {
 		return fmt.Errorf("两次密码不一致")
 	}
+	req.Username = strings.TrimSpace(req.Username)
+	req.Phone = strings.TrimSpace(req.Phone)
+	if !ValidPhone(req.Phone) {
+		return ErrInvalidPhone
+	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 0. 用户名、手机号全局唯一：业务表的 CREATE_BY 记录的是用户名，登录也按用户名 / 手机号查找，重复会串到其他账号
+		if taken, err := userExists(tx, "USERNAME", req.Username); err != nil {
+			return err
+		} else if taken {
+			return ErrUsernameTaken
+		}
+		if taken, err := userExists(tx, "PHONE", req.Phone); err != nil {
+			return err
+		} else if taken {
+			return ErrPhoneTaken
+		}
+
 		// 1. 创建公司
 		now := time.Now()
 		result := tx.Exec(`
@@ -278,4 +320,40 @@ func applyInt(src *int, dst *int) {
 	if src != nil {
 		*dst = *src
 	}
+}
+
+// CheckRegisterAvailability 检查用户名、手机号能否用于注册
+func (s *service) CheckRegisterAvailability(ctx context.Context, username, phone string) (*RegisterAvailability, error) {
+	db := s.db.WithContext(ctx)
+	res := &RegisterAvailability{}
+	if username = strings.TrimSpace(username); username != "" {
+		taken, err := userExists(db, "USERNAME", username)
+		if err != nil {
+			return nil, err
+		}
+		res.UsernameTaken = taken
+	}
+	if phone = strings.TrimSpace(phone); phone != "" {
+		res.PhoneValid = ValidPhone(phone)
+		if res.PhoneValid {
+			taken, err := userExists(db, "PHONE", phone)
+			if err != nil {
+				return nil, err
+			}
+			res.PhoneTaken = taken
+		}
+	}
+	return res, nil
+}
+
+// userExists 是否已有有效用户使用该用户名 / 手机号（column 只取 USERNAME 或 PHONE）
+func userExists(db *gorm.DB, column, value string) (bool, error) {
+	if column != "USERNAME" && column != "PHONE" {
+		return false, fmt.Errorf("不支持的字段 %s", column)
+	}
+	var n int64
+	if err := db.Table("sys_user").Where(column+" = ? AND IS_ACTIVE = ?", value, "Y").Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
