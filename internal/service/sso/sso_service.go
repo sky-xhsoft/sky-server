@@ -268,6 +268,10 @@ func (s *service) RefreshToken(refreshToken string) (*TokenResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 只接受刷新令牌：访问令牌不能用来换新令牌（否则可无限续期）
+	if claims.TokenType != "refresh" {
+		return nil, errors.InvalidToken
+	}
 
 	// 用户名、所属公司从数据库读取当前值，不沿用旧令牌里的：用户改名、调整公司后，新令牌立即生效
 	// （业务表的 CREATE_BY 取自令牌中的用户名）。用户已停用或删除时不再续期

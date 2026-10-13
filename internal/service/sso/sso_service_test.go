@@ -342,3 +342,19 @@ func TestSSO_RefreshToken_InactiveUser(t *testing.T) {
 		t.Error("用户不存在或已停用时应拒绝刷新")
 	}
 }
+
+// 访问令牌不能用来刷新
+func TestSSO_RefreshToken_RejectsAccessToken(t *testing.T) {
+	jwtUtil := jwt.New("test-secret-key-for-unit-tests-only")
+	repo := &mockUserRepository{user: &entity.SysUser{BaseModel: entity.BaseModel{ID: 38, IsActive: "Y"}, SysCompanyID: 58, Username: "sajida_58"}}
+	svc := NewService(repo, jwtUtil, 3600, 7200)
+
+	access, _ := jwtUtil.GenerateToken(38, 58, "sajida_58", "web", "dev-1", time.Hour)
+	if _, err := svc.RefreshToken(access); err == nil {
+		t.Error("访问令牌不应能刷新")
+	}
+	refresh, _ := jwtUtil.GenerateRefreshToken(38, 58, "sajida_58", "web", "dev-1", time.Hour)
+	if _, err := svc.RefreshToken(refresh); err != nil {
+		t.Errorf("刷新令牌应能刷新: %v", err)
+	}
+}
