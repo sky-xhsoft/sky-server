@@ -114,6 +114,8 @@ type service struct {
 	confRepo repository.SysCompanyConfRepository
 	// onConfigChanged 配置更新成功后的回调（用于刷新厂商客户端缓存，如腾讯云密钥）
 	onConfigChanged func(companyID uint)
+	// subdomainSuffix 注册时分配的公司子域后缀（如 ".zhibo.skyzhou.cn"）；空则不分配域名
+	subdomainSuffix string
 }
 
 // NewService 创建公司服务
@@ -132,6 +134,24 @@ func (s *service) SetConfigChangedCallback(fn func(companyID uint)) {
 // ConfigChangedSetter 配置更新回调注入接口（主程序通过类型断言注入刷新回调）
 type ConfigChangedSetter interface {
 	SetConfigChangedCallback(fn func(companyID uint))
+}
+
+// SetSubdomainSuffix 设置注册时分配的公司子域后缀（供 main 按 app.subdomainBase 注入）
+func (s *service) SetSubdomainSuffix(suffix string) {
+	s.subdomainSuffix = suffix
+}
+
+// SubdomainSuffixSetter 公司子域后缀注入接口（主程序通过类型断言注入）
+type SubdomainSuffixSetter interface {
+	SetSubdomainSuffix(suffix string)
+}
+
+// defaultCompanyDomain 新公司的默认子域 {公司ID}<suffix>；suffix 为空（未配置 app.subdomainBase）时返回空串
+func defaultCompanyDomain(companyID uint, suffix string) string {
+	if suffix == "" || companyID == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d%s", companyID, suffix)
 }
 
 // Register 执行注册流程
@@ -176,9 +196,15 @@ func (s *service) Register(ctx context.Context, req *RegisterRequest) error {
 			contactPhone = req.Phone
 		}
 
-		// SYS_COMPANY_ID = ID（自身引用）+ 默认子域（多公司域名登录）
-		tx.Exec("UPDATE sys_company SET SYS_COMPANY_ID = ?, CONTACT_PHONE = ?, DOMAIN = ? WHERE ID = ?",
-			companyID, contactPhone, fmt.Sprintf("%d.zhibo.skyzhou.cn", companyID), companyID)
+		// SYS_COMPANY_ID = ID（自身引用）；配置了子域后缀时分配默认子域（多公司域名登录）。
+		// 未配置时不分配：公司有域名后，用户名登录只能从该域名进入，在默认域名下会被拒绝
+		if domain := defaultCompanyDomain(companyID, s.subdomainSuffix); domain != "" {
+			tx.Exec("UPDATE sys_company SET SYS_COMPANY_ID = ?, CONTACT_PHONE = ?, DOMAIN = ? WHERE ID = ?",
+				companyID, contactPhone, domain, companyID)
+		} else {
+			tx.Exec("UPDATE sys_company SET SYS_COMPANY_ID = ?, CONTACT_PHONE = ? WHERE ID = ?",
+				companyID, contactPhone, companyID)
+		}
 
 		// 2. 创建管理员用户
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)

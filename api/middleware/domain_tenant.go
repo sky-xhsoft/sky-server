@@ -12,10 +12,11 @@ import (
 // DomainTenant 域名多租户中间件
 // 根据请求的 Host 头自动识别公司并设置上下文
 // 支持两种域名识别方式：
-//   1. {companyId}.zhibo.skyzhou.cn  —— 子域第一段为数字公司ID，如 1.zhibo.skyzhou.cn → 1、46.zhibo.skyzhou.cn → 46
+//   1. {companyId}<subdomainSuffix>  —— 子域第一段为数字公司ID，如 1.zhibo.skyzhou.cn → 1、46.zhibo.skyzhou.cn → 46
+//      subdomainSuffix 来自配置 app.subdomainBase（config.AppConfig.SubdomainSuffix），为空时不按子域识别
 //   2. DB 中 sys_company.DOMAIN 精确匹配
 // 若都未识别，默认公司 1
-func DomainTenant(db *gorm.DB) gin.HandlerFunc {
+func DomainTenant(db *gorm.DB, subdomainSuffix string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取请求的 Host（包含域名和端口）
 		host := c.Request.Host
@@ -32,8 +33,8 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// 优先：解析 {companyId}.zhibo.skyzhou.cn 子域
-		if companyID, ok := parseSubdomainCompanyID(host); ok {
+		// 优先：解析 {companyId}<subdomainSuffix> 子域
+		if companyID, ok := parseSubdomainCompanyID(host, subdomainSuffix); ok {
 			c.Set("companyID", companyID)
 			c.Set("companyDomain", host)
 			c.Next()
@@ -58,16 +59,13 @@ func DomainTenant(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// subdomainBase 域名基线：{companyId} 等子域都挂在这个域下
-const subdomainBase = ".zhibo.skyzhou.cn"
-
-// parseSubdomainCompanyID 尝试解析 {companyId} + subdomainBase 形式的子域。
-// 例：1.zhibo.skyzhou.cn → (1, true)；46.zhibo.skyzhou.cn → (46, true)；其它 → (0, false)
-func parseSubdomainCompanyID(host string) (uint, bool) {
-	if !strings.HasSuffix(host, subdomainBase) {
+// parseSubdomainCompanyID 尝试解析 {companyId} + suffix 形式的子域；suffix 为空时不识别。
+// 例（suffix=".zhibo.skyzhou.cn"）：1.zhibo.skyzhou.cn → (1, true)；46.zhibo.skyzhou.cn → (46, true)；其它 → (0, false)
+func parseSubdomainCompanyID(host, suffix string) (uint, bool) {
+	if suffix == "" || !strings.HasSuffix(host, suffix) {
 		return 0, false
 	}
-	firstPart := strings.TrimSuffix(host, subdomainBase)
+	firstPart := strings.TrimSuffix(host, suffix)
 	// 仅允许形如 "46" 的纯数字第一段；若带额外子域（如 a.1.zhibo.skyzhou.cn）则不支持
 	if firstPart == "" || strings.Contains(firstPart, ".") {
 		return 0, false

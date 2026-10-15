@@ -117,6 +117,11 @@ func main() {
 		logger.Warn("Failed to initialize company volcengine manager", zap.Error(err))
 	}
 
+	// 注册新公司时按 app.subdomainBase 分配默认子域（未配置则不分配）
+	if setter, ok := app.CompanyService.(company.SubdomainSuffixSetter); ok {
+		setter.SetSubdomainSuffix(cfg.App.SubdomainSuffix())
+	}
+
 	// 公司配置更新后，同步刷新腾讯云/火山引擎客户端缓存，使新配置的密钥即时生效
 	if setter, ok := app.CompanyService.(company.ConfigChangedSetter); ok {
 		setter.SetConfigChangedCallback(func(companyID uint) {

@@ -120,6 +120,18 @@ type AppConfig struct {
 	Port    int    `mapstructure:"port"`
 	Mode    string `mapstructure:"mode"`
 	Host    string `mapstructure:"host"` // 监听地址，如 127.0.0.1（只允许本机 nginx 转发）；空为所有地址
+	// 公司子域基线，如 zhibo.skyzhou.cn：注册时给新公司分配 {公司ID}.<基线> 域名，按该子域识别公司、放行跨域。
+	// 空为关闭（正式环境不配置，新公司不分配域名，可在默认域名下用用户名登录）
+	SubdomainBase string `mapstructure:"subdomainBase"`
+}
+
+// SubdomainSuffix 返回带前导点的子域后缀，如 ".zhibo.skyzhou.cn"；未配置时返回空串
+func (a AppConfig) SubdomainSuffix() string {
+	base := strings.Trim(strings.TrimSpace(a.SubdomainBase), ".")
+	if base == "" {
+		return ""
+	}
+	return "." + base
 }
 
 // DatabaseConfig 数据库配置

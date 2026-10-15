@@ -158,3 +158,33 @@ func TestCompanyService_Register_UniqueAndPhone(t *testing.T) {
 		t.Errorf("新用户名、格式错误的手机号: %+v", res)
 	}
 }
+
+// 注册时按配置分配公司子域：未配置不分配（正式环境），配置后为 {公司ID}<后缀>
+func TestDefaultCompanyDomain(t *testing.T) {
+	cases := []struct {
+		id     uint
+		suffix string
+		want   string
+	}{
+		{2, "", ""},
+		{2, ".zhibo.skyzhou.cn", "2.zhibo.skyzhou.cn"},
+		{46, ".zhibo.skyzhou.cn", "46.zhibo.skyzhou.cn"},
+		{0, ".zhibo.skyzhou.cn", ""},
+	}
+	for _, c := range cases {
+		if got := defaultCompanyDomain(c.id, c.suffix); got != c.want {
+			t.Errorf("defaultCompanyDomain(%d, %q) = %q, want %q", c.id, c.suffix, got, c.want)
+		}
+	}
+}
+
+// 未配置子域后缀时注册仍成功（不写 DOMAIN）
+func TestCompanyService_Register_NoSubdomainSuffix(t *testing.T) {
+	svc := NewService(setupCompanyTestDB(t), nil)
+	svc.(SubdomainSuffixSetter).SetSubdomainSuffix("")
+	if err := svc.Register(context.Background(), &RegisterRequest{
+		Name: "Co", Username: "u1", Phone: "13800000009", Password: "Pass123!", ConfirmPassword: "Pass123!",
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+}

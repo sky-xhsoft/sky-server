@@ -90,13 +90,13 @@ func Setup(engine *gin.Engine, cfg *config.Config, jwtUtil *jwt.JWT, services *S
 	engine.Use(middleware.Metrics())
 	engine.Use(middleware.Recovery())
 	engine.Use(middleware.Compression())
-	engine.Use(middleware.CORS(cfg.CORS))
+	engine.Use(middleware.CORS(cfg.CORS, cfg.App.SubdomainSuffix()))
 	// 语言国际化中间件
 	engine.Use(i18n.Middleware())
 	// 统一错误处理中间件
 	engine.Use(middleware.ErrorHandler())
 	// 域名多租户识别中间件（根据请求域名自动识别公司）
-	engine.Use(middleware.DomainTenant(db))
+	engine.Use(middleware.DomainTenant(db, cfg.App.SubdomainSuffix()))
 	// 认证中间件校验账号是否停用、是否管理员
 	middleware.SetUserStatusLookup(func(userID uint) (middleware.UserStatus, error) {
 		var row struct {
