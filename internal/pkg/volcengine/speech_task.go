@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"go.uber.org/zap"
 )
 
 // speech 相关常量
@@ -25,7 +27,7 @@ type CreateSpeechTaskRequest struct {
 // Pipe：si=声影同传；realtime=实时同传或原文 ASR 实时流式；mix=原文 ASR 整句
 type SpeechTaskRule struct {
 	Pipe      string              `json:"Pipe"`
-	Delay     int                 `json:"Delay"`              // 播出延迟秒：声影同传 1-60，原文 ASR 整句 0-20，实时为 0
+	Delay     int                 `json:"Delay"`              // 播出延迟秒：声影同传 1-60，原文 ASR 整句 0-20，realtime 0-60（建议 2-3）
 	Source    *SpeechTaskSource   `json:"Source"`             // 拉流源
 	EndTime   string              `json:"EndTime"`            // 结束时间 ISO8601
 	StartTime string              `json:"StartTime"`          // 开始时间 ISO8601
@@ -80,8 +82,9 @@ type SpeechTaskSeparator struct {
 	Separator  bool `json:"Separator,omitempty"`
 }
 
-// SpeechTaskFactory 固定音色（控制台填写 "TTS:SID"）
+// SpeechTaskFactory 固定音色（火山技术支持提供，未公开）：{"ASR":"sail","TTS":"minimax","SID":"<SpeakerID>"}；自动复制时 TTS/SID 为空
 type SpeechTaskFactory struct {
+	ASR string `json:"ASR,omitempty"`
 	TTS string `json:"TTS"`
 	SID string `json:"SID"`
 }
@@ -202,11 +205,14 @@ func (c *Client) CreateSpeechTask(ctx context.Context, req *CreateSpeechTaskRequ
 		taskID = resp.Result.Data.TaskID
 	}
 	if taskID == "" {
-		// 失败：Code != 0 或 Message 非 success
+		// 失败：Code != 0 或 Message 非 success；记录火山完整响应（含 RequestId，提工单用）
+		raw, _ := json.Marshal(&resp)
+		zap.L().Error("火山 CreateSpeechTask 失败响应", zap.ByteString("response", raw))
+		meta := fmt.Sprintf("Code=%d, RequestId=%s", resp.Result.Code, resp.ResponseMetadata.RequestID)
 		if resp.Result.Message != "" && resp.Result.Message != "success" {
-			return "", fmt.Errorf("创建声影同传任务失败: %s", resp.Result.Message)
+			return "", fmt.Errorf("创建声影同传任务失败: %s（%s）", resp.Result.Message, meta)
 		}
-		return "", fmt.Errorf("创建声影同传任务失败: 未返回任务ID")
+		return "", fmt.Errorf("创建声影同传任务失败: 未返回任务ID（%s）", meta)
 	}
 	return taskID, nil
 }

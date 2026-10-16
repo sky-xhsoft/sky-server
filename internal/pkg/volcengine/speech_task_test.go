@@ -42,3 +42,14 @@ func TestSpeechTaskRule_RoundTripKeepsConsoleFields(t *testing.T) {
 		}
 	}
 }
+
+func TestSpeechTaskFactoryFixedVoiceJSON(t *testing.T) {
+	b, _ := json.Marshal(&SpeechTaskRule{Factory: &SpeechTaskFactory{ASR: "sail", TTS: "minimax", SID: "speaker_123"}})
+	if !strings.Contains(string(b), `"Factory":{"ASR":"sail","TTS":"minimax","SID":"speaker_123"}`) {
+		t.Fatalf("固定音色 Factory 序列化错误: %s", b)
+	}
+	b, _ = json.Marshal(&SpeechTaskRule{Factory: &SpeechTaskFactory{}})
+	if !strings.Contains(string(b), `"Factory":{"TTS":"","SID":""}`) {
+		t.Fatalf("自动复制 Factory 应不带 ASR: %s", b)
+	}
+}
